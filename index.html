@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LEVERAGE LAB · 레버리지 백테스트</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0b0d0c;
+    --bg-soft:#121514;
+    --panel:#15191700;
+    --line:#23292600;
+    --ink:#e8efe9;
+    --ink-dim:#8a9690;
+    --ink-faint:#566059;
+    --amber:#ffb000;
+    --amber-soft:#ffc54d;
+    --green:#36e08a;
+    --red:#ff5d5d;
+    --cyan:#4fd6e0;
+    --grid:#1c211f;
+    --border:#272d2a;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);color:var(--ink);font-family:"IBM Plex Sans",sans-serif;-webkit-font-smoothing:antialiased}
+  body{
+    min-height:100vh;
+    background:
+      radial-gradient(900px 500px at 88% -8%, rgba(255,176,0,.07), transparent 60%),
+      radial-gradient(700px 500px at 5% 110%, rgba(79,214,224,.05), transparent 55%),
+      var(--bg);
+    padding:0 0 80px;
+  }
+  .mono{font-family:"JetBrains Mono",monospace;font-variant-numeric:tabular-nums}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 22px}
+
+  /* header */
+  header.top{
+    border-bottom:1px solid var(--border);
+    padding:26px 0 22px;
+    margin-bottom:30px;
+    position:relative;
+    overflow:hidden;
+  }
+  .top:before{
+    content:"";position:absolute;inset:0;
+    background:repeating-linear-gradient(90deg,transparent 0 38px, rgba(255,176,0,.025) 38px 39px);
+    pointer-events:none;
+  }
+  .brandrow{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:14px}
+  .dot{
+    width:13px;height:13px;border-radius:50%;background:var(--amber);
+    box-shadow:0 0 0 4px rgba(255,176,0,.15),0 0 22px 2px rgba(255,176,0,.55);
+    animation:pulse 2.6s ease-in-out infinite;
+  }
+  @keyframes pulse{50%{opacity:.45;transform:scale(.85)}}
+  h1{
+    font-family:"Bricolage Grotesque",sans-serif;font-weight:800;
+    font-size:clamp(26px,3.4vw,40px);letter-spacing:-.02em;line-height:.95;
+  }
+  h1 span{color:var(--amber)}
+  .tagline{color:var(--ink-dim);font-size:13px;margin-top:6px;letter-spacing:.01em}
+  .ticker-tape{
+    font-size:11.5px;color:var(--ink-faint);text-align:right;
+    letter-spacing:.08em;text-transform:uppercase;line-height:1.7;
+  }
+  .ticker-tape b{color:var(--amber-soft);font-weight:500}
+
+  /* layout */
+  .grid{display:grid;grid-template-columns:380px 1fr;gap:26px;align-items:start}
+  @media(max-width:920px){.grid{grid-template-columns:1fr}}
+
+  .card{
+    background:linear-gradient(180deg, rgba(255,255,255,.018), transparent), var(--bg-soft);
+    border:1px solid var(--border);border-radius:var(--radius);
+    padding:22px;position:relative;
+  }
+  .card h2{
+    font-family:"Bricolage Grotesque",sans-serif;font-weight:700;font-size:13px;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--ink-dim);
+    margin-bottom:18px;display:flex;align-items:center;gap:9px;
+  }
+  .card h2:before{content:"";width:18px;height:2px;background:var(--amber)}
+
+  .field{margin-bottom:16px}
+  .field label{display:block;font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:7px}
+  .field .hint{font-size:11px;color:var(--ink-faint);margin-top:5px;line-height:1.5}
+  input,select{
+    width:100%;background:#0c0f0e;border:1px solid var(--border);color:var(--ink);
+    border-radius:9px;padding:11px 13px;font-size:14px;font-family:"JetBrains Mono",monospace;
+    transition:border-color .15s, box-shadow .15s;
+  }
+  input:focus,select:focus{outline:none;border-color:var(--amber);box-shadow:0 0 0 3px rgba(255,176,0,.12)}
+  select{cursor:pointer}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .suffix{position:relative}
+  .suffix .u{position:absolute;right:13px;top:50%;transform:translateY(-50%);color:var(--ink-faint);font-size:12px;pointer-events:none;font-family:"JetBrains Mono",monospace}
+
+  .runbtn{
+    width:100%;margin-top:6px;padding:15px;border:none;border-radius:10px;cursor:pointer;
+    background:var(--amber);color:#1a1300;font-family:"Bricolage Grotesque",sans-serif;font-weight:800;
+    font-size:15px;letter-spacing:.04em;text-transform:uppercase;transition:transform .1s, box-shadow .2s;
+    box-shadow:0 6px 22px rgba(255,176,0,.28);
+  }
+  .runbtn:hover{transform:translateY(-1px);box-shadow:0 10px 30px rgba(255,176,0,.4)}
+  .runbtn:active{transform:translateY(0)}
+  .runbtn:disabled{opacity:.5;cursor:wait;box-shadow:none}
+
+  .leverbadge{
+    display:inline-flex;align-items:center;gap:6px;font-family:"JetBrains Mono",monospace;font-size:11px;
+    color:var(--amber);background:rgba(255,176,0,.1);border:1px solid rgba(255,176,0,.3);
+    padding:3px 9px;border-radius:30px;margin-left:8px;letter-spacing:.04em;
+  }
+
+  /* results */
+  .placeholder{
+    border:1px dashed var(--border);border-radius:var(--radius);padding:60px 30px;text-align:center;color:var(--ink-faint);
+    background:repeating-linear-gradient(135deg,transparent 0 16px, rgba(255,255,255,.012) 16px 17px);
+  }
+  .placeholder .big{font-family:"Bricolage Grotesque",sans-serif;font-size:18px;color:var(--ink-dim);margin-bottom:8px}
+
+  .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:22px}
+  @media(max-width:520px){.metrics{grid-template-columns:1fr}}
+  .metric{
+    background:var(--bg-soft);border:1px solid var(--border);border-radius:12px;padding:18px;position:relative;overflow:hidden;
+  }
+  .metric:after{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--amber)}
+  .metric.mdd:after{background:var(--red)}
+  .metric.mar:after{background:var(--cyan)}
+  .metric .k{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-dim)}
+  .metric .v{font-family:"JetBrains Mono",monospace;font-weight:700;font-size:30px;margin-top:8px;letter-spacing:-.01em}
+  .metric .s{font-size:11.5px;color:var(--ink-faint);margin-top:4px;font-family:"JetBrains Mono",monospace}
+  .pos{color:var(--green)} .neg{color:var(--red)} .amb{color:var(--amber)} .cy{color:var(--cyan)}
+
+  .summary{background:var(--bg-soft);border:1px solid var(--border);border-radius:12px;padding:6px 20px;margin-bottom:22px}
+  .srow{display:flex;justify-content:space-between;align-items:center;padding:13px 0;border-bottom:1px solid var(--grid)}
+  .srow:last-child{border-bottom:none}
+  .srow .lab{color:var(--ink-dim);font-size:13.5px}
+  .srow .val{font-family:"JetBrains Mono",monospace;font-weight:500;font-size:15px}
+  .srow.big .val{font-size:19px;font-weight:700}
+
+  .chartcard{margin-bottom:20px}
+  .charthead{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+  .charthead h3{font-family:"Bricolage Grotesque",sans-serif;font-size:14px;font-weight:700;letter-spacing:.02em}
+  .legend{display:flex;gap:16px;font-size:11.5px;color:var(--ink-dim)}
+  .legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+  .chartbox{height:240px;position:relative}
+  .toggle{display:flex;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+  .toggle button{background:transparent;border:none;color:var(--ink-dim);font-family:"JetBrains Mono",monospace;font-size:11px;padding:6px 11px;cursor:pointer}
+  .toggle button.on{background:var(--amber);color:#1a1300;font-weight:700}
+
+  /* data fallback */
+  .fallback{border:1px solid rgba(255,176,0,.35);background:rgba(255,176,0,.05);border-radius:12px;padding:20px;margin-bottom:20px}
+  .fallback h3{font-family:"Bricolage Grotesque",sans-serif;font-size:14px;color:var(--amber-soft);margin-bottom:10px}
+  .fallback p{font-size:13px;color:var(--ink-dim);line-height:1.65;margin-bottom:12px}
+  .fallback a.dl{display:inline-block;background:#0c0f0e;border:1px solid var(--amber);color:var(--amber);text-decoration:none;font-family:"JetBrains Mono",monospace;font-size:12.5px;padding:9px 14px;border-radius:8px;margin:0 8px 8px 0}
+  .fallback a.dl:hover{background:rgba(255,176,0,.12)}
+  .uploadbox{border:1px dashed var(--border);border-radius:9px;padding:16px;text-align:center;cursor:pointer;transition:border-color .15s;font-size:13px;color:var(--ink-dim)}
+  .uploadbox:hover{border-color:var(--amber)}
+  .err{color:var(--red);font-size:12.5px;margin-top:6px;font-family:"JetBrains Mono",monospace}
+  .note{font-size:11.5px;color:var(--ink-faint);line-height:1.6;margin-top:14px;padding-top:14px;border-top:1px solid var(--grid)}
+  .note b{color:var(--ink-dim)}
+
+  .loading{display:flex;align-items:center;gap:12px;color:var(--ink-dim);font-family:"JetBrains Mono",monospace;font-size:13px;padding:40px;justify-content:center}
+  .spin{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--amber);border-radius:50%;animation:sp .7s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap brandrow">
+    <div>
+      <div class="brand"><span class="dot"></span><h1>LEVERAGE <span>LAB</span></h1></div>
+      <div class="tagline">레버리지 ETF 백테스트 · 기초지수 합성 시뮬레이션 · CAGR / MDD / MAR</div>
+    </div>
+    <div class="ticker-tape mono">
+      ENGINE <b>v0.1</b> &nbsp;·&nbsp; DAILY RESET MODEL<br>
+      DATA <b>YAHOO / STOOQ</b> &nbsp;·&nbsp; LUMP-SUM + DCA<br>
+      <b id="clock">--:--:--</b> KST
+    </div>
+  </div>
+</header>
+
+<div class="wrap grid">
+
+  <!-- ============ CONTROL PANEL ============ -->
+  <section class="card">
+    <h2>설정 패널</h2>
+
+    <!-- 데이터 프록시 URL은 내부적으로 고정됨 (s-backtesting.thdghkstlr.workers.dev) -->
+
+    <div class="field">
+      <label>종목 / 지수</label>
+      <select id="instrument"></select>
+      <div class="hint" id="instrHint"></div>
+    </div>
+
+    <div class="row3" id="customWrap" style="display:none">
+      <div class="field"><label>티커 (야후 기준)</label><input id="cSymbol" placeholder="예: ^NDX, QQQ, AAPL"></div>
+      <div class="field"><label>배수</label><input id="cLev" type="number" value="3" step="0.5"></div>
+      <div class="field"><label>운용보수 %</label><input id="cER" type="number" value="0.95" step="0.01"></div>
+    </div>
+
+    <div class="row2">
+      <div class="field"><label>시작일</label><input id="start" type="date" value="2010-01-01"></div>
+      <div class="field"><label>종료일</label><input id="end" type="date"></div>
+    </div>
+
+    <div class="field">
+      <label>거치식 투자금액</label>
+      <div class="suffix"><input id="lump" class="mono" type="number" value="1000" step="100"><span class="u">만원</span></div>
+    </div>
+
+    <div class="field">
+      <label>월 적립 투자금액</label>
+      <div class="suffix"><input id="monthly" class="mono" type="number" value="100" step="10"><span class="u">만원/월</span></div>
+      <div class="hint">매월 첫 영업일에 매수. 0이면 거치식만 계산합니다.</div>
+    </div>
+
+    <div class="field">
+      <label>차입비용 (연 %) — 레버리지 정확도 보정</label>
+      <div class="suffix"><input id="finance" class="mono" type="number" value="0" step="0.1"><span class="u">% / 년</span></div>
+      <div class="hint">0이면 운용보수만 차감(낙관적). 실제 TQQQ에 가깝게 보려면 1~3% 정도를 넣어 보세요.</div>
+    </div>
+
+    <button class="runbtn" id="run">▶ 백테스트 실행</button>
+    <div class="err" id="ctrlErr"></div>
+
+    <div class="note">
+      <b>계산 방식</b> · 레버리지 종목은 <b>기초지수 일간수익률 × 배수 − (운용보수+차입비용)/252</b>로 매일 리셋하는 합성 시계열을 만들어 전 기간(상장 전 포함)을 계산합니다. CAGR·MDD·MAR은 이 종목 시계열 기준, 적립식 성과는 XIRR(자금가중)로 별도 표시합니다.
+    </div>
+  </section>
+
+  <!-- ============ RESULTS ============ -->
+  <section id="results">
+    <div class="placeholder">
+      <div class="big">설정 후 <span class="amb">실행</span>을 누르면<br>여기에 결과가 표시됩니다</div>
+      <div class="mono" style="font-size:12px">CAGR · MDD · MAR · 자산곡선 · 낙폭곡선</div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+/* ============================================================
+   CATALOG  — Stooq symbols + leverage definitions
+   ============================================================ */
+const CATALOG = [
+  {id:"TQQQ", name:"TQQQ — 나스닥100 3배",      base:"^ndx",   yahoo:"^NDX",  lev:3, er:0.95, inception:"2010-02"},
+  {id:"QLD",  name:"QLD — 나스닥100 2배",        base:"^ndx",   yahoo:"^NDX",  lev:2, er:0.95, inception:"2006-06"},
+  {id:"UPRO", name:"UPRO — S&P500 3배",          base:"^spx",   yahoo:"^GSPC", lev:3, er:0.91, inception:"2009-06"},
+  {id:"SSO",  name:"SSO — S&P500 2배",           base:"^spx",   yahoo:"^GSPC", lev:2, er:0.89, inception:"2006-06"},
+  {id:"SOXL", name:"SOXL — 반도체(SOXX) 3배",    base:"soxx.us",yahoo:"SOXX",  lev:3, er:0.75, inception:"2010-03"},
+  {id:"QQQ",  name:"QQQ — 나스닥100 (1배)",      base:"qqq.us", yahoo:"QQQ",   lev:1, er:0.20, inception:"1999-03"},
+  {id:"SPY",  name:"SPY — S&P500 (1배)",         base:"spy.us", yahoo:"SPY",   lev:1, er:0.09, inception:"1993-01"},
+  {id:"SOXX", name:"SOXX — 반도체 (1배)",        base:"soxx.us",yahoo:"SOXX",  lev:1, er:0.35, inception:"2001-07"},
+  {id:"NDX",  name:"^NDX — 나스닥100 지수",      base:"^ndx",   yahoo:"^NDX",  lev:1, er:0.00, inception:"1985-10"},
+  {id:"SPX",  name:"^SPX — S&P500 지수",         base:"^spx",   yahoo:"^GSPC", lev:1, er:0.00, inception:"1957-03"},
+  {id:"CUSTOM",name:"⚙ 직접 입력 (커스텀)",     custom:true},
+];
+
+const $ = s=>document.querySelector(s);
+const sel = $("#instrument");
+CATALOG.forEach(c=>{const o=document.createElement("option");o.value=c.id;o.textContent=c.name;sel.appendChild(o);});
+$("#end").value = new Date().toISOString().slice(0,10);
+
+function curInstr(){ return CATALOG.find(c=>c.id===sel.value); }
+function syncHint(){
+  const c=curInstr();
+  $("#customWrap").style.display = c.custom ? "grid" : "none";
+  if(c.custom){ $("#instrHint").innerHTML = "티커·배수·운용보수를 직접 지정합니다. 티커는 야후 기준(예: ^NDX, QQQ, AAPL)."; return; }
+  const levTxt = c.lev>1 ? `<span class="leverbadge">×${c.lev} 레버리지 합성</span>` : "";
+  $("#instrHint").innerHTML = `기초데이터: <b class="mono">${c.base}</b> · 운용보수 ${c.er}% · 상장 ${c.inception}${levTxt}`;
+}
+sel.addEventListener("change",syncHint); syncHint();
+
+/* live clock */
+setInterval(()=>{ $("#clock").textContent = new Date().toLocaleTimeString("ko-KR",{hour12:false}); },1000);
+
+/* ============================================================
+   DATA — fetch from Stooq (browser) with CSV upload fallback
+   ============================================================ */
+function stooqUrl(sym,d1,d2){
+  const f=s=>s.replaceAll("-","");
+  return `https://stooq.com/q/d/l/?s=${encodeURIComponent(sym)}&d1=${f(d1)}&d2=${f(d2)}&i=d`;
+}
+async function fetchStooq(sym,d1,d2){
+  const res = await fetch(stooqUrl(sym,d1,d2));
+  if(!res.ok) throw new Error("HTTP "+res.status);
+  const text = await res.text();
+  if(/N\/D|<html/i.test(text) || text.split("\n").length<3) throw new Error("빈 응답");
+  return parseCSV(text);
+}
+function parseCSV(text){
+  const lines = text.trim().split(/\r?\n/);
+  const header = lines[0].toLowerCase().split(",");
+  const di = header.indexOf("date");
+  let ci = header.indexOf("adj close"); if(ci<0) ci = header.indexOf("close");
+  if(di<0||ci<0) throw new Error("CSV에 Date/Close 컬럼이 없습니다");
+  const out=[];
+  for(let i=1;i<lines.length;i++){
+    const p=lines[i].split(",");
+    const d=p[di], v=parseFloat(p[ci]);
+    if(d && !isNaN(v) && v>0) out.push({date:d.slice(0,10), close:v});
+  }
+  out.sort((a,b)=>a.date<b.date?-1:1);
+  if(out.length<2) throw new Error("유효 데이터 부족");
+  return out;
+}
+
+/* ============================================================
+   ENGINE
+   ============================================================ */
+function clip(series,start,end){ return series.filter(r=>r.date>=start && r.date<=end); }
+
+// build leveraged synthetic series from base price series
+function synth(series, lev, erPct, finPct){
+  if(lev===1 && erPct===0) return series.map(r=>({date:r.date,close:r.close}));
+  const dailyCost = ((erPct/100) + (lev-1)*(finPct/100))/252;
+  const out=[{date:series[0].date, close:100}];
+  for(let i=1;i<series.length;i++){
+    const r = series[i].close/series[i-1].close - 1;
+    const lr = lev*r - dailyCost;
+    out.push({date:series[i].date, close: out[i-1].close*(1+lr)});
+  }
+  return out;
+}
+
+function metrics(series){
+  const p0=series[0].close, pN=series[series.length-1].close;
+  const days=(new Date(series[series.length-1].date)-new Date(series[0].date))/86400000;
+  const years=days/365.25;
+  const cagr=Math.pow(pN/p0,1/years)-1;
+  let peak=-Infinity, mdd=0, mddDate="", peakDate="";
+  let curPeak=p0, curPeakDate=series[0].date;
+  for(const r of series){
+    if(r.close>curPeak){curPeak=r.close;curPeakDate=r.date;}
+    const dd=r.close/curPeak-1;
+    if(dd<mdd){mdd=dd;mddDate=r.date;peakDate=curPeakDate;}
+  }
+  return {cagr, mdd, mar: mdd!==0? cagr/Math.abs(mdd):0, years, mddDate, peakDate, totMult:pN/p0};
+}
+
+// DCA + lump sum portfolio over the synthetic series
+function portfolio(series, lumpWon, monthlyWon){
+  let units=0, invested=0;
+  const cf=[]; const eqCurve=[]; const invCurve=[];
+  let curMonth="";
+  for(let i=0;i<series.length;i++){
+    const r=series[i]; const mk=r.date.slice(0,7);
+    if(i===0 && lumpWon>0){ units+=lumpWon/r.close; invested+=lumpWon; cf.push({amt:-lumpWon,date:r.date}); }
+    if(mk!==curMonth){ // first trading day of a new month
+      curMonth=mk;
+      if(i>0 && monthlyWon>0){ units+=monthlyWon/r.close; invested+=monthlyWon; cf.push({amt:-monthlyWon,date:r.date}); }
+    }
+    eqCurve.push(units*r.close); invCurve.push(invested);
+  }
+  const finalVal=units*series[series.length-1].close;
+  cf.push({amt:finalVal, date:series[series.length-1].date});
+  return {invested, finalVal, profit:finalVal-invested, mult:finalVal/invested, xirr:xirr(cf), eqCurve, invCurve};
+}
+
+function xirr(cf){
+  if(cf.length<2) return NaN;
+  const t0=new Date(cf[0].date);
+  const yr=d=>(new Date(d)-t0)/(365*86400000);
+  let rate=0.1;
+  for(let k=0;k<200;k++){
+    let f=0,df=0;
+    for(const c of cf){ const t=yr(c.date); const b=Math.pow(1+rate,t); f+=c.amt/b; df+=-t*c.amt/Math.pow(1+rate,t+1); }
+    if(Math.abs(df)<1e-12) break;
+    const nr=rate-f/df;
+    if(!isFinite(nr)) break;
+    if(Math.abs(nr-rate)<1e-7){rate=nr;break;}
+    rate=Math.max(nr,-0.9999);
+  }
+  return rate;
+}
+
+/* ============================================================
+   FORMAT
+   ============================================================ */
+function pct(x){ return (x>=0?"+":"")+(x*100).toFixed(1)+"%"; }
+function fmtWon(won){
+  won=Math.round(won);
+  const eok=Math.floor(won/1e8), man=Math.floor((won%1e8)/1e4), rest=won%1e4;
+  let s="";
+  if(eok>0) s+=eok+"억 ";
+  if(man>0) s+=man.toLocaleString()+"만 ";
+  if(eok===0 && man===0) s+=rest.toLocaleString()+"원";
+  else if(rest>0) s+=rest.toLocaleString()+"원"; else s=s.trim()+"원";
+  return s.trim();
+}
+
+/* ============================================================
+   CHARTS
+   ============================================================ */
+let eqChart=null, ddChart=null, eqLog=false, lastSource="";
+function downsample(arr, max=420){
+  if(arr.length<=max) return arr.map((_,i)=>i);
+  const step=arr.length/max, idx=[];
+  for(let i=0;i<max;i++) idx.push(Math.floor(i*step));
+  idx.push(arr.length-1);
+  return [...new Set(idx)];
+}
+function drawCharts(series, pf, mtr){
+  const idx=downsample(series);
+  const labels=idx.map(i=>series[i].date);
+  const eq=idx.map(i=>pf.eqCurve[i]);
+  const inv=idx.map(i=>pf.invCurve[i]);
+  // drawdown of instrument
+  let peak=-Infinity; const ddFull=series.map(r=>{ if(r.close>peak)peak=r.close; return (r.close/peak-1)*100; });
+  const dd=idx.map(i=>ddFull[i]);
+
+  const gridC="#1c211f", tickC="#566059";
+  const baseOpts=(logScale)=>({
+    responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+    plugins:{legend:{display:false},tooltip:{
+      backgroundColor:"#0c0f0e",borderColor:"#272d2a",borderWidth:1,titleColor:"#8a9690",bodyColor:"#e8efe9",
+      titleFont:{family:"JetBrains Mono",size:11},bodyFont:{family:"JetBrains Mono",size:12},padding:10,
+      callbacks:{label:c=>` ${c.dataset.label}: ${fmtWon(c.parsed.y)}`}
+    }},
+    scales:{
+      x:{grid:{color:gridC,drawTicks:false},ticks:{color:tickC,maxTicksLimit:7,font:{family:"JetBrains Mono",size:10}}},
+      y:logScale?{type:"logarithmic",grid:{color:gridC},ticks:{color:tickC,font:{family:"JetBrains Mono",size:10},callback:v=>fmtShort(v)}}
+                :{grid:{color:gridC},ticks:{color:tickC,font:{family:"JetBrains Mono",size:10},callback:v=>fmtShort(v)}}
+    }
+  });
+
+  if(eqChart) eqChart.destroy();
+  eqChart=new Chart($("#eqCanvas"),{type:"line",data:{labels,datasets:[
+    {label:"평가금액",data:eq,borderColor:"#ffb000",backgroundColor:"rgba(255,176,0,.10)",fill:true,borderWidth:2,pointRadius:0,tension:.05},
+    {label:"투자원금",data:inv,borderColor:"#566059",borderWidth:1.5,borderDash:[5,4],pointRadius:0,fill:false}
+  ]},options:baseOpts(eqLog)});
+
+  if(ddChart) ddChart.destroy();
+  ddChart=new Chart($("#ddCanvas"),{type:"line",data:{labels,datasets:[
+    {label:"낙폭",data:dd,borderColor:"#ff5d5d",backgroundColor:"rgba(255,93,93,.13)",fill:true,borderWidth:1.5,pointRadius:0,tension:.05}
+  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+    plugins:{legend:{display:false},tooltip:{backgroundColor:"#0c0f0e",borderColor:"#272d2a",borderWidth:1,
+      titleColor:"#8a9690",bodyColor:"#ff8f8f",titleFont:{family:"JetBrains Mono",size:11},bodyFont:{family:"JetBrains Mono",size:12},
+      callbacks:{label:c=>` 낙폭 ${c.parsed.y.toFixed(1)}%`}}},
+    scales:{x:{grid:{color:gridC},ticks:{color:tickC,maxTicksLimit:7,font:{family:"JetBrains Mono",size:10}}},
+      y:{grid:{color:gridC},ticks:{color:tickC,font:{family:"JetBrains Mono",size:10},callback:v=>v+"%"},max:0}}}});
+}
+function fmtShort(v){ if(v>=1e8)return (v/1e8).toFixed(1)+"억"; if(v>=1e4)return Math.round(v/1e4)+"만"; return Math.round(v); }
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+function renderResults(series, instr, lumpWon, monthlyWon, simulated){
+  const mtr=metrics(series);
+  const pf=portfolio(series, lumpWon, monthlyWon);
+  const usedStart=series[0].date, usedEnd=series[series.length-1].date;
+  const simBadge = simulated ? `<span class="leverbadge">×${instr.lev} 합성 시뮬레이션</span>` : "";
+  const srcBadge = lastSource ? `<span class="leverbadge" style="color:var(--cyan);background:rgba(79,214,224,.1);border-color:rgba(79,214,224,.3)">${lastSource}</span>` : "";
+
+  $("#results").innerHTML = `
+    <div class="card" style="margin-bottom:20px">
+      <h2>${instr.id} · ${usedStart} → ${usedEnd} ${simBadge}${srcBadge}</h2>
+      <div class="metrics">
+        <div class="metric"><div class="k">CAGR (연복리)</div>
+          <div class="v ${mtr.cagr>=0?'pos':'neg'}">${pct(mtr.cagr)}</div>
+          <div class="s">${mtr.years.toFixed(1)}년 · 총 ${mtr.totMult.toFixed(1)}배</div></div>
+        <div class="metric mdd"><div class="k">MDD (최대낙폭)</div>
+          <div class="v neg">${(mtr.mdd*100).toFixed(1)}%</div>
+          <div class="s">${mtr.peakDate} → ${mtr.mddDate}</div></div>
+        <div class="metric mar"><div class="k">MAR (CAGR/MDD)</div>
+          <div class="v cy">${mtr.mar.toFixed(2)}</div>
+          <div class="s">위험 대비 수익</div></div>
+      </div>
+
+      <div class="summary">
+        <div class="srow"><span class="lab">거치식 + 적립식 총 투자원금</span><span class="val">${fmtWon(pf.invested)}</span></div>
+        <div class="srow big"><span class="lab">최종 평가금액</span><span class="val ${pf.finalVal>=pf.invested?'pos':'neg'}">${fmtWon(pf.finalVal)}</span></div>
+        <div class="srow"><span class="lab">총 수익금</span><span class="val ${pf.profit>=0?'pos':'neg'}">${pf.profit>=0?'+':''}${fmtWon(pf.profit)} (${pf.mult.toFixed(2)}배)</span></div>
+        <div class="srow"><span class="lab">연환산 수익률 (XIRR · 자금가중)</span><span class="val ${pf.xirr>=0?'pos':'neg'}">${pct(pf.xirr)}</span></div>
+      </div>
+    </div>
+
+    <div class="card chartcard">
+      <div class="charthead">
+        <h3>자산 곡선</h3>
+        <div style="display:flex;gap:14px;align-items:center">
+          <div class="legend"><span><i style="background:#ffb000"></i>평가금액</span><span><i style="background:#566059"></i>투자원금</span></div>
+          <div class="toggle"><button id="linBtn" class="${eqLog?'':'on'}">선형</button><button id="logBtn" class="${eqLog?'on':''}">로그</button></div>
+        </div>
+      </div>
+      <div class="chartbox"><canvas id="eqCanvas"></canvas></div>
+    </div>
+
+    <div class="card chartcard">
+      <div class="charthead"><h3>낙폭 곡선 (Drawdown)</h3>
+        <div class="legend"><span><i style="background:#ff5d5d"></i>고점 대비 하락률</span></div></div>
+      <div class="chartbox"><canvas id="ddCanvas"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div class="note" style="border:none;margin:0;padding:0">
+        <b>해석 메모</b> · CAGR/MDD/MAR은 <b>종목 시계열 자체</b> 기준입니다(거치식 일시불 관점). 적립식이 섞이면 매수 시점이 분산돼 실제 체감 수익률은 <b>XIRR</b>가 더 정확합니다.
+        ${simulated?`<br>· 이 종목은 <b>${instr.base}</b> 기초데이터로 합성한 ×${instr.lev} 시뮬레이션입니다. 차입비용을 0으로 두면 실제보다 낙관적으로 나옵니다 — 실제 ${instr.id}에 가깝게 보려면 차입비용 1~3%를 넣어 보세요.`:""}
+      </div>
+    </div>
+  `;
+  drawCharts(series, pf, mtr);
+  $("#linBtn").onclick=()=>{eqLog=false;renderResults(series,instr,lumpWon,monthlyWon,simulated);};
+  $("#logBtn").onclick=()=>{eqLog=true;renderResults(series,instr,lumpWon,monthlyWon,simulated);};
+}
+
+/* ============================================================
+   FALLBACK UI (when Stooq fetch blocked by CORS)
+   ============================================================ */
+function showFallback(instr, d1, d2, doRun){
+  const url=stooqUrl(instr.base,d1,d2);
+  $("#results").innerHTML = `
+    <div class="card">
+      <div class="fallback">
+        <h3>⚠ 자동 데이터 수신 불가 — CSV로 직접 올리기</h3>
+        <p>프록시 주소가 비어 있거나 응답이 없습니다. 아래에서 CSV를 받아 그대로 올리면 동일하게 계산됩니다. (받을 데이터: <b class="mono">${instr.base}</b>)</p>
+        <a class="dl" href="${url}" target="_blank" rel="noopener">⬇ Stooq에서 ${instr.base} CSV 받기</a>
+        <p style="margin-top:8px">파일을 받았으면 여기에 올려주세요:</p>
+        <label class="uploadbox" id="drop">클릭하거나 CSV 파일을 끌어다 놓기 · <span class="mono">Date,Close</span> 형식</label>
+        <input id="file" type="file" accept=".csv,text/csv" style="display:none">
+        <div class="err" id="upErr"></div>
+        <div class="note" style="border:none;padding:8px 0 0">Yahoo Finance·investing.com 등에서 받은 CSV(<span class="mono">Adj Close</span> 포함)도 인식합니다.</div>
+      </div>
+    </div>`;
+  const fileEl=$("#file"), drop=$("#drop");
+  drop.onclick=()=>fileEl.click();
+  drop.ondragover=e=>{e.preventDefault();drop.style.borderColor="#ffb000";};
+  drop.ondragleave=()=>drop.style.borderColor="";
+  drop.ondrop=e=>{e.preventDefault();drop.style.borderColor="";if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0]);};
+  fileEl.onchange=e=>{ if(e.target.files[0]) handleFile(e.target.files[0]); };
+  function handleFile(f){
+    const rd=new FileReader();
+    rd.onload=()=>{ try{ const base=parseCSV(rd.result); lastSource="CSV 업로드"; doRun(base); }catch(err){ $("#upErr").textContent="❌ "+err.message; } };
+    rd.readAsText(f);
+  }
+}
+
+/* ============================================================
+   MAIN
+   ============================================================ */
+$("#run").addEventListener("click", async ()=>{
+  $("#ctrlErr").textContent="";
+  const c=curInstr();
+  let instr;
+  if(c.custom){
+    const sym=$("#cSymbol").value.trim();
+    if(!sym){ $("#ctrlErr").textContent="티커를 입력하세요."; return; }
+    instr={id:sym.toUpperCase(), base:sym, yahoo:sym, lev:parseFloat($("#cLev").value)||1, er:parseFloat($("#cER").value)||0};
+  } else {
+    instr={...c};
+  }
+  const d1=$("#start").value, d2=$("#end").value;
+  if(!d1||!d2||d1>=d2){ $("#ctrlErr").textContent="기간을 확인하세요 (시작 < 종료)."; return; }
+  const lumpWon=(parseFloat($("#lump").value)||0)*1e4;
+  const monthlyWon=(parseFloat($("#monthly").value)||0)*1e4;
+  if(lumpWon<=0 && monthlyWon<=0){ $("#ctrlErr").textContent="거치식 또는 월적립 금액을 입력하세요."; return; }
+  const finPct=parseFloat($("#finance").value)||0;
+  const simulated = instr.lev>1;
+
+  const compute=(baseSeries)=>{
+    const clipped=clip(baseSeries,d1,d2);
+    if(clipped.length<10){ 
+      $("#results").innerHTML=`<div class="card"><div class="err">해당 기간 데이터가 부족합니다. 기초데이터 시작일을 확인하세요 (요청 ${d1}).</div></div>`;
+      return;
+    }
+    const series=synth(clipped, instr.lev, instr.er, finPct);
+    renderResults(series, instr, lumpWon, monthlyWon, simulated);
+  };
+
+  const PROXY = "https://s-backtesting.thdghkstlr.workers.dev";
+  const btn=$("#run"); btn.disabled=true; const orig=btn.textContent; btn.textContent="⟳ 데이터 수신 중...";
+  const symLabel = instr.yahoo || instr.base;
+  $("#results").innerHTML=`<div class="card"><div class="loading"><span class="spin"></span> ${symLabel} 데이터 불러오는 중...</div></div>`;
+  try{
+    if(!PROXY) throw new Error("NO_PROXY");
+    const y=encodeURIComponent(instr.yahoo||instr.base), s=encodeURIComponent(instr.base);
+    const res=await fetch(`${PROXY}/?yahoo=${y}&stooq=${s}&from=${d1}&to=${d2}`);
+    const j=await res.json();
+    if(!res.ok || !j.data) throw new Error(j.error || ("프록시 오류 "+res.status));
+    lastSource = j.source==="yahoo"?"Yahoo 실시간":(j.source==="stooq"?"Stooq":(j.source||"프록시"));
+    compute(j.data);
+  }catch(err){
+    lastSource = "CSV 업로드";
+    showFallback(instr, d1, d2, compute);
+  }finally{
+    btn.disabled=false; btn.textContent=orig;
+  }
+});
+</script>
+</body>
+</html>

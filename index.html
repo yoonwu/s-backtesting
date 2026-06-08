@@ -3,28 +3,16 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>LEVERAGE LAB · 레버리지 백테스트</title>
+<title>LEVERAGE LAB · 레버리지 백테스트 비교</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   :root{
-    --bg:#0b0d0c;
-    --bg-soft:#121514;
-    --panel:#15191700;
-    --line:#23292600;
-    --ink:#e8efe9;
-    --ink-dim:#8a9690;
-    --ink-faint:#566059;
-    --amber:#ffb000;
-    --amber-soft:#ffc54d;
-    --green:#36e08a;
-    --red:#ff5d5d;
-    --cyan:#4fd6e0;
-    --grid:#1c211f;
-    --border:#272d2a;
-    --radius:14px;
+    --bg:#0b0d0c; --bg-soft:#121514; --ink:#e8efe9; --ink-dim:#8a9690; --ink-faint:#566059;
+    --amber:#ffb000; --amber-soft:#ffc54d; --green:#36e08a; --red:#ff5d5d; --cyan:#4fd6e0;
+    --grid:#1c211f; --border:#272d2a; --radius:14px;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{background:var(--bg);color:var(--ink);font-family:"IBM Plex Sans",sans-serif;-webkit-font-smoothing:antialiased}
@@ -34,143 +22,133 @@
       radial-gradient(900px 500px at 88% -8%, rgba(255,176,0,.07), transparent 60%),
       radial-gradient(700px 500px at 5% 110%, rgba(79,214,224,.05), transparent 55%),
       var(--bg);
-    padding:0 0 80px;
+    padding:0 0 90px;
   }
   .mono{font-family:"JetBrains Mono",monospace;font-variant-numeric:tabular-nums}
-  .wrap{max-width:1180px;margin:0 auto;padding:0 22px}
+  .wrap{max-width:1280px;margin:0 auto;padding:0 22px}
 
-  /* header */
-  header.top{
-    border-bottom:1px solid var(--border);
-    padding:26px 0 22px;
-    margin-bottom:30px;
-    position:relative;
-    overflow:hidden;
-  }
-  .top:before{
-    content:"";position:absolute;inset:0;
-    background:repeating-linear-gradient(90deg,transparent 0 38px, rgba(255,176,0,.025) 38px 39px);
-    pointer-events:none;
-  }
+  header.top{border-bottom:1px solid var(--border);padding:24px 0 20px;margin-bottom:26px;position:relative;overflow:hidden}
+  .top:before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0 38px, rgba(255,176,0,.025) 38px 39px);pointer-events:none}
   .brandrow{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap}
   .brand{display:flex;align-items:center;gap:14px}
-  .dot{
-    width:13px;height:13px;border-radius:50%;background:var(--amber);
-    box-shadow:0 0 0 4px rgba(255,176,0,.15),0 0 22px 2px rgba(255,176,0,.55);
-    animation:pulse 2.6s ease-in-out infinite;
-  }
+  .dot{width:13px;height:13px;border-radius:50%;background:var(--amber);box-shadow:0 0 0 4px rgba(255,176,0,.15),0 0 22px 2px rgba(255,176,0,.55);animation:pulse 2.6s ease-in-out infinite}
   @keyframes pulse{50%{opacity:.45;transform:scale(.85)}}
-  h1{
-    font-family:"Bricolage Grotesque",sans-serif;font-weight:800;
-    font-size:clamp(26px,3.4vw,40px);letter-spacing:-.02em;line-height:.95;
-  }
+  h1{font-family:"Bricolage Grotesque",sans-serif;font-weight:800;font-size:clamp(24px,3vw,36px);letter-spacing:-.02em;line-height:.95}
   h1 span{color:var(--amber)}
-  .tagline{color:var(--ink-dim);font-size:13px;margin-top:6px;letter-spacing:.01em}
-  .ticker-tape{
-    font-size:11.5px;color:var(--ink-faint);text-align:right;
-    letter-spacing:.08em;text-transform:uppercase;line-height:1.7;
-  }
+  .tagline{color:var(--ink-dim);font-size:13px;margin-top:6px}
+  .ticker-tape{font-size:11.5px;color:var(--ink-faint);text-align:right;letter-spacing:.08em;text-transform:uppercase;line-height:1.7}
   .ticker-tape b{color:var(--amber-soft);font-weight:500}
 
-  /* layout */
-  .grid{display:grid;grid-template-columns:380px 1fr;gap:26px;align-items:start}
-  @media(max-width:920px){.grid{grid-template-columns:1fr}}
+  .grid{display:grid;grid-template-columns:390px 1fr;gap:26px;align-items:start}
+  @media(max-width:980px){.grid{grid-template-columns:1fr}}
 
-  .card{
-    background:linear-gradient(180deg, rgba(255,255,255,.018), transparent), var(--bg-soft);
-    border:1px solid var(--border);border-radius:var(--radius);
-    padding:22px;position:relative;
-  }
-  .card h2{
-    font-family:"Bricolage Grotesque",sans-serif;font-weight:700;font-size:13px;
-    letter-spacing:.16em;text-transform:uppercase;color:var(--ink-dim);
-    margin-bottom:18px;display:flex;align-items:center;gap:9px;
-  }
+  .card{background:linear-gradient(180deg, rgba(255,255,255,.018), transparent), var(--bg-soft);border:1px solid var(--border);border-radius:var(--radius);padding:22px;position:relative}
+  .card h2{font-family:"Bricolage Grotesque",sans-serif;font-weight:700;font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:18px;display:flex;align-items:center;gap:9px}
   .card h2:before{content:"";width:18px;height:2px;background:var(--amber)}
 
-  .field{margin-bottom:16px}
+  .field{margin-bottom:15px}
   .field label{display:block;font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:7px}
   .field .hint{font-size:11px;color:var(--ink-faint);margin-top:5px;line-height:1.5}
-  input,select{
-    width:100%;background:#0c0f0e;border:1px solid var(--border);color:var(--ink);
-    border-radius:9px;padding:11px 13px;font-size:14px;font-family:"JetBrains Mono",monospace;
-    transition:border-color .15s, box-shadow .15s;
-  }
+  input,select{width:100%;background:#0c0f0e;border:1px solid var(--border);color:var(--ink);border-radius:9px;padding:10px 12px;font-size:14px;font-family:"JetBrains Mono",monospace;transition:border-color .15s, box-shadow .15s}
   input:focus,select:focus{outline:none;border-color:var(--amber);box-shadow:0 0 0 3px rgba(255,176,0,.12)}
   select{cursor:pointer}
+  select option,select optgroup{background:#15191a;color:var(--ink)}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .quickrange{display:flex;gap:6px;flex-wrap:wrap;margin:-2px 0 16px}
+  .quickrange button{flex:1;min-width:42px;padding:8px 4px;border:1px solid var(--border);background:#0c0f0e;color:var(--ink-dim);border-radius:8px;font-family:"JetBrains Mono",monospace;font-size:12px;cursor:pointer;transition:.15s}
+  .quickrange button:hover{border-color:var(--amber);color:var(--amber)}
+  .quickrange button.on{background:var(--amber);color:#1a1300;font-weight:700;border-color:var(--amber)}
   .suffix{position:relative}
-  .suffix .u{position:absolute;right:13px;top:50%;transform:translateY(-50%);color:var(--ink-faint);font-size:12px;pointer-events:none;font-family:"JetBrains Mono",monospace}
+  .suffix .u{position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--ink-faint);font-size:12px;pointer-events:none;font-family:"JetBrains Mono",monospace}
 
-  .runbtn{
-    width:100%;margin-top:6px;padding:15px;border:none;border-radius:10px;cursor:pointer;
-    background:var(--amber);color:#1a1300;font-family:"Bricolage Grotesque",sans-serif;font-weight:800;
-    font-size:15px;letter-spacing:.04em;text-transform:uppercase;transition:transform .1s, box-shadow .2s;
-    box-shadow:0 6px 22px rgba(255,176,0,.28);
-  }
+  .slots{display:flex;flex-direction:column;gap:9px;margin-bottom:12px}
+  .slot{display:flex;align-items:center;gap:9px;background:#0c0f0e;border:1px solid var(--border);border-radius:10px;padding:8px 10px}
+  .slot .cdot{width:11px;height:11px;border-radius:50%;flex-shrink:0;box-shadow:0 0 8px 0 currentColor}
+  .slot select{border:none;background:transparent;padding:4px 2px;font-size:13px}
+  .slot select:focus{box-shadow:none}
+  .slot .rm{flex-shrink:0;width:24px;height:24px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--ink-faint);cursor:pointer;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;transition:.15s}
+  .slot .rm:hover{border-color:var(--red);color:var(--red)}
+  .slot.custom-open{flex-wrap:wrap}
+  .slot .custom-fields{display:flex;gap:7px;width:100%;margin-top:7px;padding-top:8px;border-top:1px solid var(--grid)}
+  .slot .custom-fields input{font-size:12px;padding:7px 9px}
+  .addbtn{width:100%;padding:11px;border:1px dashed var(--border);border-radius:10px;background:transparent;color:var(--ink-dim);font-family:"JetBrains Mono",monospace;font-size:12.5px;cursor:pointer;transition:.15s}
+  .addbtn:hover{border-color:var(--amber);color:var(--amber)}
+  .addbtn:disabled{opacity:.35;cursor:not-allowed}
+
+  .runbtn{width:100%;margin-top:8px;padding:15px;border:none;border-radius:10px;cursor:pointer;background:var(--amber);color:#1a1300;font-family:"Bricolage Grotesque",sans-serif;font-weight:800;font-size:15px;letter-spacing:.04em;text-transform:uppercase;transition:transform .1s, box-shadow .2s;box-shadow:0 6px 22px rgba(255,176,0,.28)}
   .runbtn:hover{transform:translateY(-1px);box-shadow:0 10px 30px rgba(255,176,0,.4)}
   .runbtn:active{transform:translateY(0)}
   .runbtn:disabled{opacity:.5;cursor:wait;box-shadow:none}
 
-  .leverbadge{
-    display:inline-flex;align-items:center;gap:6px;font-family:"JetBrains Mono",monospace;font-size:11px;
-    color:var(--amber);background:rgba(255,176,0,.1);border:1px solid rgba(255,176,0,.3);
-    padding:3px 9px;border-radius:30px;margin-left:8px;letter-spacing:.04em;
-  }
+  .saverow{display:flex;gap:8px;margin-top:14px}
+  .saverow input{flex:1;font-size:12.5px;padding:9px 11px}
+  .saverow button{flex-shrink:0;padding:9px 14px;border:1px solid var(--border);background:#0c0f0e;color:var(--ink-dim);border-radius:9px;font-family:"JetBrains Mono",monospace;font-size:12px;cursor:pointer;transition:.15s}
+  .saverow button:hover{border-color:var(--cyan);color:var(--cyan)}
+  .saved-list{display:flex;flex-wrap:wrap;gap:7px;margin-top:11px}
+  .saved-chip{display:inline-flex;align-items:center;gap:7px;background:#0c0f0e;border:1px solid var(--border);border-radius:30px;padding:6px 8px 6px 13px;font-size:12px;font-family:"JetBrains Mono",monospace;color:var(--ink-dim);cursor:pointer;transition:.15s}
+  .saved-chip:hover{border-color:var(--cyan);color:var(--ink)}
+  .saved-chip .x{width:17px;height:17px;border-radius:50%;background:rgba(255,255,255,.05);color:var(--ink-faint);display:flex;align-items:center;justify-content:center;font-size:12px;line-height:1}
+  .saved-chip .x:hover{background:var(--red);color:#fff}
 
-  /* results */
-  .placeholder{
-    border:1px dashed var(--border);border-radius:var(--radius);padding:60px 30px;text-align:center;color:var(--ink-faint);
-    background:repeating-linear-gradient(135deg,transparent 0 16px, rgba(255,255,255,.012) 16px 17px);
-  }
+  .err{color:var(--red);font-size:12.5px;margin-top:8px;font-family:"JetBrains Mono",monospace;line-height:1.5}
+  .note{font-size:11.5px;color:var(--ink-faint);line-height:1.6;margin-top:16px;padding-top:14px;border-top:1px solid var(--grid)}
+  .note b{color:var(--ink-dim)}
+
+  .placeholder{border:1px dashed var(--border);border-radius:var(--radius);padding:70px 30px;text-align:center;color:var(--ink-faint);background:repeating-linear-gradient(135deg,transparent 0 16px, rgba(255,255,255,.012) 16px 17px)}
   .placeholder .big{font-family:"Bricolage Grotesque",sans-serif;font-size:18px;color:var(--ink-dim);margin-bottom:8px}
+  .loading{display:flex;align-items:center;gap:12px;color:var(--ink-dim);font-family:"JetBrains Mono",monospace;font-size:13px;padding:50px;justify-content:center}
+  .spin{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--amber);border-radius:50%;animation:sp .7s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
 
-  .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:22px}
-  @media(max-width:520px){.metrics{grid-template-columns:1fr}}
-  .metric{
-    background:var(--bg-soft);border:1px solid var(--border);border-radius:12px;padding:18px;position:relative;overflow:hidden;
-  }
-  .metric:after{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--amber)}
-  .metric.mdd:after{background:var(--red)}
-  .metric.mar:after{background:var(--cyan)}
-  .metric .k{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-dim)}
-  .metric .v{font-family:"JetBrains Mono",monospace;font-weight:700;font-size:30px;margin-top:8px;letter-spacing:-.01em}
-  .metric .s{font-size:11.5px;color:var(--ink-faint);margin-top:4px;font-family:"JetBrains Mono",monospace}
-  .pos{color:var(--green)} .neg{color:var(--red)} .amb{color:var(--amber)} .cy{color:var(--cyan)}
-
-  .summary{background:var(--bg-soft);border:1px solid var(--border);border-radius:12px;padding:6px 20px;margin-bottom:22px}
-  .srow{display:flex;justify-content:space-between;align-items:center;padding:13px 0;border-bottom:1px solid var(--grid)}
-  .srow:last-child{border-bottom:none}
-  .srow .lab{color:var(--ink-dim);font-size:13.5px}
-  .srow .val{font-family:"JetBrains Mono",monospace;font-weight:500;font-size:15px}
-  .srow.big .val{font-size:19px;font-weight:700}
+  .ctable-wrap{overflow-x:auto;margin:-4px -4px 0;padding:4px}
+  table.ctable{width:100%;border-collapse:collapse;font-size:13.5px}
+  table.ctable th,table.ctable td{padding:13px 14px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--grid)}
+  table.ctable thead th{font-family:"Bricolage Grotesque",sans-serif;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim);font-weight:700;text-align:right;border-bottom:1px solid var(--border)}
+  table.ctable thead th:first-child,table.ctable td.name{text-align:left}
+  table.ctable td.name{font-family:"JetBrains Mono",monospace;font-weight:700;font-size:13.5px}
+  table.ctable td.num{font-family:"JetBrains Mono",monospace;font-variant-numeric:tabular-nums;font-weight:500}
+  table.ctable tbody tr:hover{background:rgba(255,255,255,.02)}
+  .namecell{display:flex;align-items:center;gap:9px}
+  .namecell .cdot{width:10px;height:10px;border-radius:50%;flex-shrink:0;box-shadow:0 0 8px 0 currentColor}
+  .pos{color:var(--green)} .neg{color:var(--red)} .amb{color:var(--amber)} .cy{color:var(--cyan)} .dimv{color:var(--ink-faint)}
+  .hl-good{color:var(--green);font-weight:700}
+  .hl-bad{color:var(--red);font-weight:700}
 
   .chartcard{margin-bottom:20px}
-  .charthead{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+  .charthead{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:10px}
   .charthead h3{font-family:"Bricolage Grotesque",sans-serif;font-size:14px;font-weight:700;letter-spacing:.02em}
-  .legend{display:flex;gap:16px;font-size:11.5px;color:var(--ink-dim)}
-  .legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px}
-  .chartbox{height:240px;position:relative}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink-dim);margin-bottom:6px}
+  .legend span{display:inline-flex;align-items:center;cursor:pointer;transition:opacity .15s}
+  .legend span.off{opacity:.35;text-decoration:line-through}
+  .legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px}
+  .chartbox{height:340px;position:relative}
+  .chartbox.short{height:240px}
   .toggle{display:flex;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden}
   .toggle button{background:transparent;border:none;color:var(--ink-dim);font-family:"JetBrains Mono",monospace;font-size:11px;padding:6px 11px;cursor:pointer}
   .toggle button.on{background:var(--amber);color:#1a1300;font-weight:700}
 
-  /* data fallback */
-  .fallback{border:1px solid rgba(255,176,0,.35);background:rgba(255,176,0,.05);border-radius:12px;padding:20px;margin-bottom:20px}
-  .fallback h3{font-family:"Bricolage Grotesque",sans-serif;font-size:14px;color:var(--amber-soft);margin-bottom:10px}
-  .fallback p{font-size:13px;color:var(--ink-dim);line-height:1.65;margin-bottom:12px}
-  .fallback a.dl{display:inline-block;background:#0c0f0e;border:1px solid var(--amber);color:var(--amber);text-decoration:none;font-family:"JetBrains Mono",monospace;font-size:12.5px;padding:9px 14px;border-radius:8px;margin:0 8px 8px 0}
-  .fallback a.dl:hover{background:rgba(255,176,0,.12)}
-  .uploadbox{border:1px dashed var(--border);border-radius:9px;padding:16px;text-align:center;cursor:pointer;transition:border-color .15s;font-size:13px;color:var(--ink-dim)}
-  .uploadbox:hover{border-color:var(--amber)}
-  .err{color:var(--red);font-size:12.5px;margin-top:6px;font-family:"JetBrains Mono",monospace}
-  .note{font-size:11.5px;color:var(--ink-faint);line-height:1.6;margin-top:14px;padding-top:14px;border-top:1px solid var(--grid)}
-  .note b{color:var(--ink-dim)}
+  .sectitle{font-family:"Bricolage Grotesque",sans-serif;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-dim);margin:4px 0 14px;display:flex;align-items:center;gap:9px}
+  .sectitle:before{content:"";width:18px;height:2px;background:var(--amber)}
 
-  .loading{display:flex;align-items:center;gap:12px;color:var(--ink-dim);font-family:"JetBrains Mono",monospace;font-size:13px;padding:40px;justify-content:center}
-  .spin{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--amber);border-radius:50%;animation:sp .7s linear infinite}
-  @keyframes sp{to{transform:rotate(360deg)}}
+  .ytable-wrap{overflow-x:auto;margin:-4px -4px 0;padding:4px;max-height:520px;overflow-y:auto}
+  table.ytable{width:100%;border-collapse:collapse;font-size:13px}
+  table.ytable th,table.ytable td{padding:10px 13px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--grid);font-family:"JetBrains Mono",monospace;font-variant-numeric:tabular-nums}
+  table.ytable thead th{font-size:11px;letter-spacing:.06em;color:var(--ink-dim);font-weight:700;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg-soft);z-index:1}
+  table.ytable thead th .nm{display:inline-flex;align-items:center;gap:6px}
+  table.ytable thead th .cdot{width:8px;height:8px;border-radius:50%}
+  table.ytable td:first-child,table.ytable th:first-child{text-align:left;color:var(--ink-dim);font-weight:700}
+  table.ytable tbody tr:hover{background:rgba(255,255,255,.02)}
+  table.ytable tfoot td{border-top:1px solid var(--border);border-bottom:none;font-weight:700;padding-top:13px;position:sticky;bottom:0;background:var(--bg-soft)}
+  table.ytable tfoot td:first-child{color:var(--ink)}
+  .cellpos{color:var(--green)} .cellneg{color:var(--red)}
+
+  .subtabs{display:flex;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:16px;width:fit-content}
+  .subtabs button{background:transparent;border:none;color:var(--ink-dim);font-family:"JetBrains Mono",monospace;font-size:12px;padding:8px 16px;cursor:pointer;transition:.15s}
+  .subtabs button.on{background:var(--amber);color:#1a1300;font-weight:700}
+
+  .fallback{border:1px solid rgba(255,176,0,.35);background:rgba(255,176,0,.05);border-radius:12px;padding:18px;margin-top:14px}
+  .fallback h3{font-family:"Bricolage Grotesque",sans-serif;font-size:13.5px;color:var(--amber-soft);margin-bottom:8px}
+  .fallback p{font-size:12.5px;color:var(--ink-dim);line-height:1.6}
 </style>
 </head>
 <body>
@@ -179,11 +157,11 @@
   <div class="wrap brandrow">
     <div>
       <div class="brand"><span class="dot"></span><h1>LEVERAGE <span>LAB</span></h1></div>
-      <div class="tagline">레버리지 ETF 백테스트 · 기초지수 합성 시뮬레이션 · CAGR / MDD / MAR</div>
+      <div class="tagline">레버리지 ETF 백테스트 비교 · 최대 6종목 · 기초지수 합성 시뮬레이션</div>
     </div>
     <div class="ticker-tape mono">
-      ENGINE <b>v0.1</b> &nbsp;·&nbsp; DAILY RESET MODEL<br>
-      DATA <b>YAHOO / STOOQ</b> &nbsp;·&nbsp; LUMP-SUM + DCA<br>
+      ENGINE <b>v0.2 · COMPARE</b><br>
+      DATA <b>YAHOO / STOOQ</b> · DAILY RESET<br>
       <b id="clock">--:--:--</b> KST
     </div>
   </div>
@@ -191,68 +169,64 @@
 
 <div class="wrap grid">
 
-  <!-- ============ CONTROL PANEL ============ -->
   <section class="card">
     <h2>설정 패널</h2>
 
-    <!-- 데이터 프록시 URL은 내부적으로 고정됨 (s-backtesting.thdghkstlr.workers.dev) -->
-
-    <div class="field">
-      <label>종목 / 지수</label>
-      <select id="instrument"></select>
-      <div class="hint" id="instrHint"></div>
+    <div class="row2">
+      <div class="field" style="margin-bottom:9px"><label>시작일</label><input id="start" type="date" value="2010-01-01"></div>
+      <div class="field" style="margin-bottom:9px"><label>종료일</label><input id="end" type="date"></div>
     </div>
-
-    <div class="row3" id="customWrap" style="display:none">
-      <div class="field"><label>티커 (야후 기준)</label><input id="cSymbol" placeholder="예: ^NDX, QQQ, AAPL"></div>
-      <div class="field"><label>배수</label><input id="cLev" type="number" value="3" step="0.5"></div>
-      <div class="field"><label>운용보수 %</label><input id="cER" type="number" value="0.95" step="0.01"></div>
+    <div class="quickrange" id="quickRange">
+      <button data-y="1">1년</button>
+      <button data-y="3">3년</button>
+      <button data-y="5">5년</button>
+      <button data-y="10">10년</button>
+      <button data-y="15">15년</button>
+      <button data-y="0">최대</button>
     </div>
 
     <div class="row2">
-      <div class="field"><label>시작일</label><input id="start" type="date" value="2010-01-01"></div>
-      <div class="field"><label>종료일</label><input id="end" type="date"></div>
+      <div class="field"><label>거치식 투자금</label>
+        <div class="suffix"><input id="lump" class="mono" type="number" value="1000" step="100"><span class="u">만원</span></div></div>
+      <div class="field"><label>월 적립금</label>
+        <div class="suffix"><input id="monthly" class="mono" type="number" value="0" step="10"><span class="u">만원</span></div></div>
     </div>
 
-    <div class="field">
-      <label>거치식 투자금액</label>
-      <div class="suffix"><input id="lump" class="mono" type="number" value="1000" step="100"><span class="u">만원</span></div>
-    </div>
-
-    <div class="field">
-      <label>월 적립 투자금액</label>
-      <div class="suffix"><input id="monthly" class="mono" type="number" value="100" step="10"><span class="u">만원/월</span></div>
-      <div class="hint">매월 첫 영업일에 매수. 0이면 거치식만 계산합니다.</div>
-    </div>
-
-    <div class="field">
-      <label>차입비용 (연 %) — 레버리지 정확도 보정</label>
+    <div class="field"><label>차입비용 (연 %) — 레버리지 보정</label>
       <div class="suffix"><input id="finance" class="mono" type="number" value="0" step="0.1"><span class="u">% / 년</span></div>
-      <div class="hint">0이면 운용보수만 차감(낙관적). 실제 TQQQ에 가깝게 보려면 1~3% 정도를 넣어 보세요.</div>
+      <div class="hint">레버리지 종목 공통 적용. 실제 TQQQ에 가깝게 보려면 1~3% 권장. 커스텀 슬롯엔 미적용.</div>
     </div>
 
-    <button class="runbtn" id="run">▶ 백테스트 실행</button>
+    <div class="field" style="margin-bottom:9px">
+      <label>비교 종목 <span class="mono" id="slotCount" style="color:var(--ink-faint)"></span></label>
+    </div>
+    <div class="slots" id="slots"></div>
+    <button class="addbtn" id="addSlot">＋ 종목 추가</button>
+
+    <button class="runbtn" id="run">▶ 비교 실행</button>
     <div class="err" id="ctrlErr"></div>
 
+    <div class="saverow">
+      <input id="saveName" placeholder="구성 이름 (예: 3배 레버리지 3종)">
+      <button id="saveBtn">💾 저장</button>
+    </div>
+    <div class="saved-list" id="savedList"></div>
+
     <div class="note">
-      <b>계산 방식</b> · 레버리지 종목은 <b>기초지수 일간수익률 × 배수 − (운용보수+차입비용)/252</b>로 매일 리셋하는 합성 시계열을 만들어 전 기간(상장 전 포함)을 계산합니다. CAGR·MDD·MAR은 이 종목 시계열 기준, 적립식 성과는 XIRR(자금가중)로 별도 표시합니다.
+      <b>계산 방식</b> · 레버리지 종목은 <b>기초지수 일간수익률 × 배수 − (운용보수+차입비용)/252</b>로 매일 리셋하는 합성 시계열을 만들어 전 기간(상장 전 포함)을 계산합니다. CAGR·MDD·MAR은 종목 시계열 기준, 적립식 성과는 XIRR(자금가중)로 표시합니다.
     </div>
   </section>
 
-  <!-- ============ RESULTS ============ -->
   <section id="results">
     <div class="placeholder">
-      <div class="big">설정 후 <span class="amb">실행</span>을 누르면<br>여기에 결과가 표시됩니다</div>
-      <div class="mono" style="font-size:12px">CAGR · MDD · MAR · 자산곡선 · 낙폭곡선</div>
+      <div class="big">종목을 고르고 <span class="amb">비교 실행</span>을 누르면<br>여기에 결과가 표시됩니다</div>
+      <div class="mono" style="font-size:12px">비교표 · 멀티라인 자산곡선 · 낙폭곡선 · 연도별 수익률</div>
     </div>
   </section>
 
 </div>
 
 <script>
-/* ============================================================
-   CATALOG  — Stooq symbols + leverage definitions
-   ============================================================ */
 const CATALOG = [
   {id:"TQQQ", name:"TQQQ — 나스닥100 3배",      base:"^ndx",   yahoo:"^NDX",  lev:3, er:0.95, inception:"2010-02"},
   {id:"QLD",  name:"QLD — 나스닥100 2배",        base:"^ndx",   yahoo:"^NDX",  lev:2, er:0.95, inception:"2006-06"},
@@ -266,128 +240,136 @@ const CATALOG = [
   {id:"SPX",  name:"^SPX — S&P500 지수",         base:"^spx",   yahoo:"^GSPC", lev:1, er:0.00, inception:"1957-03"},
   {id:"CUSTOM",name:"⚙ 직접 입력 (커스텀)",     custom:true},
 ];
+const COLORS = ["#ffb000","#4fd6e0","#36e08a","#b07cff","#ff7cc4","#ff8f3c"];
+const PROXY = "https://s-backtesting.thdghkstlr.workers.dev";
+const MAX_SLOTS = 6;
 
 const $ = s=>document.querySelector(s);
-const sel = $("#instrument");
-CATALOG.forEach(c=>{const o=document.createElement("option");o.value=c.id;o.textContent=c.name;sel.appendChild(o);});
+const $$ = s=>document.querySelectorAll(s);
 $("#end").value = new Date().toISOString().slice(0,10);
-
-function curInstr(){ return CATALOG.find(c=>c.id===sel.value); }
-function syncHint(){
-  const c=curInstr();
-  $("#customWrap").style.display = c.custom ? "grid" : "none";
-  if(c.custom){ $("#instrHint").innerHTML = "티커·배수·운용보수를 직접 지정합니다. 티커는 야후 기준(예: ^NDX, QQQ, AAPL)."; return; }
-  const levTxt = c.lev>1 ? `<span class="leverbadge">×${c.lev} 레버리지 합성</span>` : "";
-  $("#instrHint").innerHTML = `기초데이터: <b class="mono">${c.base}</b> · 운용보수 ${c.er}% · 상장 ${c.inception}${levTxt}`;
-}
-sel.addEventListener("change",syncHint); syncHint();
-
-/* live clock */
 setInterval(()=>{ $("#clock").textContent = new Date().toLocaleTimeString("ko-KR",{hour12:false}); },1000);
 
-/* ============================================================
-   DATA — fetch from Stooq (browser) with CSV upload fallback
-   ============================================================ */
-function stooqUrl(sym,d1,d2){
-  const f=s=>s.replaceAll("-","");
-  return `https://stooq.com/q/d/l/?s=${encodeURIComponent(sym)}&d1=${f(d1)}&d2=${f(d2)}&i=d`;
-}
-async function fetchStooq(sym,d1,d2){
-  const res = await fetch(stooqUrl(sym,d1,d2));
-  if(!res.ok) throw new Error("HTTP "+res.status);
-  const text = await res.text();
-  if(/N\/D|<html/i.test(text) || text.split("\n").length<3) throw new Error("빈 응답");
-  return parseCSV(text);
-}
-function parseCSV(text){
-  const lines = text.trim().split(/\r?\n/);
-  const header = lines[0].toLowerCase().split(",");
-  const di = header.indexOf("date");
-  let ci = header.indexOf("adj close"); if(ci<0) ci = header.indexOf("close");
-  if(di<0||ci<0) throw new Error("CSV에 Date/Close 컬럼이 없습니다");
-  const out=[];
-  for(let i=1;i<lines.length;i++){
-    const p=lines[i].split(",");
-    const d=p[di], v=parseFloat(p[ci]);
-    if(d && !isNaN(v) && v>0) out.push({date:d.slice(0,10), close:v});
-  }
-  out.sort((a,b)=>a.date<b.date?-1:1);
-  if(out.length<2) throw new Error("유효 데이터 부족");
-  return out;
-}
+/* ---- 빠른 기간 (종료일 기준 시작일 계산) ---- */
+$$("#quickRange button").forEach(b=>b.onclick=()=>{
+  const end = $("#end").value || new Date().toISOString().slice(0,10);
+  const y = +b.dataset.y;
+  if(y===0){ $("#start").value = "1970-01-01"; }   // 최대: 데이터 있는 시점부터 자동 클립
+  else { const d=new Date(end); d.setFullYear(d.getFullYear()-y); $("#start").value = d.toISOString().slice(0,10); }
+  $$("#quickRange button").forEach(x=>x.classList.remove("on"));
+  b.classList.add("on");
+});
+// 시작/종료일을 직접 수정하면 빠른버튼 선택 해제
+$("#start").addEventListener("input",()=>$$("#quickRange button").forEach(x=>x.classList.remove("on")));
+$("#end").addEventListener("input",()=>$$("#quickRange button").forEach(x=>x.classList.remove("on")));
 
-/* ============================================================
-   ENGINE
-   ============================================================ */
+/* ---- SLOTS ---- */
+let slots = [];
+let uidSeq = 1;
+function addSlot(preset){
+  if(slots.length>=MAX_SLOTS) return;
+  slots.push({uid:uidSeq++, instrId:"TQQQ", cSym:"", cLev:3, cER:0.95, ...(preset||{})});
+  renderSlots();
+}
+function rmSlot(uid){ slots = slots.filter(s=>s.uid!==uid); renderSlots(); }
+function renderSlots(){
+  const wrap = $("#slots"); wrap.innerHTML="";
+  slots.forEach((s,i)=>{
+    const color = COLORS[i%COLORS.length];
+    const c = CATALOG.find(x=>x.id===s.instrId) || CATALOG[0];
+    const div = document.createElement("div");
+    div.className = "slot"+(c.custom?" custom-open":"");
+    div.innerHTML = `
+      <span class="cdot" style="background:${color};color:${color}"></span>
+      <select data-uid="${s.uid}" class="slotSel">
+        ${CATALOG.map(o=>`<option value="${o.id}" ${o.id===s.instrId?"selected":""}>${o.name}</option>`).join("")}
+      </select>
+      <button class="rm" data-uid="${s.uid}" title="제거">×</button>
+      ${c.custom?`
+      <div class="custom-fields">
+        <input class="cSym" data-uid="${s.uid}" placeholder="티커 ^NDX/QQQ" value="${s.cSym||""}" style="flex:2">
+        <input class="cLev" data-uid="${s.uid}" type="number" step="0.5" value="${s.cLev}" title="배수" style="flex:1">
+        <input class="cER" data-uid="${s.uid}" type="number" step="0.01" value="${s.cER}" title="보수%" style="flex:1">
+      </div>`:""}
+    `;
+    wrap.appendChild(div);
+  });
+  $("#slotCount").textContent = `(${slots.length}/${MAX_SLOTS})`;
+  $("#addSlot").disabled = slots.length>=MAX_SLOTS;
+  $$(".slotSel").forEach(el=>el.onchange=e=>{ slots.find(x=>x.uid==e.target.dataset.uid).instrId=e.target.value; renderSlots(); });
+  $$(".slot .rm").forEach(el=>el.onclick=e=>rmSlot(+e.target.dataset.uid));
+  $$(".cSym").forEach(el=>el.oninput=e=>{slots.find(x=>x.uid==e.target.dataset.uid).cSym=e.target.value;});
+  $$(".cLev").forEach(el=>el.oninput=e=>{slots.find(x=>x.uid==e.target.dataset.uid).cLev=parseFloat(e.target.value)||1;});
+  $$(".cER").forEach(el=>el.oninput=e=>{slots.find(x=>x.uid==e.target.dataset.uid).cER=parseFloat(e.target.value)||0;});
+}
+$("#addSlot").onclick=()=>addSlot();
+addSlot({instrId:"TQQQ"}); addSlot({instrId:"QLD"}); addSlot({instrId:"QQQ"});
+
+/* ---- ENGINE ---- */
 function clip(series,start,end){ return series.filter(r=>r.date>=start && r.date<=end); }
-
-// build leveraged synthetic series from base price series
 function synth(series, lev, erPct, finPct){
   if(lev===1 && erPct===0) return series.map(r=>({date:r.date,close:r.close}));
   const dailyCost = ((erPct/100) + (lev-1)*(finPct/100))/252;
   const out=[{date:series[0].date, close:100}];
   for(let i=1;i<series.length;i++){
     const r = series[i].close/series[i-1].close - 1;
-    const lr = lev*r - dailyCost;
-    out.push({date:series[i].date, close: out[i-1].close*(1+lr)});
+    out.push({date:series[i].date, close: out[i-1].close*(1+lev*r-dailyCost)});
   }
   return out;
 }
-
 function metrics(series){
   const p0=series[0].close, pN=series[series.length-1].close;
-  const days=(new Date(series[series.length-1].date)-new Date(series[0].date))/86400000;
-  const years=days/365.25;
+  const years=(new Date(series[series.length-1].date)-new Date(series[0].date))/86400000/365.25;
   const cagr=Math.pow(pN/p0,1/years)-1;
-  let peak=-Infinity, mdd=0, mddDate="", peakDate="";
-  let curPeak=p0, curPeakDate=series[0].date;
+  let curPeak=p0, curPeakDate=series[0].date, mdd=0, mddDate="", peakDate="";
   for(const r of series){
     if(r.close>curPeak){curPeak=r.close;curPeakDate=r.date;}
     const dd=r.close/curPeak-1;
     if(dd<mdd){mdd=dd;mddDate=r.date;peakDate=curPeakDate;}
   }
-  return {cagr, mdd, mar: mdd!==0? cagr/Math.abs(mdd):0, years, mddDate, peakDate, totMult:pN/p0};
+  return {cagr, mdd, mar: mdd!==0?cagr/Math.abs(mdd):0, years, mddDate, peakDate, totMult:pN/p0};
 }
-
-// DCA + lump sum portfolio over the synthetic series
 function portfolio(series, lumpWon, monthlyWon){
-  let units=0, invested=0;
-  const cf=[]; const eqCurve=[]; const invCurve=[];
-  let curMonth="";
+  let units=0, invested=0; const cf=[], eqCurve=[], invCurve=[]; let curMonth="";
   for(let i=0;i<series.length;i++){
-    const r=series[i]; const mk=r.date.slice(0,7);
+    const r=series[i], mk=r.date.slice(0,7);
     if(i===0 && lumpWon>0){ units+=lumpWon/r.close; invested+=lumpWon; cf.push({amt:-lumpWon,date:r.date}); }
-    if(mk!==curMonth){ // first trading day of a new month
-      curMonth=mk;
-      if(i>0 && monthlyWon>0){ units+=monthlyWon/r.close; invested+=monthlyWon; cf.push({amt:-monthlyWon,date:r.date}); }
-    }
+    if(mk!==curMonth){ curMonth=mk; if(i>0 && monthlyWon>0){ units+=monthlyWon/r.close; invested+=monthlyWon; cf.push({amt:-monthlyWon,date:r.date}); } }
     eqCurve.push(units*r.close); invCurve.push(invested);
   }
   const finalVal=units*series[series.length-1].close;
   cf.push({amt:finalVal, date:series[series.length-1].date});
   return {invested, finalVal, profit:finalVal-invested, mult:finalVal/invested, xirr:xirr(cf), eqCurve, invCurve};
 }
-
 function xirr(cf){
   if(cf.length<2) return NaN;
-  const t0=new Date(cf[0].date);
-  const yr=d=>(new Date(d)-t0)/(365*86400000);
+  const t0=new Date(cf[0].date), yr=d=>(new Date(d)-t0)/(365*86400000);
   let rate=0.1;
   for(let k=0;k<200;k++){
     let f=0,df=0;
-    for(const c of cf){ const t=yr(c.date); const b=Math.pow(1+rate,t); f+=c.amt/b; df+=-t*c.amt/Math.pow(1+rate,t+1); }
+    for(const c of cf){ const t=yr(c.date), b=Math.pow(1+rate,t); f+=c.amt/b; df+=-t*c.amt/Math.pow(1+rate,t+1); }
     if(Math.abs(df)<1e-12) break;
-    const nr=rate-f/df;
-    if(!isFinite(nr)) break;
+    const nr=rate-f/df; if(!isFinite(nr)) break;
     if(Math.abs(nr-rate)<1e-7){rate=nr;break;}
     rate=Math.max(nr,-0.9999);
   }
   return rate;
 }
+function yearly(series, eqCurve){
+  const map=new Map();
+  for(let i=0;i<series.length;i++){
+    const y=series[i].date.slice(0,4);
+    if(!map.has(y)) map.set(y,{first:series[i].close,last:series[i].close,eq:eqCurve?eqCurve[i]:0});
+    const o=map.get(y); o.last=series[i].close; if(eqCurve)o.eq=eqCurve[i];
+  }
+  const years=[...map.keys()].sort(); const rows=[]; let prev=null;
+  for(const y of years){
+    const o=map.get(y), base=prev!==null?prev:o.first;
+    rows.push({year:y, ret:o.last/base-1, eq:o.eq}); prev=o.last;
+  }
+  return rows;
+}
 
-/* ============================================================
-   FORMAT
-   ============================================================ */
+/* ---- FORMAT ---- */
 function pct(x){ return (x>=0?"+":"")+(x*100).toFixed(1)+"%"; }
 function fmtWon(won){
   won=Math.round(won);
@@ -399,204 +381,330 @@ function fmtWon(won){
   else if(rest>0) s+=rest.toLocaleString()+"원"; else s=s.trim()+"원";
   return s.trim();
 }
-
-/* ============================================================
-   CHARTS
-   ============================================================ */
-let eqChart=null, ddChart=null, eqLog=false, lastSource="";
-function downsample(arr, max=420){
-  if(arr.length<=max) return arr.map((_,i)=>i);
-  const step=arr.length/max, idx=[];
+function fmtShort(v){ if(v>=1e8)return (v/1e8).toFixed(2)+"억"; if(v>=1e4)return Math.round(v/1e4).toLocaleString()+"만"; return Math.round(v); }
+function downsample(len, max=460){
+  if(len<=max) return Array.from({length:len},(_,i)=>i);
+  const step=len/max, idx=[];
   for(let i=0;i<max;i++) idx.push(Math.floor(i*step));
-  idx.push(arr.length-1);
-  return [...new Set(idx)];
-}
-function drawCharts(series, pf, mtr){
-  const idx=downsample(series);
-  const labels=idx.map(i=>series[i].date);
-  const eq=idx.map(i=>pf.eqCurve[i]);
-  const inv=idx.map(i=>pf.invCurve[i]);
-  // drawdown of instrument
-  let peak=-Infinity; const ddFull=series.map(r=>{ if(r.close>peak)peak=r.close; return (r.close/peak-1)*100; });
-  const dd=idx.map(i=>ddFull[i]);
-
-  const gridC="#1c211f", tickC="#566059";
-  const baseOpts=(logScale)=>({
-    responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
-    plugins:{legend:{display:false},tooltip:{
-      backgroundColor:"#0c0f0e",borderColor:"#272d2a",borderWidth:1,titleColor:"#8a9690",bodyColor:"#e8efe9",
-      titleFont:{family:"JetBrains Mono",size:11},bodyFont:{family:"JetBrains Mono",size:12},padding:10,
-      callbacks:{label:c=>` ${c.dataset.label}: ${fmtWon(c.parsed.y)}`}
-    }},
-    scales:{
-      x:{grid:{color:gridC,drawTicks:false},ticks:{color:tickC,maxTicksLimit:7,font:{family:"JetBrains Mono",size:10}}},
-      y:logScale?{type:"logarithmic",grid:{color:gridC},ticks:{color:tickC,font:{family:"JetBrains Mono",size:10},callback:v=>fmtShort(v)}}
-                :{grid:{color:gridC},ticks:{color:tickC,font:{family:"JetBrains Mono",size:10},callback:v=>fmtShort(v)}}
-    }
-  });
-
-  if(eqChart) eqChart.destroy();
-  eqChart=new Chart($("#eqCanvas"),{type:"line",data:{labels,datasets:[
-    {label:"평가금액",data:eq,borderColor:"#ffb000",backgroundColor:"rgba(255,176,0,.10)",fill:true,borderWidth:2,pointRadius:0,tension:.05},
-    {label:"투자원금",data:inv,borderColor:"#566059",borderWidth:1.5,borderDash:[5,4],pointRadius:0,fill:false}
-  ]},options:baseOpts(eqLog)});
-
-  if(ddChart) ddChart.destroy();
-  ddChart=new Chart($("#ddCanvas"),{type:"line",data:{labels,datasets:[
-    {label:"낙폭",data:dd,borderColor:"#ff5d5d",backgroundColor:"rgba(255,93,93,.13)",fill:true,borderWidth:1.5,pointRadius:0,tension:.05}
-  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
-    plugins:{legend:{display:false},tooltip:{backgroundColor:"#0c0f0e",borderColor:"#272d2a",borderWidth:1,
-      titleColor:"#8a9690",bodyColor:"#ff8f8f",titleFont:{family:"JetBrains Mono",size:11},bodyFont:{family:"JetBrains Mono",size:12},
-      callbacks:{label:c=>` 낙폭 ${c.parsed.y.toFixed(1)}%`}}},
-    scales:{x:{grid:{color:gridC},ticks:{color:tickC,maxTicksLimit:7,font:{family:"JetBrains Mono",size:10}}},
-      y:{grid:{color:gridC},ticks:{color:tickC,font:{family:"JetBrains Mono",size:10},callback:v=>v+"%"},max:0}}}});
-}
-function fmtShort(v){ if(v>=1e8)return (v/1e8).toFixed(1)+"억"; if(v>=1e4)return Math.round(v/1e4)+"만"; return Math.round(v); }
-
-/* ============================================================
-   RENDER
-   ============================================================ */
-function renderResults(series, instr, lumpWon, monthlyWon, simulated){
-  const mtr=metrics(series);
-  const pf=portfolio(series, lumpWon, monthlyWon);
-  const usedStart=series[0].date, usedEnd=series[series.length-1].date;
-  const simBadge = simulated ? `<span class="leverbadge">×${instr.lev} 합성 시뮬레이션</span>` : "";
-  const srcBadge = lastSource ? `<span class="leverbadge" style="color:var(--cyan);background:rgba(79,214,224,.1);border-color:rgba(79,214,224,.3)">${lastSource}</span>` : "";
-
-  $("#results").innerHTML = `
-    <div class="card" style="margin-bottom:20px">
-      <h2>${instr.id} · ${usedStart} → ${usedEnd} ${simBadge}${srcBadge}</h2>
-      <div class="metrics">
-        <div class="metric"><div class="k">CAGR (연복리)</div>
-          <div class="v ${mtr.cagr>=0?'pos':'neg'}">${pct(mtr.cagr)}</div>
-          <div class="s">${mtr.years.toFixed(1)}년 · 총 ${mtr.totMult.toFixed(1)}배</div></div>
-        <div class="metric mdd"><div class="k">MDD (최대낙폭)</div>
-          <div class="v neg">${(mtr.mdd*100).toFixed(1)}%</div>
-          <div class="s">${mtr.peakDate} → ${mtr.mddDate}</div></div>
-        <div class="metric mar"><div class="k">MAR (CAGR/MDD)</div>
-          <div class="v cy">${mtr.mar.toFixed(2)}</div>
-          <div class="s">위험 대비 수익</div></div>
-      </div>
-
-      <div class="summary">
-        <div class="srow"><span class="lab">거치식 + 적립식 총 투자원금</span><span class="val">${fmtWon(pf.invested)}</span></div>
-        <div class="srow big"><span class="lab">최종 평가금액</span><span class="val ${pf.finalVal>=pf.invested?'pos':'neg'}">${fmtWon(pf.finalVal)}</span></div>
-        <div class="srow"><span class="lab">총 수익금</span><span class="val ${pf.profit>=0?'pos':'neg'}">${pf.profit>=0?'+':''}${fmtWon(pf.profit)} (${pf.mult.toFixed(2)}배)</span></div>
-        <div class="srow"><span class="lab">연환산 수익률 (XIRR · 자금가중)</span><span class="val ${pf.xirr>=0?'pos':'neg'}">${pct(pf.xirr)}</span></div>
-      </div>
-    </div>
-
-    <div class="card chartcard">
-      <div class="charthead">
-        <h3>자산 곡선</h3>
-        <div style="display:flex;gap:14px;align-items:center">
-          <div class="legend"><span><i style="background:#ffb000"></i>평가금액</span><span><i style="background:#566059"></i>투자원금</span></div>
-          <div class="toggle"><button id="linBtn" class="${eqLog?'':'on'}">선형</button><button id="logBtn" class="${eqLog?'on':''}">로그</button></div>
-        </div>
-      </div>
-      <div class="chartbox"><canvas id="eqCanvas"></canvas></div>
-    </div>
-
-    <div class="card chartcard">
-      <div class="charthead"><h3>낙폭 곡선 (Drawdown)</h3>
-        <div class="legend"><span><i style="background:#ff5d5d"></i>고점 대비 하락률</span></div></div>
-      <div class="chartbox"><canvas id="ddCanvas"></canvas></div>
-    </div>
-
-    <div class="card">
-      <div class="note" style="border:none;margin:0;padding:0">
-        <b>해석 메모</b> · CAGR/MDD/MAR은 <b>종목 시계열 자체</b> 기준입니다(거치식 일시불 관점). 적립식이 섞이면 매수 시점이 분산돼 실제 체감 수익률은 <b>XIRR</b>가 더 정확합니다.
-        ${simulated?`<br>· 이 종목은 <b>${instr.base}</b> 기초데이터로 합성한 ×${instr.lev} 시뮬레이션입니다. 차입비용을 0으로 두면 실제보다 낙관적으로 나옵니다 — 실제 ${instr.id}에 가깝게 보려면 차입비용 1~3%를 넣어 보세요.`:""}
-      </div>
-    </div>
-  `;
-  drawCharts(series, pf, mtr);
-  $("#linBtn").onclick=()=>{eqLog=false;renderResults(series,instr,lumpWon,monthlyWon,simulated);};
-  $("#logBtn").onclick=()=>{eqLog=true;renderResults(series,instr,lumpWon,monthlyWon,simulated);};
+  idx.push(len-1); return [...new Set(idx)];
 }
 
-/* ============================================================
-   FALLBACK UI (when Stooq fetch blocked by CORS)
-   ============================================================ */
-function showFallback(instr, d1, d2, doRun){
-  const url=stooqUrl(instr.base,d1,d2);
-  $("#results").innerHTML = `
-    <div class="card">
-      <div class="fallback">
-        <h3>⚠ 자동 데이터 수신 불가 — CSV로 직접 올리기</h3>
-        <p>프록시 주소가 비어 있거나 응답이 없습니다. 아래에서 CSV를 받아 그대로 올리면 동일하게 계산됩니다. (받을 데이터: <b class="mono">${instr.base}</b>)</p>
-        <a class="dl" href="${url}" target="_blank" rel="noopener">⬇ Stooq에서 ${instr.base} CSV 받기</a>
-        <p style="margin-top:8px">파일을 받았으면 여기에 올려주세요:</p>
-        <label class="uploadbox" id="drop">클릭하거나 CSV 파일을 끌어다 놓기 · <span class="mono">Date,Close</span> 형식</label>
-        <input id="file" type="file" accept=".csv,text/csv" style="display:none">
-        <div class="err" id="upErr"></div>
-        <div class="note" style="border:none;padding:8px 0 0">Yahoo Finance·investing.com 등에서 받은 CSV(<span class="mono">Adj Close</span> 포함)도 인식합니다.</div>
-      </div>
-    </div>`;
-  const fileEl=$("#file"), drop=$("#drop");
-  drop.onclick=()=>fileEl.click();
-  drop.ondragover=e=>{e.preventDefault();drop.style.borderColor="#ffb000";};
-  drop.ondragleave=()=>drop.style.borderColor="";
-  drop.ondrop=e=>{e.preventDefault();drop.style.borderColor="";if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0]);};
-  fileEl.onchange=e=>{ if(e.target.files[0]) handleFile(e.target.files[0]); };
-  function handleFile(f){
-    const rd=new FileReader();
-    rd.onload=()=>{ try{ const base=parseCSV(rd.result); lastSource="CSV 업로드"; doRun(base); }catch(err){ $("#upErr").textContent="❌ "+err.message; } };
-    rd.readAsText(f);
+/* ---- CHART PLUGIN: 최고/최저점 숫자 라벨 ---- */
+const peakLabelPlugin = {
+  id:"peakLabels",
+  afterDatasetsDraw(chart, args, opts){
+    if(!opts || !opts.enabled) return;
+    const {ctx} = chart;
+    const isWon = opts.isWon;
+    chart.data.datasets.forEach((ds,di)=>{
+      const meta=chart.getDatasetMeta(di);
+      if(meta.hidden || !ds.data || !ds.data.length) return;
+      let maxI=0,minI=0;
+      for(let i=0;i<ds.data.length;i++){
+        if(ds.data[i]>ds.data[maxI]) maxI=i;
+        if(ds.data[i]<ds.data[minI]) minI=i;
+      }
+      [{i:maxI,up:true},{i:minI,up:false}].forEach(({i,up})=>{
+        const el=meta.data[i]; if(!el) return;
+        const val=ds.data[i];
+        const txt=(up?"▲":"▼")+(isWon?fmtShort(val):val.toFixed(0)+"%");
+        ctx.save();
+        ctx.font='700 10px "JetBrains Mono", monospace';
+        const w=ctx.measureText(txt).width+10;
+        let x=el.x-w/2, y=up?el.y-17:el.y+9;
+        x=Math.max(2,Math.min(x,chart.chartArea.right-w));
+        y=Math.max(chart.chartArea.top,Math.min(y,chart.chartArea.bottom-15));
+        ctx.fillStyle="rgba(12,15,14,.92)";
+        ctx.strokeStyle=ds.borderColor; ctx.lineWidth=1;
+        roundRect(ctx,x,y,w,15,4); ctx.fill(); ctx.stroke();
+        ctx.fillStyle=ds.borderColor; ctx.textBaseline="middle"; ctx.textAlign="left";
+        ctx.fillText(txt,x+5,y+8);
+        ctx.restore();
+      });
+    });
   }
+};
+function roundRect(ctx,x,y,w,h,r){ ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath(); }
+Chart.register(peakLabelPlugin);
+
+/* ---- STATE ---- */
+let lastRun=null, eqChart=null, ddChart=null;
+let eqMode="value", eqLog=false, yearMode="ret";
+let hidden=new Set();
+
+/* ---- FETCH ---- */
+async function fetchBase(yahoo, base, from, to, cache){
+  const key=`${yahoo}|${base}`;
+  if(cache[key]) return cache[key];
+  const res=await fetch(`${PROXY}/?yahoo=${encodeURIComponent(yahoo)}&stooq=${encodeURIComponent(base)}&from=${from}&to=${to}`);
+  const j=await res.json();
+  if(!res.ok || !j.data) throw new Error(j.error||("프록시 오류 "+res.status));
+  cache[key]={data:j.data, source:j.source};
+  return cache[key];
 }
 
-/* ============================================================
-   MAIN
-   ============================================================ */
+/* ---- RUN ---- */
 $("#run").addEventListener("click", async ()=>{
   $("#ctrlErr").textContent="";
-  const c=curInstr();
-  let instr;
-  if(c.custom){
-    const sym=$("#cSymbol").value.trim();
-    if(!sym){ $("#ctrlErr").textContent="티커를 입력하세요."; return; }
-    instr={id:sym.toUpperCase(), base:sym, yahoo:sym, lev:parseFloat($("#cLev").value)||1, er:parseFloat($("#cER").value)||0};
-  } else {
-    instr={...c};
-  }
+  if(slots.length===0){ $("#ctrlErr").textContent="비교할 종목을 1개 이상 추가하세요."; return; }
   const d1=$("#start").value, d2=$("#end").value;
   if(!d1||!d2||d1>=d2){ $("#ctrlErr").textContent="기간을 확인하세요 (시작 < 종료)."; return; }
   const lumpWon=(parseFloat($("#lump").value)||0)*1e4;
   const monthlyWon=(parseFloat($("#monthly").value)||0)*1e4;
   if(lumpWon<=0 && monthlyWon<=0){ $("#ctrlErr").textContent="거치식 또는 월적립 금액을 입력하세요."; return; }
   const finPct=parseFloat($("#finance").value)||0;
-  const simulated = instr.lev>1;
 
-  const compute=(baseSeries)=>{
-    const clipped=clip(baseSeries,d1,d2);
-    if(clipped.length<10){ 
-      $("#results").innerHTML=`<div class="card"><div class="err">해당 기간 데이터가 부족합니다. 기초데이터 시작일을 확인하세요 (요청 ${d1}).</div></div>`;
+  const instrs=[];
+  for(const s of slots){
+    const c=CATALOG.find(x=>x.id===s.instrId);
+    if(c.custom){
+      const sym=(s.cSym||"").trim();
+      if(!sym){ $("#ctrlErr").textContent="커스텀 슬롯의 티커를 입력하세요."; return; }
+      instrs.push({id:sym.toUpperCase(), base:sym, yahoo:sym, lev:s.cLev||1, er:s.cER||0, custom:true});
+    } else instrs.push({...c});
+  }
+
+  const btn=$("#run"); btn.disabled=true; const orig=btn.textContent; btn.textContent="⟳ 데이터 수신 중...";
+  $("#results").innerHTML=`<div class="card"><div class="loading"><span class="spin"></span> ${instrs.length}종목 데이터 불러오는 중...</div></div>`;
+
+  const cache={}; const results=[]; const errors=[];
+  try{
+    const uniq=[...new Map(instrs.map(it=>[`${it.yahoo}|${it.base}`,it])).values()];
+    await Promise.all(uniq.map(it=>fetchBase(it.yahoo,it.base,d1,d2,cache).catch(e=>{errors.push(`${it.id}: ${e.message}`);})));
+
+    instrs.forEach((it,idx)=>{
+      const cd=cache[`${it.yahoo}|${it.base}`];
+      if(!cd) return;
+      const clipped=clip(cd.data,d1,d2);
+      if(clipped.length<10){ errors.push(`${it.id}: 기간 데이터 부족`); return; }
+      const series=synth(clipped, it.lev, it.er, it.custom?0:finPct);
+      const pf=portfolio(series, lumpWon, monthlyWon);
+      results.push({
+        instr:it, color:COLORS[idx%COLORS.length], series,
+        mtr:metrics(series), pf, yr:yearly(series, pf.eqCurve),
+        source: cd.source==="yahoo"?"Yahoo":(cd.source||"proxy"),
+        simulated: it.lev>1
+      });
+    });
+
+    if(results.length===0){
+      $("#results").innerHTML=`<div class="card"><div class="err">데이터를 가져오지 못했습니다.<br>${errors.join("<br>")}</div>
+        <div class="fallback"><h3>⚠ 프록시 응답 없음</h3><p>잠시 후 다시 시도하거나 기간/티커를 확인하세요.</p></div></div>`;
       return;
     }
-    const series=synth(clipped, instr.lev, instr.er, finPct);
-    renderResults(series, instr, lumpWon, monthlyWon, simulated);
-  };
-
-  const PROXY = "https://s-backtesting.thdghkstlr.workers.dev";
-  const btn=$("#run"); btn.disabled=true; const orig=btn.textContent; btn.textContent="⟳ 데이터 수신 중...";
-  const symLabel = instr.yahoo || instr.base;
-  $("#results").innerHTML=`<div class="card"><div class="loading"><span class="spin"></span> ${symLabel} 데이터 불러오는 중...</div></div>`;
-  try{
-    if(!PROXY) throw new Error("NO_PROXY");
-    const y=encodeURIComponent(instr.yahoo||instr.base), s=encodeURIComponent(instr.base);
-    const res=await fetch(`${PROXY}/?yahoo=${y}&stooq=${s}&from=${d1}&to=${d2}`);
-    const j=await res.json();
-    if(!res.ok || !j.data) throw new Error(j.error || ("프록시 오류 "+res.status));
-    lastSource = j.source==="yahoo"?"Yahoo 실시간":(j.source==="stooq"?"Stooq":(j.source||"프록시"));
-    compute(j.data);
+    hidden=new Set();
+    lastRun={results, settings:{d1,d2,lumpWon,monthlyWon,finPct}, errors};
+    render();
   }catch(err){
-    lastSource = "CSV 업로드";
-    showFallback(instr, d1, d2, compute);
+    $("#results").innerHTML=`<div class="card"><div class="err">실행 오류: ${err.message}</div></div>`;
   }finally{
     btn.disabled=false; btn.textContent=orig;
   }
 });
+
+/* ---- RENDER ---- */
+function render(){
+  const {results, settings, errors}=lastRun;
+  const {lumpWon,monthlyWon}=settings;
+
+  const best={cagr:Math.max(...results.map(r=>r.mtr.cagr)), mar:Math.max(...results.map(r=>r.mtr.mar)), final:Math.max(...results.map(r=>r.pf.finalVal))};
+  const worst={mdd:Math.min(...results.map(r=>r.mtr.mdd))};
+  const usedStart=results[0].series[0].date, usedEnd=results[0].series[results[0].series.length-1].date;
+
+  const rows=results.map(r=>{
+    const m=r.mtr, p=r.pf;
+    const cagrCls = m.cagr===best.cagr?"hl-good":(m.cagr>=0?"pos":"neg");
+    const marCls = m.mar===best.mar?"hl-good":"cy";
+    const mddCls = m.mdd===worst.mdd?"hl-bad":"neg";
+    const finCls = p.finalVal===best.final?"hl-good":(p.finalVal>=p.invested?"pos":"neg");
+    return `<tr>
+      <td class="name"><span class="namecell"><span class="cdot" style="background:${r.color};color:${r.color}"></span>${r.instr.id}${r.simulated?` <span class="dimv" style="font-size:10px">×${r.instr.lev}합성</span>`:""}</span></td>
+      <td class="num ${cagrCls}">${pct(m.cagr)}</td>
+      <td class="num ${mddCls}">${(m.mdd*100).toFixed(1)}%</td>
+      <td class="num ${marCls}">${m.mar.toFixed(2)}</td>
+      <td class="num">${m.totMult.toFixed(1)}배</td>
+      <td class="num ${finCls}">${fmtWon(p.finalVal)}</td>
+      <td class="num ${p.xirr>=0?"pos":"neg"}">${pct(p.xirr)}</td>
+    </tr>`;
+  }).join("");
+
+  const allYears=[...new Set(results.flatMap(r=>r.yr.map(y=>y.year)))].sort();
+  const yhead=`<th>연도</th>`+results.map(r=>`<th><span class="nm"><span class="cdot" style="background:${r.color}"></span>${r.instr.id}</span></th>`).join("");
+  const ybody=allYears.map(y=>{
+    const cells=results.map(r=>{
+      const row=r.yr.find(x=>x.year===y);
+      if(!row) return `<td class="dimv">·</td>`;
+      if(yearMode==="ret") return `<td class="${row.ret>=0?"cellpos":"cellneg"}">${pct(row.ret)}</td>`;
+      return `<td>${fmtShort(row.eq)}</td>`;
+    }).join("");
+    return `<tr><td>${y}</td>${cells}</tr>`;
+  }).join("");
+  const yfoot=`<tr><td>전체</td>`+results.map(r=>{
+    if(yearMode==="ret") return `<td class="${r.mtr.totMult>=1?"cellpos":"cellneg"}">${pct(r.mtr.totMult-1)}</td>`;
+    return `<td>${fmtShort(r.pf.finalVal)}</td>`;
+  }).join("")+`</tr>`;
+
+  const errBlock = (errors&&errors.length)?`<div class="fallback" style="margin-bottom:18px"><h3>⚠ 일부 종목 제외됨</h3><p>${errors.join("<br>")}</p></div>`:"";
+
+  $("#results").innerHTML = `
+    <div class="card" style="margin-bottom:20px">
+      <h2>비교 결과 · ${usedStart} → ${usedEnd}</h2>
+      <div style="font-size:12.5px;color:var(--ink-dim);margin:-8px 0 16px;font-family:'JetBrains Mono',monospace">
+        투자원금 ${fmtWon(results[0].pf.invested)} ${monthlyWon>0?`(거치 ${fmtWon(lumpWon)} + 월 ${fmtWon(monthlyWon)})`:"(거치식)"} · ${results.length}종목
+      </div>
+      ${errBlock}
+      <div class="ctable-wrap">
+        <table class="ctable">
+          <thead><tr><th>종목</th><th>CAGR</th><th>MDD</th><th>MAR</th><th>총배수</th><th>최종 평가금액</th><th>XIRR</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div class="note" style="margin-top:14px"><b class="hl-good">초록</b> = 항목별 최고 · <b class="hl-bad">빨강 굵게</b> = 최악(MDD) · CAGR/MDD/MAR은 종목 시계열 기준, XIRR은 적립 포함 자금가중 수익률.</div>
+    </div>
+
+    <div class="card chartcard">
+      <div class="charthead">
+        <h3>자산 곡선 — 평가금액 추이</h3>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <div class="toggle"><button id="mValue" class="${eqMode==="value"?"on":""}">평가금액</button><button id="mGrowth" class="${eqMode==="growth"?"on":""}">성장배수</button></div>
+          <div class="toggle"><button id="linBtn" class="${eqLog?"":"on"}">선형</button><button id="logBtn" class="${eqLog?"on":""}">로그</button></div>
+        </div>
+      </div>
+      <div class="legend" id="legendEq"></div>
+      <div class="chartbox"><canvas id="eqCanvas"></canvas></div>
+      <div class="note" style="margin-top:10px">각 선의 <b>▲최고점 · ▼최저점</b>이 숫자로 표시됩니다. 범례를 클릭하면 종목을 켜고 끌 수 있어요.</div>
+    </div>
+
+    <div class="card chartcard">
+      <div class="charthead"><h3>낙폭 곡선 — 고점 대비 하락률 (%)</h3></div>
+      <div class="legend" id="legendDd"></div>
+      <div class="chartbox short"><canvas id="ddCanvas"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div class="sectitle">연도별 수익률</div>
+      <div class="subtabs"><button id="yRet" class="${yearMode==="ret"?"on":""}">연 수익률</button><button id="yEq" class="${yearMode==="eq"?"on":""}">연말 평가금액</button></div>
+      <div class="ytable-wrap">
+        <table class="ytable">
+          <thead><tr>${yhead}</tr></thead>
+          <tbody>${ybody}</tbody>
+          <tfoot>${yfoot}</tfoot>
+        </table>
+      </div>
+    </div>
+  `;
+
+  drawCharts();
+  buildLegends();
+  $("#mValue").onclick=()=>{eqMode="value";drawCharts();updateToggles();};
+  $("#mGrowth").onclick=()=>{eqMode="growth";drawCharts();updateToggles();};
+  $("#linBtn").onclick=()=>{eqLog=false;drawCharts();updateToggles();};
+  $("#logBtn").onclick=()=>{eqLog=true;drawCharts();updateToggles();};
+  $("#yRet").onclick=()=>{yearMode="ret";render();};
+  $("#yEq").onclick=()=>{yearMode="eq";render();};
+}
+function updateToggles(){
+  $("#mValue").classList.toggle("on",eqMode==="value");
+  $("#mGrowth").classList.toggle("on",eqMode==="growth");
+  $("#linBtn").classList.toggle("on",!eqLog);
+  $("#logBtn").classList.toggle("on",eqLog);
+}
+
+function drawCharts(){
+  const {results}=lastRun;
+  const ref=results.reduce((a,b)=>b.series.length>a.series.length?b:a, results[0]);
+  const idx=downsample(ref.series.length);
+  const labels=idx.map(i=>ref.series[i].date);
+
+  const dsEq=results.map((r,di)=>{
+    const arr = eqMode==="growth" ? r.series.map(p=>p.close/r.series[0].close) : r.pf.eqCurve;
+    return {label:r.instr.id, data:idx.map(i=>arr[Math.min(i,arr.length-1)]), borderColor:r.color,
+      backgroundColor:"transparent", borderWidth:2, pointRadius:0, tension:.06, hidden:hidden.has(di)};
+  });
+  const dsDd=results.map((r,di)=>{
+    let peak=-Infinity; const dd=r.series.map(p=>{ if(p.close>peak)peak=p.close; return (p.close/peak-1)*100; });
+    return {label:r.instr.id, data:idx.map(i=>dd[Math.min(i,dd.length-1)]), borderColor:r.color,
+      backgroundColor:"transparent", borderWidth:1.6, pointRadius:0, tension:.06, hidden:hidden.has(di)};
+  });
+
+  const gridC="#1c211f", tickC="#566059";
+  const tip={backgroundColor:"#0c0f0e",borderColor:"#272d2a",borderWidth:1,titleColor:"#8a9690",bodyColor:"#e8efe9",
+    titleFont:{family:"JetBrains Mono",size:11},bodyFont:{family:"JetBrains Mono",size:12},padding:10};
+
+  if(eqChart) eqChart.destroy();
+  eqChart=new Chart($("#eqCanvas"),{type:"line",data:{labels,datasets:dsEq},options:{
+    responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+    plugins:{legend:{display:false},
+      tooltip:{...tip,callbacks:{label:c=>` ${c.dataset.label}: ${eqMode==="growth"?c.parsed.y.toFixed(2)+"배":fmtWon(c.parsed.y)}`}},
+      peakLabels:{enabled:true, isWon: eqMode!=="growth"}},
+    scales:{
+      x:{grid:{color:gridC,drawTicks:false},ticks:{color:tickC,maxTicksLimit:8,font:{family:"JetBrains Mono",size:10}}},
+      y:eqLog?{type:"logarithmic",grid:{color:gridC},ticks:{color:tickC,font:{family:"JetBrains Mono",size:10},callback:v=>eqMode==="growth"?v+"x":fmtShort(v)}}
+            :{grid:{color:gridC},ticks:{color:tickC,font:{family:"JetBrains Mono",size:10},callback:v=>eqMode==="growth"?v+"x":fmtShort(v)}}
+    }
+  }});
+
+  if(ddChart) ddChart.destroy();
+  ddChart=new Chart($("#ddCanvas"),{type:"line",data:{labels,datasets:dsDd},options:{
+    responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+    plugins:{legend:{display:false},
+      tooltip:{...tip,bodyColor:"#ff8f8f",callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y.toFixed(1)}%`}},
+      peakLabels:{enabled:true, isWon:false}},
+    scales:{
+      x:{grid:{color:gridC},ticks:{color:tickC,maxTicksLimit:8,font:{family:"JetBrains Mono",size:10}}},
+      y:{grid:{color:gridC},ticks:{color:tickC,font:{family:"JetBrains Mono",size:10},callback:v=>v+"%"},max:0}
+    }
+  }});
+}
+function buildLegends(){
+  const {results}=lastRun;
+  const mk=(elId)=>{
+    const el=$("#"+elId); el.innerHTML="";
+    results.forEach((r,di)=>{
+      const span=document.createElement("span");
+      span.className=hidden.has(di)?"off":"";
+      span.innerHTML=`<i style="background:${r.color}"></i>${r.instr.id}`;
+      span.onclick=()=>{ if(hidden.has(di))hidden.delete(di); else hidden.add(di); drawCharts(); buildLegends(); };
+      el.appendChild(span);
+    });
+  };
+  mk("legendEq"); mk("legendDd");
+}
+
+/* ---- SAVE / LOAD ---- */
+const LS_KEY="leveragelab.saved.v1";
+function getSaved(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)||"[]"); }catch{ return []; } }
+function setSaved(arr){ localStorage.setItem(LS_KEY, JSON.stringify(arr)); renderSaved(); }
+function renderSaved(){
+  const list=getSaved(); const el=$("#savedList"); el.innerHTML="";
+  if(!list.length){ el.innerHTML=`<span class="dimv" style="font-size:11.5px;font-family:'JetBrains Mono',monospace">저장된 구성 없음</span>`; return; }
+  list.forEach((s,i)=>{
+    const chip=document.createElement("span");
+    chip.className="saved-chip";
+    chip.innerHTML=`<span class="lbl">${s.name}</span><span class="x" title="삭제">×</span>`;
+    chip.querySelector(".lbl").onclick=()=>loadConfig(s);
+    chip.querySelector(".x").onclick=(e)=>{ e.stopPropagation(); const a=getSaved(); a.splice(i,1); setSaved(a); };
+    el.appendChild(chip);
+  });
+}
+$("#saveBtn").onclick=()=>{
+  const name=($("#saveName").value||"").trim()||`구성 ${new Date().toLocaleDateString("ko-KR")}`;
+  const cfg={ name, start:$("#start").value, end:$("#end").value,
+    lump:$("#lump").value, monthly:$("#monthly").value, finance:$("#finance").value,
+    slots: slots.map(s=>({instrId:s.instrId, cSym:s.cSym, cLev:s.cLev, cER:s.cER})) };
+  const arr=getSaved();
+  const ex=arr.findIndex(x=>x.name===name);
+  if(ex>=0) arr[ex]=cfg; else arr.push(cfg);
+  setSaved(arr); $("#saveName").value="";
+};
+function loadConfig(cfg){
+  $("#start").value=cfg.start; $("#end").value=cfg.end;
+  $("#lump").value=cfg.lump; $("#monthly").value=cfg.monthly; $("#finance").value=cfg.finance||0;
+  slots = cfg.slots.map(s=>({uid:uidSeq++, instrId:s.instrId, cSym:s.cSym||"", cLev:s.cLev||3, cER:s.cER||0.95}));
+  renderSlots(); $("#ctrlErr").textContent="";
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+renderSaved();
 </script>
 </body>
 </html>

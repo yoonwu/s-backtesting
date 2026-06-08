@@ -179,6 +179,20 @@
   .searchdd .sr.msg{color:var(--ink-faint);font-size:12px;justify-content:center;cursor:default}
   .searchdd .sr.msg:hover{background:transparent}
   .searchloading{position:absolute;right:10px;top:50%;transform:translateY(-50%);width:13px;height:13px;border:2px solid var(--border);border-top-color:var(--amber);border-radius:50%;animation:sp .7s linear infinite;pointer-events:none}
+
+  /* 비교 보드 */
+  .boardadd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--grid)}
+  .boardadd .badd-label{font-size:11.5px;color:var(--ink-dim);font-family:"JetBrains Mono",monospace}
+  .badd-btn{padding:7px 13px;border:1px solid var(--border);background:#0c0f0e;color:var(--cyan);border-radius:8px;font-family:"JetBrains Mono",monospace;font-size:12px;cursor:pointer;transition:.15s}
+  .badd-btn:hover{border-color:var(--cyan);background:rgba(79,214,224,.08)}
+  .badd-btn.done{color:var(--green);border-color:var(--green);background:rgba(54,224,138,.08)}
+  .bsort{cursor:pointer;user-select:none}
+  .bsort:hover .th-main{color:var(--cyan)}
+  .brm{width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--ink-faint);cursor:pointer;font-size:14px;line-height:1}
+  .brm:hover{border-color:var(--red);color:var(--red)}
+  .tabbar button .badge{color:var(--cyan);font-size:12px;font-family:"JetBrains Mono",monospace;font-weight:700}
+  .board-clear{margin-top:16px;padding:9px 16px;border:1px solid var(--border);background:#0c0f0e;color:var(--ink-dim);border-radius:9px;font-family:"JetBrains Mono",monospace;font-size:12px;cursor:pointer;transition:.15s}
+  .board-clear:hover{border-color:var(--red);color:var(--red)}
 </style>
 </head>
 <body>
@@ -199,6 +213,8 @@
       <button data-tab="signal">신호 매매<span class="sub">MA Signal</span></button>
       <button data-tab="underwater">언더워터<span class="sub">Recovery</span></button>
       <button data-tab="tranche">분할매수<span class="sub">Tranche</span></button>
+      <button data-tab="shannon">도깨비<span class="sub">Shannon</span></button>
+      <button data-tab="board">비교 보드 <span class="badge" id="tab_board_badge"></span><span class="sub">Board</span></button>
     </div>
   </div>
 </header>
@@ -249,6 +265,9 @@
         <div class="quickrange" data-qr="p"><button data-y="5">5년</button><button data-y="10">10년</button><button data-y="15">15년</button><button data-y="0">최대</button></div>
         <div class="field"><label>현재 투자금</label><div class="suffix"><input id="p_lump" class="mono" type="number" value="1000" step="100"><span class="u">만원</span></div></div>
         <div class="field"><label>매달 추가 적립 (선택)</label><div class="suffix"><input id="p_monthly" class="mono" type="number" value="0" step="10"><span class="u">만원</span></div></div>
+        <div class="field"><label>예측 기간</label>
+          <div class="subtabs" id="p_years"><button data-y="5">5년</button><button data-y="10">10년</button><button data-y="20" class="on">20년</button><button data-y="custom">직접 입력</button></div>
+          <div class="suffix" id="p_yearsCustom" style="display:none;margin-top:9px"><input id="p_yearsInput" class="mono" type="number" value="25" min="1" max="50" step="1"><span class="u">년 (최대 50)</span></div></div>
         <div class="field"><label>연평균 수익률 가정 <span class="mono" id="p_cagrSrc" style="color:var(--ink-faint);font-size:11px"></span></label><div class="suffix"><input id="p_cagr" class="mono" type="number" value="10" step="0.5"><span class="u">% / 년</span></div>
           <div class="subtabs" id="p_preset" style="margin-top:9px"><button data-p="past">과거 그대로</button><button data-p="half">과거의 70%</button><button data-p="ten">보수 10%</button><button data-p="seven">안전 7%</button></div>
           <div class="hint">"예측 실행"을 누르면 과거 수익률이 자동으로 채워져요. 그 뒤 값을 바꾸면 표가 바로 다시 계산됩니다.</div></div>
@@ -367,6 +386,46 @@
     </div>
   </div>
 
+  <!-- =================== TAB: SHANNON =================== -->
+  <div class="tabpane" id="pane-shannon" hidden>
+    <div class="grid">
+      <section class="card">
+        <h2>섀넌의 도깨비 설정</h2>
+        <div class="intro"><b>섀넌의 도깨비(Shannon's Demon)</b> · 종목과 현금을 정해진 비율로 들고, 주기적으로 그 비율을 되돌립니다. 오르면 일부 팔고 떨어지면 사들여서 <b>출렁임 자체에서 수익</b>을 짜내요. 변동성이 크고 옆으로 기는 장에서 빛나고, 한 방향 강세장에선 현금이 발목을 잡습니다.</div>
+        <div class="field"><label>종목</label><select id="sh_instr"></select>
+          <div class="row3" id="sh_custom" style="display:none;margin-top:10px"><input id="sh_cSym" placeholder="티커 검색" autocomplete="off"><input id="sh_cLev" type="number" step="0.5" value="3" title="배수"><input id="sh_cER" type="number" step="0.01" value="0.95" title="보수%"></div></div>
+        <div class="row2">
+          <div class="field" style="margin-bottom:9px"><label>시작일</label><input id="sh_start" type="date" value="2010-01-01"></div>
+          <div class="field" style="margin-bottom:9px"><label>종료일</label><input id="sh_end" type="date"></div>
+        </div>
+        <div class="quickrange" data-qr="sh"><button data-y="5">5년</button><button data-y="10">10년</button><button data-y="15">15년</button><button data-y="0">최대</button></div>
+        <div class="field"><label>총 투자금</label><div class="suffix"><input id="sh_total" class="mono" type="number" value="10000" step="100"><span class="u">만원</span></div></div>
+        <div class="field"><label>목표 비율 — 종목 비중</label><div class="suffix"><input id="sh_target" class="mono" type="number" value="60" min="1" max="99" step="5"><span class="u">% (종목)</span></div>
+          <div class="hint">예: 60 → 종목 60 : 현금 40. 나머지가 현금 비중이에요.</div></div>
+        <div class="field"><label>리밸런싱 방식</label>
+          <div class="subtabs" id="sh_mode"><button data-m="monthly">월별</button><button data-m="yearly">연별</button><button data-m="band" class="on">밴드</button></div></div>
+        <div class="field" id="sh_bandField"><label>밴드 폭 (절대 ±%p)</label><div class="suffix"><input id="sh_band" class="mono" type="number" value="10" min="1" max="40" step="1"><span class="u">±%p</span></div>
+          <div class="hint">예: 종목 목표 60% + 밴드 10% → 비중이 70% 넘거나 50% 밑으로 가면 그때 복원.</div></div>
+        <div class="field"><label>현금 이자 (연 %, 선택)</label><div class="suffix"><input id="sh_cashR" class="mono" type="number" value="0" step="0.1"><span class="u">% / 년</span></div>
+          <div class="hint">SGOV·파킹통장처럼 현금에 이자가 붙는 경우. 기본 0%.</div></div>
+        <div class="field"><label>차입비용 (연 %)</label><div class="suffix"><input id="sh_fin" class="mono" type="number" value="0" step="0.1"><span class="u">% / 년</span></div></div>
+        <button class="runbtn" id="sh_run">▶ 도깨비 실행</button>
+        <div class="err" id="sh_err"></div>
+        <div class="note"><b>비교</b> · 리밸런싱 안 하고 <b>100% 종목만 보유</b>한 경우와 나란히 보여줍니다. 도깨비가 실제로 이득인지 한눈에 확인하세요. 거래비용·세금 미반영.</div>
+      </section>
+      <section id="sh_results"><div class="placeholder"><div class="big">비율·방식을 정하고 <span class="amb">도깨비 실행</span></div><div class="mono" style="font-size:12px">도깨비 vs 100% 보유 · 리밸런싱 횟수 · 자산 곡선</div></div></section>
+    </div>
+  </div>
+
+  <!-- =================== TAB: BOARD =================== -->
+  <div class="tabpane" id="pane-board" hidden>
+    <section class="card" style="margin-top:26px">
+      <h2>비교 보드</h2>
+      <div class="intro">여러 탭에서 <b>"⊕ 비교함에 담기"</b>로 담은 전략을 한자리에 모읍니다. 결국 중요한 건 <b>연평균 수익률·최대 낙폭·위험대비 수익</b> — 헤더를 클릭해 정렬하세요. 담은 내용은 이 브라우저에 저장돼 다음에 와도 남아있어요.</div>
+      <div id="board_body"></div>
+    </section>
+  </div>
+
 </div>
 
 <script>
@@ -392,7 +451,7 @@ const $ = s=>document.querySelector(s);
 const $$ = s=>document.querySelectorAll(s);
 const today = ()=>new Date().toISOString().slice(0,10);
 
-["c_end","r_end","s_end","u_end","t_end","p_end"].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=today(); });
+["c_end","r_end","s_end","u_end","t_end","p_end","sh_end"].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=today(); });
 setInterval(()=>{ $("#clock").textContent = new Date().toLocaleTimeString("ko-KR",{hour12:false}); },1000);
 
 /* ---- 탭 전환 ---- */
@@ -413,7 +472,7 @@ $$(".quickrange").forEach(qr=>{
     qr.querySelectorAll("button").forEach(x=>x.classList.remove("on")); b.classList.add("on");
   });
 });
-["c","r","s","u","t","p"].forEach(pfx=>{
+["c","r","s","u","t","p","sh"].forEach(pfx=>{
   const clear=()=>{ const qr=document.querySelector(`.quickrange[data-qr="${pfx}"]`); if(qr)qr.querySelectorAll("button").forEach(x=>x.classList.remove("on")); };
   const s=$("#"+pfx+"_start"), e=$("#"+pfx+"_end");
   if(s)s.addEventListener("input",clear); if(e)e.addEventListener("input",clear);
@@ -560,6 +619,32 @@ function trancheStrategy(series, initialWon, cashWon, tranches){
   const finalVal=units*series[series.length-1].close+cash;
   const invested=initialWon+(cashWon-cash);
   return {curve, buys, finalVal, cashLeft:cash, invested, units, avgCost:costBasis/units};
+}
+/* 섀넌의 도깨비: 종목+현금 리밸런싱 (mode: monthly|yearly|band) */
+function shannon(series, totalWon, target, mode, band, cashAnnualR){
+  const rmCash = cashAnnualR? Math.pow(1+cashAnnualR/100,1/252)-1 : 0;
+  let units=(totalWon*target)/series[0].close, cash=totalWon*(1-target);
+  let rebals=0; const curve=[]; const events=[];
+  let curMonth=series[0].date.slice(0,7), curYear=series[0].date.slice(0,4);
+  function rebalance(px,date,reason){
+    const total=units*px+cash; units=(total*target)/px; cash=total*(1-target); rebals++;
+    events.push({date,reason,total});
+  }
+  for(let i=0;i<series.length;i++){
+    const px=series[i].close;
+    if(i>0 && rmCash) cash*=(1+rmCash);
+    const total=units*px+cash, stockW=(units*px)/total;
+    const mk=series[i].date.slice(0,7), yk=series[i].date.slice(0,4);
+    if(i>0){
+      if(mode==="monthly" && mk!==curMonth) rebalance(px,series[i].date,"월");
+      else if(mode==="yearly" && yk!==curYear) rebalance(px,series[i].date,"연");
+      else if(mode==="band" && (stockW>target+band || stockW<target-band)) rebalance(px,series[i].date,"밴드");
+    }
+    curMonth=mk; curYear=yk;
+    curve.push({date:series[i].date, value:units*px+cash});
+  }
+  const finalVal=units*series[series.length-1].close+cash;
+  return {curve, finalVal, rebals, events};
 }
 
 /* ---- 포맷 ---- */
@@ -711,6 +796,59 @@ function attachSearch(input, onPick){
 }
 
 /* ============================================================
+   비교 보드 (전 탭 공용, localStorage 저장)
+   ============================================================ */
+const BOARD_LS="leveragelab.board.v1";
+let boardSort={key:"mar",dir:-1};
+function getBoard(){ try{return JSON.parse(localStorage.getItem(BOARD_LS)||"[]");}catch{return[];} }
+function saveBoard(a){ localStorage.setItem(BOARD_LS,JSON.stringify(a)); renderBoard(); }
+function addBoard(e){
+  const mar=(e.mar!=null)?e.mar:(e.mdd?e.cagr/Math.abs(e.mdd):0);
+  const a=getBoard();
+  a.push({id:"b"+Date.now()+Math.random().toString(36).slice(2,5), label:e.label, cagr:e.cagr, mdd:e.mdd, mar, finalVal:e.finalVal});
+  saveBoard(a);
+}
+function removeBoard(id){ saveBoard(getBoard().filter(x=>x.id!==id)); }
+function bArrow(k){ return boardSort.key===k?(boardSort.dir<0?" ▼":" ▲"):""; }
+function renderBoard(){
+  const list=getBoard();
+  const badge=$("#tab_board_badge"); if(badge) badge.textContent=list.length?`(${list.length})`:"";
+  const body=$("#board_body"); if(!body) return;
+  if(!list.length){ body.innerHTML=`<div class="placeholder"><div class="big">아직 담은 전략이 없어요</div><div class="mono" style="font-size:12px">비교·신호매매·분할매수·도깨비 탭에서 결과를 낸 뒤 <span class="cy">⊕ 비교함에 담기</span>를 누르세요</div></div>`; return; }
+  const sorted=[...list].sort((a,b)=>{ const k=boardSort.key; let av=a[k],bv=b[k]; if(k==="mdd"){av=Math.abs(av);bv=Math.abs(bv);} return (av-bv)*boardSort.dir; });
+  const best={cagr:Math.max(...list.map(x=>x.cagr)), mar:Math.max(...list.map(x=>x.mar)), final:Math.max(...list.map(x=>x.finalVal))};
+  const worstMdd=Math.min(...list.map(x=>x.mdd));
+  const rows=sorted.map(e=>`<tr>
+    <td class="name">${esc(e.label)}</td>
+    <td class="num ${e.cagr===best.cagr?'hl-good':(e.cagr>=0?'pos':'neg')}">${pct(e.cagr)}</td>
+    <td class="num ${e.mdd===worstMdd?'hl-bad':'neg'}">${(e.mdd*100).toFixed(1)}%</td>
+    <td class="num ${e.mar===best.mar?'hl-good':'cy'}">${e.mar.toFixed(2)}</td>
+    <td class="num ${e.finalVal===best.final?'hl-good':''}">${fmtWon(e.finalVal)}</td>
+    <td><button class="brm" data-id="${e.id}">×</button></td></tr>`).join("");
+  body.innerHTML=`<div class="ctable-wrap"><table class="ctable"><thead><tr>
+    <th>전략</th>
+    <th class="bsort" data-k="cagr"><span class="th-main">연평균 수익률${bArrow('cagr')}</span><span class="th-sub">CAGR</span></th>
+    <th class="bsort" data-k="mdd"><span class="th-main">최대 낙폭률${bArrow('mdd')}</span><span class="th-sub">MDD</span></th>
+    <th class="bsort" data-k="mar"><span class="th-main">위험대비 수익${bArrow('mar')}</span><span class="th-sub">MAR</span></th>
+    <th class="bsort" data-k="finalVal"><span class="th-main">최종 평가금액${bArrow('finalVal')}</span></th>
+    <th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="note" style="margin-top:14px"><b class="hl-good">초록</b>=항목별 최고(낙폭은 작을수록 좋음) · <b class="hl-bad">빨강</b>=가장 큰 낙폭 · 헤더 클릭 정렬 · 같은 전략을 파라미터만 바꿔 여러 번 담아 비교할 수 있어요.</div>
+    <button class="board-clear" id="board_clear">🗑 전체 비우기</button>`;
+  body.querySelectorAll(".bsort").forEach(th=>th.onclick=()=>{ const k=th.dataset.k; if(boardSort.key===k)boardSort.dir*=-1; else{boardSort.key=k;boardSort.dir=(k==="mdd"?1:-1);} renderBoard(); });
+  body.querySelectorAll(".brm").forEach(b=>b.onclick=()=>removeBoard(b.dataset.id));
+  $("#board_clear").onclick=()=>{ if(confirm("비교 보드를 전부 비울까요?")) saveBoard([]); };
+}
+/* 결과 카드에 담기 버튼 줄 생성. entries=[{label, short, cagr, mdd, mar, finalVal}] */
+function boardAddButtons(containerId, entries){
+  const c=$("#"+containerId); if(!c) return;
+  c.innerHTML=`<span class="badd-label">⊕ 비교함에 담기:</span>`+entries.map((e,i)=>`<button class="badd-btn" data-i="${i}">${esc(e.short)}</button>`).join("");
+  c.querySelectorAll(".badd-btn").forEach(btn=>btn.onclick=()=>{
+    addBoard(entries[+btn.dataset.i]); const t=btn.textContent; btn.textContent="✓ 담김"; btn.classList.add("done");
+    setTimeout(()=>{ btn.textContent=t; btn.classList.remove("done"); },1200);
+  });
+}
+
+/* ============================================================
    TAB 1: COMPARE
    ============================================================ */
 const cSlots=SlotManager("c",6,[{instrId:"TQQQ"},{instrId:"QLD"},{instrId:"QQQ"}]);
@@ -783,6 +921,7 @@ function renderCompare(){
         <th><span class="th-main">실질 연수익률</span><span class="th-sub">XIRR</span></th></tr></thead><tbody>${rows}</tbody></table></div>
       <div class="note" style="margin-top:14px"><b class="hl-good">초록</b>=항목별 최고 · <b class="hl-bad">빨강</b>=가장 큰 낙폭.<br>
         <b>연평균 수익률</b> = 복리로 환산한 1년 평균 수익률 · <b>최대 낙폭률</b> = 고점에서 가장 크게 떨어졌던 폭(–가 클수록 더 깊이 하락) · <b>위험대비 수익</b> = 수익률 ÷ 낙폭, 높을수록 덜 출렁이며 번 것 · <b>실질 연수익률</b> = 적립 시점까지 반영한 내 돈 기준 실제 수익률(거치식만 하면 연평균 수익률과 거의 같음).</div>
+      <div class="boardadd" id="c_boardadd"></div>
     </div>
     <div class="card chartcard">
       <div class="charthead"><h3>자산 곡선</h3><div style="display:flex;gap:10px;flex-wrap:wrap"><div class="toggle"><button id="c_mVal" class="${cEqMode==="value"?"on":""}">평가금액</button><button id="c_mGro" class="${cEqMode==="growth"?"on":""}">성장배수</button></div><div class="toggle"><button id="c_lin" class="${cEqLog?"":"on"}">선형</button><button id="c_log" class="${cEqLog?"on":""}">로그</button></div></div></div>
@@ -795,6 +934,7 @@ function renderCompare(){
 
   drawCompare();
   cLegends();
+  boardAddButtons("c_boardadd", results.map(r=>({label:`${r.instr.id} 단순보유`, short:r.instr.id, cagr:r.mtr.cagr, mdd:r.mtr.mdd, mar:r.mtr.mar, finalVal:r.pf.finalVal})));
   $("#c_mVal").onclick=()=>{cEqMode="value";drawCompare();cTog();};
   $("#c_mGro").onclick=()=>{cEqMode="growth";drawCompare();cTog();};
   $("#c_lin").onclick=()=>{cEqLog=false;drawCompare();cTog();};
@@ -959,12 +1099,17 @@ function renderSignal(it,d1,d2,sN,lN,lump,holdCurve,sigCurve,holdM,sigM,sig){
         <tr><td class="name"><span class="namecell"><span class="cdot" style="background:#566059;color:#566059"></span>단순 보유</span></td><td class="num ${holdFinal>sigFinal?"hl-good":""}">${fmtWon(holdFinal)}</td><td class="num">${pct(holdM.cagr)}</td><td class="num">${(holdM.mdd*100).toFixed(1)}%</td><td class="num cy">${holdM.mar.toFixed(2)}</td></tr>
       </tbody></table></div>
       <div class="note" style="margin-top:14px">신호는 기초지수(${it.base}) ${sN}/${lN}일 이평 교차로 ${it.id}를 매매. 현금 구간 수익률 0 가정. 거래비용·세금 미반영.</div>
+      <div class="boardadd" id="s_boardadd"></div>
     </div>
     <div class="card chartcard"><div class="charthead"><h3>신호 매매 vs 단순 보유</h3><div class="toggle"><button id="s_lin" class="on">선형</button><button id="s_log">로그</button></div></div>
       <div class="legend"><span><i style="background:#36e08a"></i>신호 매매</span><span><i style="background:#566059"></i>단순 보유</span></div>
       <div class="chartbox"><canvas id="s_eq"></canvas></div>
       <div class="note" style="margin-top:10px">신호 매매가 단순 보유보다 <b>MDD(낙폭)를 줄이는 대신</b> 강세장 수익 일부를 포기하는 트레이드오프를 봅니다.</div></div>`;
   drawSignal(holdCurve,sigCurve,false);
+  boardAddButtons("s_boardadd", [
+    {label:`${it.id} 신호 ${sN}/${lN}`, short:"신호매매", cagr:sigM.cagr, mdd:sigM.mdd, mar:sigM.mar, finalVal:sigFinal},
+    {label:`${it.id} 단순보유`, short:"단순보유", cagr:holdM.cagr, mdd:holdM.mdd, mar:holdM.mar, finalVal:holdFinal}
+  ]);
   $("#s_lin").onclick=()=>{drawSignal(holdCurve,sigCurve,false);$("#s_lin").classList.add("on");$("#s_log").classList.remove("on");};
   $("#s_log").onclick=()=>{drawSignal(holdCurve,sigCurve,true);$("#s_log").classList.add("on");$("#s_lin").classList.remove("on");};
 }
@@ -1070,6 +1215,8 @@ $("#t_run").onclick=async ()=>{
 };
 function renderTranche(it,d1,d2,init,cash,tr,series,tranche,lumpAll){
   const tFinal=tranche.finalVal, lFinal=lumpAll.finalVal;
+  const trM=metrics(tranche.curve.map(c=>({date:c.date,close:c.value})));
+  const luM=metrics(lumpAll.curve.map(c=>({date:c.date,close:c.value})));
   const buyRows=tranche.buys.length?tranche.buys.map((b,i)=>`<tr><td class="num dimv">#${i+1}</td><td class="num">${b.date}</td><td class="num neg">${(b.dd*100).toFixed(0)}%</td><td class="num">${fmtWon(b.amt)}</td></tr>`).join(""):`<tr><td colspan="4" class="dimv" style="text-align:center;padding:18px">발동된 분할매수 없음 (해당 하락이 없었음)</td></tr>`;
   $("#t_results").innerHTML=`
     <div class="card" style="margin-bottom:20px">
@@ -1083,12 +1230,17 @@ function renderTranche(it,d1,d2,init,cash,tr,series,tranche,lumpAll){
       <div class="sectitle" style="margin-top:8px">분할매수 발동 내역</div>
       <div class="ctable-wrap"><table class="ctable"><thead><tr><th>회차</th><th>날짜</th><th>고점대비</th><th>투입금액</th></tr></thead><tbody>${buyRows}</tbody></table></div>
       <div class="note" style="margin-top:14px">규칙: ${tr.map(t=>`-${(t.drop*100).toFixed(0)}%→${(t.deploy*100).toFixed(0)}%`).join(" · ")} · 초기 ${fmtWon(init)} + 대기 ${fmtWon(cash)}. 현금 보유 구간 이자 미반영.</div>
+      <div class="boardadd" id="t_boardadd"></div>
     </div>
     <div class="card chartcard"><div class="charthead"><h3>총자산 추이 (현금 포함)</h3><div class="toggle"><button id="t_lin" class="on">선형</button><button id="t_log">로그</button></div></div>
       <div class="legend"><span><i style="background:#ffb000"></i>분할매수</span><span><i style="background:#566059"></i>일괄투자</span></div>
       <div class="chartbox"><canvas id="t_eq"></canvas></div>
       <div class="note" style="margin-top:10px">분할매수는 현금을 들고 있어 <b>하락장에서 평단가를 낮추지만</b>, 상승장에선 대기 현금만큼 기회비용이 생깁니다.</div></div>`;
   drawTranche(tranche,lumpAll,false);
+  boardAddButtons("t_boardadd", [
+    {label:`${it.id} 분할매수`, short:"분할매수", cagr:trM.cagr, mdd:trM.mdd, mar:trM.mar, finalVal:tFinal},
+    {label:`${it.id} 일괄투자`, short:"일괄투자", cagr:luM.cagr, mdd:luM.mdd, mar:luM.mar, finalVal:lFinal}
+  ]);
   $("#t_lin").onclick=()=>{drawTranche(tranche,lumpAll,false);$("#t_lin").classList.add("on");$("#t_log").classList.remove("on");};
   $("#t_log").onclick=()=>{drawTranche(tranche,lumpAll,true);$("#t_log").classList.add("on");$("#t_lin").classList.remove("on");};
 }
@@ -1107,7 +1259,14 @@ function drawTranche(tranche,lumpAll,log){
    TAB: PROJECTION (미래 예측)
    ============================================================ */
 fillSelect("p_instr"); bindCustomToggle("p_instr","p_custom");
-let pState=null;
+let pState=null, pYears=20;
+$$("#p_years button").forEach(b=>b.onclick=()=>{
+  $$("#p_years button").forEach(x=>x.classList.toggle("on",x===b));
+  if(b.dataset.y==="custom"){ $("#p_yearsCustom").style.display="block"; pYears=Math.min(50,Math.max(1,parseInt($("#p_yearsInput").value)||25)); }
+  else { $("#p_yearsCustom").style.display="none"; pYears=+b.dataset.y; }
+  if(pState)renderProjection();
+});
+$("#p_yearsInput").addEventListener("input",()=>{ pYears=Math.min(50,Math.max(1,parseInt($("#p_yearsInput").value)||1)); if(pState)renderProjection(); });
 $("#p_run").onclick=async ()=>{
   $("#p_err").textContent="";
   const it=resolveInstr($("#p_instr").value,$("#p_cSym").value,parseFloat($("#p_cLev").value),parseFloat($("#p_cER").value));
@@ -1144,24 +1303,24 @@ function projectSeries(lump, monthly, annualR, years){
 function renderProjection(){
   const lump=(parseFloat($("#p_lump").value)||0)*1e4, monthly=(parseFloat($("#p_monthly").value)||0)*1e4;
   const r=(parseFloat($("#p_cagr").value)||0)/100;
-  const rows=projectSeries(lump,monthly,r,20);
-  const it=pState.instr, y20=rows[19], y10=rows[9], y5=rows[4];
-  const lev=it.lev>1||(it.custom&&it.lev>1);
+  const rows=projectSeries(lump,monthly,r,pYears);
+  const it=pState.instr;
+  // 마일스톤 카드: 5/10/마지막해 중 기간 안에 드는 것만
+  let ms=[...new Set([5,10,pYears].filter(y=>y>=1&&y<=pYears))].sort((a,b)=>a-b);
+  const cards=ms.map((y,i)=>{ const x=rows[y-1]; const last=i===ms.length-1, mid=(i===ms.length-2)&&ms.length>1;
+    return `<div class="metric ${last?"green":(mid?"cyan":"")}"><div class="k">${y}년 뒤</div><div class="v ${last?"pos":(mid?"cy":"")}">${fmtWon(x.value)}</div><div class="s">원금 ${fmtWon(x.principal)}</div></div>`;
+  }).join("");
   const tbody=rows.map(x=>`<tr><td>${x.year}년</td><td class="num">${fmtWon(x.principal)}</td><td class="num pos">${fmtWon(x.value)}</td><td class="num ${x.profit>=0?"pos":"neg"}">${fmtWon(x.profit)}</td><td class="num cy">${x.mult.toFixed(2)}배</td></tr>`).join("");
-  const warn=Math.abs(r)>0.25?`<div class="fallback" style="margin-bottom:18px"><h3>⚠ 매우 높은 수익률 가정</h3><p>연 ${(r*100).toFixed(1)}%가 20년 내내 이어진다는 건 현실에서 거의 일어나지 않습니다. 과거 ${it.id}의 최대 낙폭은 ${pState.mdd!=null?(pState.mdd*100).toFixed(0)+"%":"매우 큼"}였어요. 아래 [보수 10%]/[안전 7%]도 꼭 같이 보세요.</p></div>`:"";
+  const warn=Math.abs(r)>0.25?`<div class="fallback" style="margin-bottom:18px"><h3>⚠ 매우 높은 수익률 가정</h3><p>연 ${(r*100).toFixed(1)}%가 ${pYears}년 내내 이어진다는 건 현실에서 거의 일어나지 않습니다. 과거 ${it.id}의 최대 낙폭은 ${pState.mdd!=null?(pState.mdd*100).toFixed(0)+"%":"매우 큼"}였어요. 아래 [보수 10%]/[안전 7%]도 꼭 같이 보세요.</p></div>`:"";
   $("#p_results").innerHTML=`
     <div class="card" style="margin-bottom:20px">
-      <h2>${it.id} 미래 예측 · 연 ${(r*100).toFixed(1)}% 가정</h2>
+      <h2>${it.id} 미래 예측 · 연 ${(r*100).toFixed(1)}% 가정 · ${pYears}년</h2>
       ${warn}
-      <div class="metrics">
-        <div class="metric"><div class="k">5년 뒤</div><div class="v">${fmtWon(y5.value)}</div><div class="s">원금 ${fmtWon(y5.principal)}</div></div>
-        <div class="metric cyan"><div class="k">10년 뒤</div><div class="v cy">${fmtWon(y10.value)}</div><div class="s">원금 ${fmtWon(y10.principal)}</div></div>
-        <div class="metric green"><div class="k">20년 뒤</div><div class="v pos">${fmtWon(y20.value)}</div><div class="s">원금 ${fmtWon(y20.principal)}</div></div>
-      </div>
+      <div class="metrics">${cards}</div>
       <div class="ctable-wrap"><table class="ctable"><thead><tr><th>경과</th><th><span class="th-main">누적 원금</span></th><th><span class="th-main">예상 평가금액</span></th><th><span class="th-main">평가 손익</span></th><th><span class="th-main">원금의 몇 배</span></th></tr></thead><tbody>${tbody}</tbody></table></div>
       <div class="note" style="margin-top:14px">연 ${(r*100).toFixed(1)}% 복리 ${monthly>0?`+ 매달 ${fmtWon(monthly)} 적립`:"(추가 적립 없음)"}. 이 종목의 과거 수익률은 <b>연 ${pState.pastCAGR}%</b>(${pState.years.toFixed(1)}년)였어요. 실제로는 매년 들쭉날쭉하고 중간에 큰 하락도 겪습니다.</div>
     </div>
-    <div class="card chartcard"><div class="charthead"><h3>복리 성장 곡선 (20년)</h3><div class="toggle"><button id="p_lin" class="on">선형</button><button id="p_log">로그</button></div></div>
+    <div class="card chartcard"><div class="charthead"><h3>복리 성장 곡선 (${pYears}년)</h3><div class="toggle"><button id="p_lin" class="on">선형</button><button id="p_log">로그</button></div></div>
       <div class="legend"><span><i style="background:#36e08a"></i>예상 평가금액</span><span><i style="background:#566059"></i>누적 원금</span></div>
       <div class="chartbox"><canvas id="p_eq"></canvas></div>
       <div class="note" style="margin-top:10px">초록과 회색의 간격이 복리로 불어난 수익. 위 [과거 그대로]/[보수 10%] 버튼으로 가정을 바꿔 여러 시나리오를 비교하세요.</div></div>`;
@@ -1185,8 +1344,91 @@ attachSearch($("#s_cSym"), q=>{ $("#s_cSym").value=q.symbol; $("#s_cSym").title=
 attachSearch($("#t_cSym"), q=>{ $("#t_cSym").value=q.symbol; $("#t_cSym").title=q.name; });
 attachSearch($("#p_cSym"), q=>{ $("#p_cSym").value=q.symbol; $("#p_cSym").title=q.name; });
 
+/* ============================================================
+   TAB: SHANNON (섀넌의 도깨비)
+   ============================================================ */
+fillSelect("sh_instr"); bindCustomToggle("sh_instr","sh_custom");
+let shMode="band";
+$$("#sh_mode button").forEach(b=>b.onclick=()=>{
+  shMode=b.dataset.m; $$("#sh_mode button").forEach(x=>x.classList.toggle("on",x===b));
+  $("#sh_bandField").style.display = shMode==="band" ? "block" : "none";
+});
+attachSearch($("#sh_cSym"), q=>{ $("#sh_cSym").value=q.symbol; $("#sh_cSym").title=q.name; });
+$("#sh_run").onclick=async ()=>{
+  $("#sh_err").textContent="";
+  const it=resolveInstr($("#sh_instr").value,$("#sh_cSym").value,parseFloat($("#sh_cLev").value),parseFloat($("#sh_cER").value));
+  if(!it){$("#sh_err").textContent="종목 티커를 입력하거나 검색하세요.";return;}
+  const d1=$("#sh_start").value,d2=$("#sh_end").value; if(!d1||!d2||d1>=d2){$("#sh_err").textContent="기간을 확인하세요.";return;}
+  const total=(parseFloat($("#sh_total").value)||0)*1e4; if(total<=0){$("#sh_err").textContent="총 투자금을 입력하세요.";return;}
+  const target=(parseFloat($("#sh_target").value)||60)/100;
+  if(target<=0||target>=1){$("#sh_err").textContent="종목 비중은 1~99% 사이여야 합니다.";return;}
+  const band=(parseFloat($("#sh_band").value)||10)/100;
+  const cashR=parseFloat($("#sh_cashR").value)||0, fin=parseFloat($("#sh_fin").value)||0;
+  const btn=$("#sh_run");btn.disabled=true;const o=btn.textContent;btn.textContent="⟳ 실행 중...";
+  $("#sh_results").innerHTML=`<div class="card"><div class="loading"><span class="spin"></span> 리밸런싱 계산 중...</div></div>`;
+  try{
+    const cd=await getData(it.yahoo,it.base,d1,d2);
+    const cl=clip(cd.data,d1,d2); if(cl.length<20){$("#sh_results").innerHTML=`<div class="card"><div class="err">데이터가 부족합니다.</div></div>`;return;}
+    const series=synth(cl,it.lev,it.er,it.custom?0:fin);
+    const demon=shannon(series,total,target,shMode,band,cashR);
+    // 100% 종목 보유 (현금 0)
+    const u0=total/series[0].close;
+    const holdCurve=series.map(r=>({date:r.date,value:u0*r.close}));
+    renderShannon(it,d1,d2,target,band,cashR,demon,holdCurve,series);
+  }catch(e){$("#sh_results").innerHTML=`<div class="card"><div class="err">오류: ${e.message}</div></div>`;}
+  finally{btn.disabled=false;btn.textContent=o;}
+};
+function renderShannon(it,d1,d2,target,band,cashR,demon,holdCurve,series){
+  const dFinal=demon.finalVal, hFinal=holdCurve[holdCurve.length-1].value;
+  const dM=metrics(demon.curve.map(c=>({date:c.date,close:c.value})));
+  const hM=metrics(series);
+  const modeLabel={monthly:"월별",yearly:"연별",band:`밴드 ±${(band*100).toFixed(0)}%p`}[shMode];
+  $("#sh_results").innerHTML=`
+    <div class="card" style="margin-bottom:20px">
+      <h2>${it.id} 도깨비 · 종목${(target*100).toFixed(0)}:현금${((1-target)*100).toFixed(0)} · ${modeLabel}</h2>
+      <div style="font-size:12.5px;color:var(--ink-dim);margin:-8px 0 16px;font-family:'JetBrains Mono',monospace">${d1}~${d2} · 총 투자금 ${fmtWon(holdCurve[0].value)}${cashR>0?` · 현금이자 연 ${cashR}%`:""}</div>
+      <div class="metrics">
+        <div class="metric ${dFinal>=hFinal?"green":""}"><div class="k">도깨비 최종</div><div class="v ${dFinal>=hFinal?"pos":""}">${fmtWon(dFinal)}</div><div class="s">연 ${pct(dM.cagr)} · MDD ${(dM.mdd*100).toFixed(0)}%</div></div>
+        <div class="metric ${hFinal>dFinal?"green":""}"><div class="k">100% 보유 최종</div><div class="v ${hFinal>dFinal?"pos":""}">${fmtWon(hFinal)}</div><div class="s">연 ${pct(hM.cagr)} · MDD ${(hM.mdd*100).toFixed(0)}%</div></div>
+        <div class="metric cyan"><div class="k">도깨비 vs 보유</div><div class="v ${dFinal>=hFinal?"pos":"neg"}">${dFinal>=hFinal?"+":""}${fmtWon(dFinal-hFinal)}</div><div class="s">${((dFinal/hFinal-1)*100).toFixed(1)}% 차이</div></div>
+        <div class="metric"><div class="k">리밸런싱 횟수</div><div class="v">${demon.rebals}</div><div class="s">${modeLabel}</div></div>
+      </div>
+      <div class="ctable-wrap"><table class="ctable"><thead><tr><th>전략</th>
+        <th><span class="th-main">최종 평가금액</span></th>
+        <th><span class="th-main">연평균 수익률</span><span class="th-sub">CAGR</span></th>
+        <th><span class="th-main">최대 낙폭률</span><span class="th-sub">MDD</span></th>
+        <th><span class="th-main">위험대비 수익</span><span class="th-sub">MAR</span></th></tr></thead><tbody>
+        <tr><td class="name"><span class="namecell"><span class="cdot" style="background:#ffb000;color:#ffb000"></span>도깨비</span></td><td class="num ${dFinal>=hFinal?"hl-good":""}">${fmtWon(dFinal)}</td><td class="num">${pct(dM.cagr)}</td><td class="num ${Math.abs(dM.mdd)<Math.abs(hM.mdd)?"hl-good":"neg"}">${(dM.mdd*100).toFixed(1)}%</td><td class="num cy">${(dM.mdd!==0?dM.cagr/Math.abs(dM.mdd):0).toFixed(2)}</td></tr>
+        <tr><td class="name"><span class="namecell"><span class="cdot" style="background:#566059;color:#566059"></span>100% 보유</span></td><td class="num ${hFinal>dFinal?"hl-good":""}">${fmtWon(hFinal)}</td><td class="num">${pct(hM.cagr)}</td><td class="num">${(hM.mdd*100).toFixed(1)}%</td><td class="num cy">${(hM.mdd!==0?hM.cagr/Math.abs(hM.mdd):0).toFixed(2)}</td></tr>
+      </tbody></table></div>
+      <div class="note" style="margin-top:14px"><b>읽는 법</b> · 도깨비는 보통 <b>최대 낙폭(MDD)을 크게 줄여줍니다</b>(현금 비중 덕분). 옆으로 출렁이는 장에선 수익까지 늘지만, 한 방향 강세장에선 현금이 발목을 잡아 100% 보유보다 적게 법니다. 너처럼 변동성 큰 레버리지를 들 때 "덜 토하면서" 가는 방법이 될 수 있어요.</div>
+      <div class="boardadd" id="sh_boardadd"></div>
+    </div>
+    <div class="card chartcard"><div class="charthead"><h3>도깨비 vs 100% 보유</h3><div class="toggle"><button id="sh_lin" class="on">선형</button><button id="sh_log">로그</button></div></div>
+      <div class="legend"><span><i style="background:#ffb000"></i>도깨비 (종목${(target*100).toFixed(0)}:현금${((1-target)*100).toFixed(0)})</span><span><i style="background:#566059"></i>100% 보유</span></div>
+      <div class="chartbox"><canvas id="sh_eq"></canvas></div>
+      <div class="note" style="margin-top:10px">두 선의 모양을 비교하세요. 도깨비 선이 더 완만하게(덜 출렁이며) 가면 그게 낙폭을 줄여준 거예요.</div></div>`;
+  drawShannon(demon.curve,holdCurve,false);
+  boardAddButtons("sh_boardadd", [
+    {label:`${it.id} 도깨비 ${(target*100).toFixed(0)}:${((1-target)*100).toFixed(0)} ${modeLabel}`, short:"도깨비", cagr:dM.cagr, mdd:dM.mdd, mar:(dM.mdd?dM.cagr/Math.abs(dM.mdd):0), finalVal:dFinal},
+    {label:`${it.id} 100% 보유`, short:"100% 보유", cagr:hM.cagr, mdd:hM.mdd, mar:(hM.mdd?hM.cagr/Math.abs(hM.mdd):0), finalVal:hFinal}
+  ]);
+  $("#sh_lin").onclick=()=>{drawShannon(demon.curve,holdCurve,false);$("#sh_lin").classList.add("on");$("#sh_log").classList.remove("on");};
+  $("#sh_log").onclick=()=>{drawShannon(demon.curve,holdCurve,true);$("#sh_log").classList.add("on");$("#sh_lin").classList.remove("on");};
+}
+function drawShannon(demonCurve,holdCurve,log){
+  const idx=downsample(demonCurve.length); const labels=idx.map(i=>demonCurve[i].date);
+  setChart("sh_eq",{type:"line",data:{labels,datasets:[
+    {label:"도깨비",data:idx.map(i=>demonCurve[i].value),borderColor:"#ffb000",backgroundColor:"transparent",borderWidth:2,pointRadius:0,tension:.06},
+    {label:"100% 보유",data:idx.map(i=>holdCurve[i].value),borderColor:"#566059",borderWidth:1.6,borderDash:[5,4],pointRadius:0,tension:.06}
+  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+    plugins:{legend:{display:false},tooltip:{...TIP,callbacks:{label:c=>` ${c.dataset.label}: ${fmtWon(c.parsed.y)}`}},peakLabels:{enabled:true,isWon:true}},
+    scales:{x:{grid:{color:GRIDC,drawTicks:false},ticks:{color:TICKC,maxTicksLimit:8,font:{family:"JetBrains Mono",size:10}}},
+      y:log?{type:"logarithmic",grid:{color:GRIDC},ticks:{color:TICKC,font:{family:"JetBrains Mono",size:10},callback:v=>fmtShort(v)}}:{grid:{color:GRIDC},ticks:{color:TICKC,font:{family:"JetBrains Mono",size:10},callback:v=>fmtShort(v)}}}}});
+}
+
+/* 비교 보드 초기 렌더 (저장된 항목 + 뱃지 복원) */
+renderBoard();
 </script>
-</body>
-</html>
 </body>
 </html>

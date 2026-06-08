@@ -208,12 +208,14 @@
     </div>
     <div class="tabbar" id="tabbar">
       <button data-tab="compare" class="on">비교<span class="sub">Compare</span></button>
+      <button data-tab="allstrat">일괄 비교<span class="sub">All-in-one</span></button>
       <button data-tab="projection">미래 예측<span class="sub">Projection</span></button>
       <button data-tab="rolling">롤링 수익률<span class="sub">Rolling</span></button>
       <button data-tab="signal">신호 매매<span class="sub">MA Signal</span></button>
       <button data-tab="underwater">언더워터<span class="sub">Recovery</span></button>
       <button data-tab="tranche">분할매수<span class="sub">Tranche</span></button>
       <button data-tab="shannon">도깨비<span class="sub">Shannon</span></button>
+      <button data-tab="rsirev">RSI 매수<span class="sub">Mean Rev</span></button>
       <button data-tab="board">비교 보드 <span class="badge" id="tab_board_badge"></span><span class="sub">Board</span></button>
     </div>
   </div>
@@ -247,6 +249,37 @@
         <div class="note"><b>계산</b> · 레버리지 종목은 기초지수 일간수익률×배수−(보수+차입)/252로 매일 리셋 합성. CAGR·MDD·MAR은 종목 시계열, 적립 성과는 XIRR(자금가중).</div>
       </section>
       <section id="c_results"><div class="placeholder"><div class="big">종목을 고르고 <span class="amb">비교 실행</span></div><div class="mono" style="font-size:12px">비교표 · 멀티라인 · 연도별 수익률</div></div></section>
+    </div>
+  </div>
+
+  <!-- =================== TAB: ALLSTRAT (일괄 비교) =================== -->
+  <div class="tabpane" id="pane-allstrat" hidden>
+    <div class="grid">
+      <section class="card">
+        <h2>일괄 비교 설정</h2>
+        <div class="intro">종목 하나에 <b>모든 전략을 같은 조건</b>으로 한 번에 돌려, 어떤 게 우월한지 한 표로 봅니다. 기간·금액만 정하면 단순보유·신호매매·분할매수·도깨비가 동시에 계산돼요.</div>
+        <div class="field"><label>종목</label><select id="a_instr"></select>
+          <div class="row3" id="a_custom" style="display:none;margin-top:10px"><input id="a_cSym" placeholder="티커 검색" autocomplete="off"><input id="a_cLev" type="number" step="0.5" value="3" title="배수"><input id="a_cER" type="number" step="0.01" value="0.95" title="보수%"></div></div>
+        <div class="row2">
+          <div class="field" style="margin-bottom:9px"><label>시작일</label><input id="a_start" type="date" value="2010-01-01"></div>
+          <div class="field" style="margin-bottom:9px"><label>종료일</label><input id="a_end" type="date"></div>
+        </div>
+        <div class="quickrange" data-qr="a"><button data-y="5">5년</button><button data-y="10">10년</button><button data-y="15">15년</button><button data-y="0">최대</button></div>
+        <div class="row2">
+          <div class="field"><label>거치식 투자금</label><div class="suffix"><input id="a_lump" class="mono" type="number" value="1000" step="100"><span class="u">만원</span></div></div>
+          <div class="field"><label>월 적립금</label><div class="suffix"><input id="a_monthly" class="mono" type="number" value="0" step="10"><span class="u">만원</span></div></div>
+        </div>
+        <div class="field"><label>차입비용 (연 %)</label><div class="suffix"><input id="a_fin" class="mono" type="number" value="0" step="0.1"><span class="u">% / 년</span></div></div>
+        <div class="sectitle" style="margin-top:6px">전략별 세부값</div>
+        <div class="field"><label>신호 매매 — 단기 / 장기 이평 (일)</label><div class="row2"><input id="a_short" class="mono" type="number" value="3"><input id="a_long" class="mono" type="number" value="160"></div></div>
+        <div class="field"><label>분할매수 — 하락 트리거 (%, 3단계)</label><div class="row3"><input id="a_t1" class="mono" type="number" value="20"><input id="a_t2" class="mono" type="number" value="25"><input id="a_t3" class="mono" type="number" value="30"></div>
+          <div class="hint">대기 현금 = 거치식의 절반을 3등분해 투입.</div></div>
+        <div class="field"><label>도깨비 — 종목 비중 / 밴드 (%)</label><div class="row2"><div class="suffix"><input id="a_demonW" class="mono" type="number" value="60"><span class="u">% 종목</span></div><div class="suffix"><input id="a_demonB" class="mono" type="number" value="10"><span class="u">±%p</span></div></div></div>
+        <button class="runbtn" id="a_run">▶ 모든 전략 비교</button>
+        <div class="err" id="a_err"></div>
+        <div class="note"><b>적립식 주의</b> · 분할매수·도깨비는 적립식이 잘 안 맞는 전략이라 <b>거치식 기준</b>으로만 계산해 함께 표시합니다(표에 "거치식" 표시). 단순보유·신호매매는 적립 포함.</div>
+      </section>
+      <section id="a_results"><div class="placeholder"><div class="big">종목·금액을 정하고 <span class="amb">모든 전략 비교</span></div><div class="mono" style="font-size:12px">단순보유 · 신호매매 · 분할매수 · 도깨비 한 표로</div></div></section>
     </div>
   </div>
 
@@ -317,10 +350,20 @@
         </div>
         <div class="quickrange" data-qr="s"><button data-y="5">5년</button><button data-y="10">10년</button><button data-y="15">15년</button><button data-y="0">최대</button></div>
         <div class="field"><label>매매 종목</label><select id="s_instr"></select>
-          <div class="row3" id="s_custom" style="display:none;margin-top:10px"><input id="s_cSym" placeholder="티커"><input id="s_cLev" type="number" step="0.5" value="3" title="배수"><input id="s_cER" type="number" step="0.01" value="0.95" title="보수%"></div></div>
-        <div class="row2">
+          <div class="row3" id="s_custom" style="display:none;margin-top:10px"><input id="s_cSym" placeholder="티커 검색" autocomplete="off"><input id="s_cLev" type="number" step="0.5" value="3" title="배수"><input id="s_cER" type="number" step="0.01" value="0.95" title="보수%"></div></div>
+        <div class="field"><label>신호 방식</label>
+          <div class="subtabs" id="s_method"><button data-m="cross" class="on">이평 교차</button><button data-m="band">단일선 + 버퍼</button></div></div>
+        <div class="row2" id="s_crossFields">
           <div class="field"><label>단기 이평 (일)</label><input id="s_short" class="mono" type="number" value="3" step="1"></div>
           <div class="field"><label>장기 이평 (일)</label><input id="s_long" class="mono" type="number" value="160" step="1"></div>
+        </div>
+        <div id="s_bandFields" style="display:none">
+          <div class="field"><label>기준 이평선 (일)</label><input id="s_maLen" class="mono" type="number" value="200" step="1"></div>
+          <div class="row2">
+            <div class="field"><label>매수 버퍼 (선 위)</label><div class="suffix"><input id="s_upBuf" class="mono" type="number" value="5" step="0.5"><span class="u">+%</span></div></div>
+            <div class="field"><label>매도 버퍼 (선 아래)</label><div class="suffix"><input id="s_downBuf" class="mono" type="number" value="3" step="0.5"><span class="u">−%</span></div></div>
+          </div>
+          <div class="hint" style="margin:-6px 0 14px">"Leverage for the Long Run" 방식. 버퍼 0이면 단순 200일선. 선 근처에서 사고팔기 반복(휩쏘)을 버퍼로 막아요.</div>
         </div>
         <div class="field"><label>거치식 투자금</label><div class="suffix"><input id="s_lump" class="mono" type="number" value="1000" step="100"><span class="u">만원</span></div></div>
         <div class="field"><label>차입비용 (연 %)</label><div class="suffix"><input id="s_fin" class="mono" type="number" value="0" step="0.1"><span class="u">% / 년</span></div></div>
@@ -417,6 +460,37 @@
     </div>
   </div>
 
+  <!-- =================== TAB: RSI MEAN REVERSION =================== -->
+  <div class="tabpane" id="pane-rsirev" hidden>
+    <div class="grid">
+      <section class="card">
+        <h2>RSI 과매도 분할매수 설정</h2>
+        <div class="intro"><b>RSI 평균회귀</b> · 가격이 과하게 떨어지면(RSI 과매도) 현금을 나눠 사들이고, 과하게 오르면(RSI 과매수) 전량 팔아 현금화합니다. "떨어지면 사고 오르면 판다"는 평균회귀 전략으로, 횡보·급락 후 반등장에서 빛나요.</div>
+        <div class="field"><label>종목</label><select id="rs_instr"></select>
+          <div class="row3" id="rs_custom" style="display:none;margin-top:10px"><input id="rs_cSym" placeholder="티커 검색" autocomplete="off"><input id="rs_cLev" type="number" step="0.5" value="3" title="배수"><input id="rs_cER" type="number" step="0.01" value="0.95" title="보수%"></div></div>
+        <div class="row2">
+          <div class="field" style="margin-bottom:9px"><label>시작일</label><input id="rs_start" type="date" value="2010-01-01"></div>
+          <div class="field" style="margin-bottom:9px"><label>종료일</label><input id="rs_end" type="date"></div>
+        </div>
+        <div class="quickrange" data-qr="rs"><button data-y="5">5년</button><button data-y="10">10년</button><button data-y="15">15년</button><button data-y="0">최대</button></div>
+        <div class="field"><label>총 투자금</label><div class="suffix"><input id="rs_total" class="mono" type="number" value="1000" step="100"><span class="u">만원</span></div></div>
+        <div class="row2">
+          <div class="field"><label>RSI 기간 (일)</label><input id="rs_period" class="mono" type="number" value="14" step="1"></div>
+          <div class="field"><label>분할 횟수</label><input id="rs_tr" class="mono" type="number" value="2" min="1" step="1"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>매수 임계 (RSI 이하)</label><input id="rs_buy" class="mono" type="number" value="30" step="1"></div>
+          <div class="field"><label>매도 임계 (RSI 이상)</label><input id="rs_sell" class="mono" type="number" value="70" step="1"></div>
+        </div>
+        <div class="field"><label>차입비용 (연 %)</label><div class="suffix"><input id="rs_fin" class="mono" type="number" value="0" step="0.1"><span class="u">% / 년</span></div></div>
+        <button class="runbtn" id="rs_run">▶ RSI 매수 실행</button>
+        <div class="err" id="rs_err"></div>
+        <div class="note"><b>동작</b> · RSI가 매수 임계 아래면 자금을 분할 횟수만큼 나눠 한 번에 한 몫씩 매수, 매도 임계 위로 오르면 전량 매도해 현금화. 신호는 <b>전일 종가</b>로 판정(미래참조 방지). RSI 14·30/70이 일반적이고, 짧은 RSI(2~4)는 더 자주 거래해요. 거래비용·세금 미반영.</div>
+      </section>
+      <section id="rs_results"><div class="placeholder"><div class="big">종목·RSI 설정을 정하고 <span class="amb">RSI 매수 실행</span></div><div class="mono" style="font-size:12px">RSI 매수 vs 100% 보유 · 거래 내역 · 자산 곡선</div></div></section>
+    </div>
+  </div>
+
   <!-- =================== TAB: BOARD =================== -->
   <div class="tabpane" id="pane-board" hidden>
     <section class="card" style="margin-top:26px">
@@ -451,7 +525,7 @@ const $ = s=>document.querySelector(s);
 const $$ = s=>document.querySelectorAll(s);
 const today = ()=>new Date().toISOString().slice(0,10);
 
-["c_end","r_end","s_end","u_end","t_end","p_end","sh_end"].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=today(); });
+["c_end","r_end","s_end","u_end","t_end","p_end","sh_end","a_end","rs_end"].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=today(); });
 setInterval(()=>{ $("#clock").textContent = new Date().toLocaleTimeString("ko-KR",{hour12:false}); },1000);
 
 /* ---- 탭 전환 ---- */
@@ -472,7 +546,7 @@ $$(".quickrange").forEach(qr=>{
     qr.querySelectorAll("button").forEach(x=>x.classList.remove("on")); b.classList.add("on");
   });
 });
-["c","r","s","u","t","p","sh"].forEach(pfx=>{
+["c","r","s","u","t","p","sh","a","rs"].forEach(pfx=>{
   const clear=()=>{ const qr=document.querySelector(`.quickrange[data-qr="${pfx}"]`); if(qr)qr.querySelectorAll("button").forEach(x=>x.classList.remove("on")); };
   const s=$("#"+pfx+"_start"), e=$("#"+pfx+"_end");
   if(s)s.addEventListener("input",clear); if(e)e.addEventListener("input",clear);
@@ -645,6 +719,52 @@ function shannon(series, totalWon, target, mode, band, cashAnnualR){
   }
   const finalVal=units*series[series.length-1].close+cash;
   return {curve, finalVal, rebals, events};
+}
+/* 단일 MA + 버퍼 (히스테리시스): 선 위 +up% 돌파 매수, 선 아래 -down% 매도 */
+function backtestMABand(tradeSeries, signalSeries, maLen, upBuf, downBuf){
+  const sc=signalSeries.map(r=>r.close), ma=smaArr(sc,maLen);
+  const want=new Array(tradeSeries.length).fill(false); let st=false;
+  for(let i=0;i<tradeSeries.length;i++){
+    if(ma[i]!=null){ const px=sc[i];
+      if(st && px < ma[i]*(1-downBuf)) st=false;
+      else if(!st && px > ma[i]*(1+upBuf)) st=true; }
+    want[i]=st;
+  }
+  let val=100, prevIn=false, trades=0, daysIn=0; const curve=[];
+  for(let i=0;i<tradeSeries.length;i++){
+    const inMkt = i>0 ? want[i-1] : false;
+    if(i>0 && inMkt) val *= tradeSeries[i].close/tradeSeries[i-1].close;
+    if(inMkt) daysIn++; if(inMkt!==prevIn) trades++; prevIn=inMkt;
+    curve.push({date:tradeSeries[i].date, close:val});
+  }
+  const li=tradeSeries.length-1;
+  return {curve, trades, timeIn:daysIn/tradeSeries.length, curSignal:want[li]?"gold":"dead", holding:want[li]};
+}
+/* RSI (Wilder smoothing) */
+function rsiArr(closes, period){
+  const out=new Array(closes.length).fill(null); let avgGain=0, avgLoss=0;
+  for(let i=1;i<closes.length;i++){
+    const ch=closes[i]-closes[i-1], gain=ch>0?ch:0, loss=ch<0?-ch:0;
+    if(i<=period){ avgGain+=gain/period; avgLoss+=loss/period; if(i===period) out[i]=avgLoss===0?100:100-100/(1+avgGain/avgLoss); }
+    else { avgGain=(avgGain*(period-1)+gain)/period; avgLoss=(avgLoss*(period-1)+loss)/period; out[i]=avgLoss===0?100:100-100/(1+avgGain/avgLoss); }
+  }
+  return out;
+}
+/* RSI 과매도 분할매수: RSI<buyTh면 트랜치 매수, RSI>sellTh면 전량 매도 */
+function backtestRSI(series, total, period, buyTh, sellTh, tranches){
+  const closes=series.map(r=>r.close), rsi=rsiArr(closes,period);
+  const trAmt=total/tranches;
+  let cash=total, units=0, used=0; const curve=[]; const trades=[]; let prevRsi=null;
+  for(let i=0;i<series.length;i++){
+    const px=series[i].close;
+    if(i>0 && prevRsi!=null){
+      if(prevRsi<buyTh && used<tranches && cash>0){ const amt=Math.min(cash,trAmt); units+=amt/px; cash-=amt; used++; trades.push({date:series[i].date,type:"매수",amt,rsi:prevRsi}); }
+      else if(prevRsi>sellTh && units>0){ const amt=units*px; cash+=amt; units=0; used=0; trades.push({date:series[i].date,type:"매도",amt,rsi:prevRsi}); }
+    }
+    if(rsi[i]!=null) prevRsi=rsi[i];
+    curve.push({date:series[i].date, value:units*px+cash});
+  }
+  return {curve, finalVal:units*series[series.length-1].close+cash, trades};
 }
 
 /* ---- 포맷 ---- */
@@ -1050,39 +1170,52 @@ function renderRolling(results,errors,d1,d2){
    TAB 3: SIGNAL
    ============================================================ */
 fillSelect("s_instr"); bindCustomToggle("s_instr","s_custom");
+let sMethod="cross";
+$$("#s_method button").forEach(b=>b.onclick=()=>{
+  sMethod=b.dataset.m; $$("#s_method button").forEach(x=>x.classList.toggle("on",x===b));
+  $("#s_crossFields").style.display = sMethod==="cross"?"grid":"none";
+  $("#s_bandFields").style.display = sMethod==="band"?"block":"none";
+});
 $("#s_run").onclick=async ()=>{
   $("#s_err").textContent="";
   const it=resolveInstr($("#s_instr").value,$("#s_cSym").value,parseFloat($("#s_cLev").value),parseFloat($("#s_cER").value));
   if(!it){$("#s_err").textContent="커스텀 티커를 입력하세요.";return;}
   const d1=$("#s_start").value,d2=$("#s_end").value; if(!d1||!d2||d1>=d2){$("#s_err").textContent="기간 확인.";return;}
-  const shortN=parseInt($("#s_short").value)||3, longN=parseInt($("#s_long").value)||160;
-  if(shortN>=longN){$("#s_err").textContent="단기 이평 < 장기 이평이어야 합니다.";return;}
+  let needLen, methodLabel, shortN, longN, maLen, upBuf, downBuf;
+  if(sMethod==="cross"){
+    shortN=parseInt($("#s_short").value)||3; longN=parseInt($("#s_long").value)||160;
+    if(shortN>=longN){$("#s_err").textContent="단기 이평 < 장기 이평이어야 합니다.";return;}
+    needLen=longN+10; methodLabel=`${shortN}/${longN}일 교차`;
+  } else {
+    maLen=parseInt($("#s_maLen").value)||200;
+    upBuf=(parseFloat($("#s_upBuf").value)||0)/100; downBuf=(parseFloat($("#s_downBuf").value)||0)/100;
+    needLen=maLen+10; methodLabel=`${maLen}일선 +${(upBuf*100).toFixed(1)}/−${(downBuf*100).toFixed(1)}%`;
+  }
   const lump=(parseFloat($("#s_lump").value)||1000)*1e4, fin=parseFloat($("#s_fin").value)||0;
   const btn=$("#s_run");btn.disabled=true;const o=btn.textContent;btn.textContent="⟳ 실행 중...";
   $("#s_results").innerHTML=`<div class="card"><div class="loading"><span class="spin"></span> 신호 매매 계산 중...</div></div>`;
   try{
     const cd=await getData(it.yahoo,it.base,d1,d2);
-    const cl=clip(cd.data,d1,d2); if(cl.length<longN+10){$("#s_results").innerHTML=`<div class="card"><div class="err">데이터가 장기이평(${longN}일)보다 짧습니다.</div></div>`;return;}
-    const tradeSeries=synth(cl,it.lev,it.er,it.custom?0:fin); // 매매 종목 합성
-    const signalSeries=cl.map(r=>({date:r.date,close:r.close})); // 기초지수(1배)로 신호
-    const sig=backtestSignal(tradeSeries,signalSeries,shortN,longN);
-    // 보유 vs 신호 자산곡선 (투자금 스케일)
+    const cl=clip(cd.data,d1,d2); if(cl.length<needLen){$("#s_results").innerHTML=`<div class="card"><div class="err">데이터가 기준선(${needLen-10}일)보다 짧습니다.</div></div>`;return;}
+    const tradeSeries=synth(cl,it.lev,it.er,it.custom?0:fin);
+    const signalSeries=cl.map(r=>({date:r.date,close:r.close}));
+    const sig = sMethod==="cross" ? backtestSignal(tradeSeries,signalSeries,shortN,longN) : backtestMABand(tradeSeries,signalSeries,maLen,upBuf,downBuf);
     const u0=lump/tradeSeries[0].close;
     const holdCurve=tradeSeries.map(r=>({date:r.date,value:u0*r.close}));
     const sigCurve=sig.curve.map(c=>({date:c.date,value:lump*(c.close/100)}));
     const holdM=metrics(tradeSeries);
     const sigSeries=sig.curve.map(c=>({date:c.date,close:c.close}));
     const sigM=metrics(sigSeries);
-    renderSignal(it,d1,d2,shortN,longN,lump,holdCurve,sigCurve,holdM,sigM,sig);
+    renderSignal(it,d1,d2,methodLabel,lump,holdCurve,sigCurve,holdM,sigM,sig);
   }catch(e){$("#s_results").innerHTML=`<div class="card"><div class="err">오류: ${e.message}</div></div>`;}
   finally{btn.disabled=false;btn.textContent=o;}
 };
-function renderSignal(it,d1,d2,sN,lN,lump,holdCurve,sigCurve,holdM,sigM,sig){
+function renderSignal(it,d1,d2,methodLabel,lump,holdCurve,sigCurve,holdM,sigM,sig){
   const holdFinal=holdCurve[holdCurve.length-1].value, sigFinal=sigCurve[sigCurve.length-1].value;
   const pill=sig.curSignal==="gold"?`<span class="pill gold">● 골든크로스 (보유 신호)</span>`:(sig.curSignal==="dead"?`<span class="pill dead">● 데드크로스 (현금 신호)</span>`:`<span class="pill">신호 없음</span>`);
   $("#s_results").innerHTML=`
     <div class="card" style="margin-bottom:20px">
-      <h2>${it.id} · ${sN}일/${lN}일 신호 · ${d1}~${d2}</h2>
+      <h2>${it.id} · ${methodLabel} · ${d1}~${d2}</h2>
       <div style="margin:-6px 0 18px">${pill} <span class="dimv mono" style="font-size:12px;margin-left:8px">현재 ${sig.curSignal==="gold"?"보유 중":"현금 중"}</span></div>
       <div class="metrics">
         <div class="metric green"><div class="k">신호 매매 최종</div><div class="v pos">${fmtWon(sigFinal)}</div><div class="s">연수익률 ${pct(sigM.cagr)}</div></div>
@@ -1098,7 +1231,7 @@ function renderSignal(it,d1,d2,sN,lN,lump,holdCurve,sigCurve,holdM,sigM,sig){
         <tr><td class="name"><span class="namecell"><span class="cdot" style="background:#36e08a;color:#36e08a"></span>신호 매매</span></td><td class="num ${sigFinal>=holdFinal?"hl-good":"pos"}">${fmtWon(sigFinal)}</td><td class="num">${pct(sigM.cagr)}</td><td class="num ${Math.abs(sigM.mdd)<Math.abs(holdM.mdd)?"hl-good":"neg"}">${(sigM.mdd*100).toFixed(1)}%</td><td class="num cy">${sigM.mar.toFixed(2)}</td></tr>
         <tr><td class="name"><span class="namecell"><span class="cdot" style="background:#566059;color:#566059"></span>단순 보유</span></td><td class="num ${holdFinal>sigFinal?"hl-good":""}">${fmtWon(holdFinal)}</td><td class="num">${pct(holdM.cagr)}</td><td class="num">${(holdM.mdd*100).toFixed(1)}%</td><td class="num cy">${holdM.mar.toFixed(2)}</td></tr>
       </tbody></table></div>
-      <div class="note" style="margin-top:14px">신호는 기초지수(${it.base}) ${sN}/${lN}일 이평 교차로 ${it.id}를 매매. 현금 구간 수익률 0 가정. 거래비용·세금 미반영.</div>
+      <div class="note" style="margin-top:14px">신호는 기초지수(${it.base}) ${methodLabel}로 ${it.id}를 매매. 현금 구간 수익률 0 가정. 거래비용·세금 미반영.</div>
       <div class="boardadd" id="s_boardadd"></div>
     </div>
     <div class="card chartcard"><div class="charthead"><h3>신호 매매 vs 단순 보유</h3><div class="toggle"><button id="s_lin" class="on">선형</button><button id="s_log">로그</button></div></div>
@@ -1107,7 +1240,7 @@ function renderSignal(it,d1,d2,sN,lN,lump,holdCurve,sigCurve,holdM,sigM,sig){
       <div class="note" style="margin-top:10px">신호 매매가 단순 보유보다 <b>MDD(낙폭)를 줄이는 대신</b> 강세장 수익 일부를 포기하는 트레이드오프를 봅니다.</div></div>`;
   drawSignal(holdCurve,sigCurve,false);
   boardAddButtons("s_boardadd", [
-    {label:`${it.id} 신호 ${sN}/${lN}`, short:"신호매매", cagr:sigM.cagr, mdd:sigM.mdd, mar:sigM.mar, finalVal:sigFinal},
+    {label:`${it.id} 신호 ${methodLabel}`, short:"신호매매", cagr:sigM.cagr, mdd:sigM.mdd, mar:sigM.mar, finalVal:sigFinal},
     {label:`${it.id} 단순보유`, short:"단순보유", cagr:holdM.cagr, mdd:holdM.mdd, mar:holdM.mar, finalVal:holdFinal}
   ]);
   $("#s_lin").onclick=()=>{drawSignal(holdCurve,sigCurve,false);$("#s_lin").classList.add("on");$("#s_log").classList.remove("on");};
@@ -1429,6 +1562,175 @@ function drawShannon(demonCurve,holdCurve,log){
 
 /* 비교 보드 초기 렌더 (저장된 항목 + 뱃지 복원) */
 renderBoard();
+
+/* ============================================================
+   TAB: ALLSTRAT (일괄 비교 — 한 종목에 모든 전략)
+   ============================================================ */
+fillSelect("a_instr"); bindCustomToggle("a_instr","a_custom");
+attachSearch($("#a_cSym"), q=>{ $("#a_cSym").value=q.symbol; $("#a_cSym").title=q.name; });
+
+$("#a_run").onclick=async ()=>{
+  $("#a_err").textContent="";
+  const it=resolveInstr($("#a_instr").value,$("#a_cSym").value,parseFloat($("#a_cLev").value),parseFloat($("#a_cER").value));
+  if(!it){$("#a_err").textContent="종목 티커를 입력하거나 검색하세요.";return;}
+  const d1=$("#a_start").value,d2=$("#a_end").value; if(!d1||!d2||d1>=d2){$("#a_err").textContent="기간을 확인하세요.";return;}
+  const lump=(parseFloat($("#a_lump").value)||0)*1e4, monthly=(parseFloat($("#a_monthly").value)||0)*1e4;
+  if(lump<=0&&monthly<=0){$("#a_err").textContent="투자금을 입력하세요.";return;}
+  const fin=parseFloat($("#a_fin").value)||0;
+  const sN=parseInt($("#a_short").value)||3, lN=parseInt($("#a_long").value)||160;
+  const t1=(parseFloat($("#a_t1").value)||20)/100, t2=(parseFloat($("#a_t2").value)||25)/100, t3=(parseFloat($("#a_t3").value)||30)/100;
+  const demonW=(parseFloat($("#a_demonW").value)||60)/100, demonB=(parseFloat($("#a_demonB").value)||10)/100;
+  const btn=$("#a_run");btn.disabled=true;const o=btn.textContent;btn.textContent="⟳ 계산 중...";
+  $("#a_results").innerHTML=`<div class="card"><div class="loading"><span class="spin"></span> 모든 전략 계산 중...</div></div>`;
+  try{
+    const cd=await getData(it.yahoo,it.base,d1,d2);
+    const cl=clip(cd.data,d1,d2); if(cl.length<Math.max(60,lN+10)){$("#a_results").innerHTML=`<div class="card"><div class="err">데이터가 부족합니다(장기이평 ${lN}일 이상 필요).</div></div>`;return;}
+    const series=synth(cl,it.lev,it.er,it.custom?0:fin);
+    const lumpInfo = monthly>0?`(거치 ${fmtWon(lump)} + 월 ${fmtWon(monthly)})`:"(거치식)";
+    const out=[];
+
+    // 1) 단순 보유 (거치 + 적립)
+    const pf=portfolio(series,lump,monthly);
+    const holdM=metrics(series);
+    out.push({name:"단순 보유", note:"거치+적립", cagr:holdM.cagr, mdd:holdM.mdd, mar:holdM.mar, finalVal:pf.finalVal, sub:monthly>0?"적립 포함":"거치식"});
+
+    // 2) 신호 매매 (거치 + 적립) — 신호 곡선을 단위가치로 만들어 적립 포트폴리오 적용
+    const sig=backtestSignal(series, cl.map(r=>({date:r.date,close:r.close})), sN, lN);
+    const sigSeries=sig.curve.map(c=>({date:c.date,close:c.close}));
+    const sigPf=portfolio(sigSeries, lump, monthly);
+    const sigM=metrics(sigSeries);
+    out.push({name:`신호 매매 ${sN}/${lN}`, note:"거치+적립", cagr:sigM.cagr, mdd:sigM.mdd, mar:sigM.mar, finalVal:sigPf.finalVal, sub:monthly>0?"적립 포함":"거치식"});
+
+    // 3) 분할매수 — 거치식만. 거치금의 절반을 초기투입, 절반을 대기현금 3등분
+    const init=lump*0.5, cashBuf=lump*0.5;
+    const tr=[{drop:t1,deploy:0.34},{drop:t2,deploy:0.33},{drop:t3,deploy:0.33}].filter(t=>t.drop>0);
+    const tranche=trancheStrategy(series, init, cashBuf, tr);
+    const trM=metrics(tranche.curve.map(c=>({date:c.date,close:c.value})));
+    out.push({name:`분할매수 -${(t1*100).toFixed(0)}/${(t2*100).toFixed(0)}/${(t3*100).toFixed(0)}%`, note:"거치식", cagr:trM.cagr, mdd:trM.mdd, mar:trM.mar, finalVal:tranche.finalVal, sub:"거치식만"});
+
+    // 4) 도깨비 — 거치식만 (밴드 리밸런싱)
+    const demon=shannon(series, lump, demonW, "band", demonB, 0);
+    const dM=metrics(demon.curve.map(c=>({date:c.date,close:c.value})));
+    out.push({name:`도깨비 ${(demonW*100).toFixed(0)}:${((1-demonW)*100).toFixed(0)} ±${(demonB*100).toFixed(0)}`, note:"거치식", cagr:dM.cagr, mdd:dM.mdd, mar:dM.mar, finalVal:demon.finalVal, sub:"거치식만"});
+
+    renderAllStrat(it, d1, d2, lumpInfo, lump, monthly, out);
+  }catch(e){$("#a_results").innerHTML=`<div class="card"><div class="err">오류: ${e.message}</div></div>`;}
+  finally{btn.disabled=false;btn.textContent=o;}
+};
+let aLast=null;
+function renderAllStrat(it, d1, d2, lumpInfo, lump, monthly, out){
+  aLast={it, out};
+  const best={cagr:Math.max(...out.map(x=>x.cagr)), mar:Math.max(...out.map(x=>x.mar)), final:Math.max(...out.map(x=>x.finalVal))};
+  const worstMdd=Math.min(...out.map(x=>x.mdd));
+  const COL=["#ffb000","#4fd6e0","#36e08a","#b07cff"];
+  const rows=out.map((x,i)=>`<tr>
+    <td class="name"><span class="namecell"><span class="cdot" style="background:${COL[i]};color:${COL[i]}"></span>${x.name}</span></td>
+    <td class="num ${x.cagr===best.cagr?'hl-good':(x.cagr>=0?'pos':'neg')}">${pct(x.cagr)}</td>
+    <td class="num ${x.mdd===worstMdd?'hl-bad':'neg'}">${(x.mdd*100).toFixed(1)}%</td>
+    <td class="num ${x.mar===best.mar?'hl-good':'cy'}">${x.mar.toFixed(2)}</td>
+    <td class="num ${x.finalVal===best.final?'hl-good':''}">${fmtWon(x.finalVal)}</td>
+    <td class="num dimv" style="font-size:11px">${x.sub}</td></tr>`).join("");
+  $("#a_results").innerHTML=`
+    <div class="card" style="margin-bottom:20px">
+      <h2>${it.id} 전략 일괄 비교 · ${d1}~${d2}</h2>
+      <div style="font-size:12.5px;color:var(--ink-dim);margin:-8px 0 16px;font-family:'JetBrains Mono',monospace">투자금 ${fmtWon(lump)} ${lumpInfo}</div>
+      <div class="ctable-wrap"><table class="ctable"><thead><tr><th>전략</th>
+        <th><span class="th-main">연평균 수익률</span><span class="th-sub">CAGR</span></th>
+        <th><span class="th-main">최대 낙폭률</span><span class="th-sub">MDD</span></th>
+        <th><span class="th-main">위험대비 수익</span><span class="th-sub">MAR</span></th>
+        <th><span class="th-main">최종 평가금액</span></th>
+        <th><span class="th-main">방식</span></th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="note" style="margin-top:14px"><b class="hl-good">초록</b>=항목별 최고 · <b class="hl-bad">빨강</b>=가장 큰 낙폭 · <b>분할매수·도깨비는 거치식만</b>(적립 미적용)이라 적립을 크게 넣으면 단순보유·신호매매와 직접 비교가 안 맞을 수 있어요. 그땐 월 적립금을 0으로 두고 보세요.</div>
+      <div class="boardadd" id="a_boardadd"></div>
+    </div>
+    <div class="card chartcard"><div class="charthead"><h3>최종 평가금액 비교</h3></div>
+      <div class="chartbox short"><canvas id="a_bar"></canvas></div>
+      <div class="note" style="margin-top:10px">막대가 높을수록 최종 금액이 큼. 하지만 <b>가장 높은 게 늘 최선은 아니에요</b> — 낙폭(MDD)을 견딜 수 있어야 그 수익을 실제로 가져갑니다.</div></div>`;
+  // 막대 차트
+  const COL2=["#ffb000","#4fd6e0","#36e08a","#b07cff"];
+  setChart("a_bar",{type:"bar",data:{labels:out.map(x=>x.name),datasets:[{data:out.map(x=>x.finalVal),backgroundColor:COL2,borderRadius:5}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...TIP,callbacks:{label:c=>" "+fmtWon(c.parsed.y)}}},
+      scales:{x:{grid:{display:false},ticks:{color:TICKC,font:{family:"JetBrains Mono",size:10}}},y:{grid:{color:GRIDC},ticks:{color:TICKC,font:{family:"JetBrains Mono",size:10},callback:v=>fmtShort(v)}}}}});
+  boardAddButtons("a_boardadd", out.map(x=>({label:`${it.id} ${x.name}`, short:x.name.split(" ")[0]==="신호"?"신호매매":x.name.split(" ")[0], cagr:x.cagr, mdd:x.mdd, mar:x.mar, finalVal:x.finalVal})));
+}
+
+/* ============================================================
+   TAB: RSI MEAN REVERSION (RSI 과매도 분할매수)
+   ============================================================ */
+fillSelect("rs_instr"); bindCustomToggle("rs_instr","rs_custom");
+attachSearch($("#rs_cSym"), q=>{ $("#rs_cSym").value=q.symbol; $("#rs_cSym").title=q.name; });
+
+$("#rs_run").onclick=async ()=>{
+  $("#rs_err").textContent="";
+  const it=resolveInstr($("#rs_instr").value,$("#rs_cSym").value,parseFloat($("#rs_cLev").value),parseFloat($("#rs_cER").value));
+  if(!it){$("#rs_err").textContent="종목 티커를 입력하거나 검색하세요.";return;}
+  const d1=$("#rs_start").value,d2=$("#rs_end").value; if(!d1||!d2||d1>=d2){$("#rs_err").textContent="기간을 확인하세요.";return;}
+  const total=(parseFloat($("#rs_total").value)||0)*1e4; if(total<=0){$("#rs_err").textContent="투자금을 입력하세요.";return;}
+  const period=parseInt($("#rs_period").value)||14, buyTh=parseFloat($("#rs_buy").value)||30, sellTh=parseFloat($("#rs_sell").value)||70;
+  const tr=Math.max(1,parseInt($("#rs_tr").value)||2), fin=parseFloat($("#rs_fin").value)||0;
+  if(buyTh>=sellTh){$("#rs_err").textContent="매수 임계 < 매도 임계여야 합니다.";return;}
+  const btn=$("#rs_run");btn.disabled=true;const o=btn.textContent;btn.textContent="⟳ 실행 중...";
+  $("#rs_results").innerHTML=`<div class="card"><div class="loading"><span class="spin"></span> RSI 계산 중...</div></div>`;
+  try{
+    const cd=await getData(it.yahoo,it.base,d1,d2);
+    const cl=clip(cd.data,d1,d2); if(cl.length<period+20){$("#rs_results").innerHTML=`<div class="card"><div class="err">데이터가 부족합니다(RSI 기간 ${period}일 이상 필요).</div></div>`;return;}
+    const series=synth(cl,it.lev,it.er,it.custom?0:fin);
+    const rsiBt=backtestRSI(series, total, period, buyTh, sellTh, tr);
+    const u0=total/series[0].close;
+    const holdCurve=series.map(r=>({date:r.date,value:u0*r.close}));
+    renderRSI(it,d1,d2,period,buyTh,sellTh,tr,total,rsiBt,holdCurve,series);
+  }catch(e){$("#rs_results").innerHTML=`<div class="card"><div class="err">오류: ${e.message}</div></div>`;}
+  finally{btn.disabled=false;btn.textContent=o;}
+};
+function renderRSI(it,d1,d2,period,buyTh,sellTh,tr,total,rsiBt,holdCurve,series){
+  const rFinal=rsiBt.finalVal, hFinal=holdCurve[holdCurve.length-1].value;
+  const rM=metrics(rsiBt.curve.map(c=>({date:c.date,close:c.value})));
+  const hM=metrics(series);
+  const buys=rsiBt.trades.filter(t=>t.type==="매수").length, sells=rsiBt.trades.filter(t=>t.type==="매도").length;
+  const trRows=rsiBt.trades.length?rsiBt.trades.slice(0,40).map((t,i)=>`<tr><td class="num dimv">#${i+1}</td><td class="num">${t.date}</td><td class="num ${t.type==="매수"?"cy":"amb"}">${t.type}</td><td class="num">${t.rsi.toFixed(0)}</td><td class="num">${fmtWon(t.amt)}</td></tr>`).join(""):`<tr><td colspan="5" class="dimv" style="text-align:center;padding:18px">신호 발생 없음</td></tr>`;
+  $("#rs_results").innerHTML=`
+    <div class="card" style="margin-bottom:20px">
+      <h2>${it.id} RSI 과매도 분할매수 · ${d1}~${d2}</h2>
+      <div style="font-size:12.5px;color:var(--ink-dim);margin:-8px 0 16px;font-family:'JetBrains Mono',monospace">RSI ${period} · 매수<${buyTh} / 매도>${sellTh} · ${tr}분할 · 총 ${fmtWon(total)}</div>
+      <div class="metrics">
+        <div class="metric ${rFinal>=hFinal?"green":""}"><div class="k">RSI 매수 최종</div><div class="v ${rFinal>=hFinal?"pos":""}">${fmtWon(rFinal)}</div><div class="s">연 ${pct(rM.cagr)} · MDD ${(rM.mdd*100).toFixed(0)}%</div></div>
+        <div class="metric ${hFinal>rFinal?"green":""}"><div class="k">100% 보유 최종</div><div class="v ${hFinal>rFinal?"pos":""}">${fmtWon(hFinal)}</div><div class="s">연 ${pct(hM.cagr)} · MDD ${(hM.mdd*100).toFixed(0)}%</div></div>
+        <div class="metric cyan"><div class="k">RSI vs 보유</div><div class="v ${rFinal>=hFinal?"pos":"neg"}">${rFinal>=hFinal?"+":""}${fmtWon(rFinal-hFinal)}</div><div class="s">${((rFinal/hFinal-1)*100).toFixed(1)}% 차이</div></div>
+        <div class="metric"><div class="k">거래 횟수</div><div class="v">${rsiBt.trades.length}</div><div class="s">매수 ${buys} · 매도 ${sells}</div></div>
+      </div>
+      <div class="ctable-wrap"><table class="ctable"><thead><tr><th>전략</th>
+        <th><span class="th-main">연평균 수익률</span><span class="th-sub">CAGR</span></th>
+        <th><span class="th-main">최대 낙폭률</span><span class="th-sub">MDD</span></th>
+        <th><span class="th-main">위험대비 수익</span><span class="th-sub">MAR</span></th></tr></thead><tbody>
+        <tr><td class="name"><span class="namecell"><span class="cdot" style="background:#4fd6e0;color:#4fd6e0"></span>RSI 매수</span></td><td class="num ${rM.cagr>=hM.cagr?"hl-good":""}">${pct(rM.cagr)}</td><td class="num ${Math.abs(rM.mdd)<Math.abs(hM.mdd)?"hl-good":"neg"}">${(rM.mdd*100).toFixed(1)}%</td><td class="num cy">${rM.mar.toFixed(2)}</td></tr>
+        <tr><td class="name"><span class="namecell"><span class="cdot" style="background:#566059;color:#566059"></span>100% 보유</span></td><td class="num ${hM.cagr>rM.cagr?"hl-good":""}">${pct(hM.cagr)}</td><td class="num">${(hM.mdd*100).toFixed(1)}%</td><td class="num cy">${hM.mar.toFixed(2)}</td></tr>
+      </tbody></table></div>
+      <div class="note" style="margin-top:14px"><b>읽는 법</b> · RSI 매수는 현금을 들고 신호를 기다리므로 <b>강세장에선 보유보다 많이 뒤처지지만</b>, 급락 후 반등을 잘 잡으면 낙폭을 크게 줄입니다. 현금 대기 시간이 길수록 기회비용도 커요.</div>
+      <div class="boardadd" id="rs_boardadd"></div>
+    </div>
+    <div class="card chartcard"><div class="charthead"><h3>RSI 매수 vs 100% 보유</h3><div class="toggle"><button id="rs_lin" class="on">선형</button><button id="rs_log">로그</button></div></div>
+      <div class="legend"><span><i style="background:#4fd6e0"></i>RSI 매수</span><span><i style="background:#566059"></i>100% 보유</span></div>
+      <div class="chartbox"><canvas id="rs_eq"></canvas></div></div>
+    <div class="card"><div class="sectitle">거래 내역 ${rsiBt.trades.length>40?"(처음 40건)":""}</div>
+      <div class="ctable-wrap"><table class="ctable"><thead><tr><th>회차</th><th>날짜</th><th>구분</th><th>RSI</th><th>금액</th></tr></thead><tbody>${trRows}</tbody></table></div></div>`;
+  drawRSI(rsiBt.curve,holdCurve,false);
+  $("#rs_lin").onclick=()=>{drawRSI(rsiBt.curve,holdCurve,false);$("#rs_lin").classList.add("on");$("#rs_log").classList.remove("on");};
+  $("#rs_log").onclick=()=>{drawRSI(rsiBt.curve,holdCurve,true);$("#rs_log").classList.add("on");$("#rs_lin").classList.remove("on");};
+  boardAddButtons("rs_boardadd", [
+    {label:`${it.id} RSI${period} ${buyTh}/${sellTh} ${tr}분할`, short:"RSI매수", cagr:rM.cagr, mdd:rM.mdd, mar:rM.mar, finalVal:rFinal},
+    {label:`${it.id} 100% 보유`, short:"100% 보유", cagr:hM.cagr, mdd:hM.mdd, mar:hM.mar, finalVal:hFinal}
+  ]);
+}
+function drawRSI(rCurve,holdCurve,log){
+  const idx=downsample(rCurve.length); const labels=idx.map(i=>rCurve[i].date);
+  setChart("rs_eq",{type:"line",data:{labels,datasets:[
+    {label:"RSI 매수",data:idx.map(i=>rCurve[i].value),borderColor:"#4fd6e0",backgroundColor:"transparent",borderWidth:2,pointRadius:0,tension:.06},
+    {label:"100% 보유",data:idx.map(i=>holdCurve[i].value),borderColor:"#566059",borderWidth:1.6,borderDash:[5,4],pointRadius:0,tension:.06}
+  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+    plugins:{legend:{display:false},tooltip:{...TIP,callbacks:{label:c=>` ${c.dataset.label}: ${fmtWon(c.parsed.y)}`}},peakLabels:{enabled:true,isWon:true}},
+    scales:{x:{grid:{color:GRIDC,drawTicks:false},ticks:{color:TICKC,maxTicksLimit:8,font:{family:"JetBrains Mono",size:10}}},
+      y:log?{type:"logarithmic",grid:{color:GRIDC},ticks:{color:TICKC,font:{family:"JetBrains Mono",size:10},callback:v=>fmtShort(v)}}:{grid:{color:GRIDC},ticks:{color:TICKC,font:{family:"JetBrains Mono",size:10},callback:v=>fmtShort(v)}}}}});
+}
 </script>
 </body>
 </html>

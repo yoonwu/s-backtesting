@@ -131,6 +131,9 @@
   .namecell{display:flex;align-items:center;gap:9px}
   .namecell .cdot{width:10px;height:10px;border-radius:50%;flex-shrink:0;box-shadow:0 0 8px 0 currentColor}
   .hl-good{color:var(--green);font-weight:700} .hl-bad{color:var(--red);font-weight:700}
+  th.db-sort{cursor:pointer;user-select:none} th.db-sort:hover .th-main{color:var(--amber)}
+  tr.db-hot td{background:rgba(255,176,0,.10)!important;border-bottom-color:rgba(255,176,0,.3)}
+  .db-best{font-size:12.5px;color:var(--ink-dim);line-height:1.7;margin:2px 0 16px;padding:12px 14px;background:rgba(255,176,0,.06);border:1px solid rgba(255,176,0,.22);border-radius:10px}
 
   table.ytable th,table.ytable td{padding:10px 13px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--grid);font-family:"JetBrains Mono",monospace;font-variant-numeric:tabular-nums}
   table.ytable thead th{font-size:11px;letter-spacing:.06em;color:var(--ink-dim);font-weight:700;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg-soft);z-index:1}
@@ -216,6 +219,7 @@
       <button data-tab="tranche">분할매수<span class="sub">Tranche</span></button>
       <button data-tab="shannon">도깨비<span class="sub">Shannon</span></button>
       <button data-tab="rsirev">RSI 매수<span class="sub">Mean Rev</span></button>
+      <button data-tab="doubleb">더블비<span class="sub">Double-BB</span></button>
       <button data-tab="board">비교 보드 <span class="badge" id="tab_board_badge"></span><span class="sub">Board</span></button>
     </div>
   </div>
@@ -488,6 +492,53 @@
         <div class="note"><b>동작</b> · RSI가 매수 임계 아래면 자금을 분할 횟수만큼 나눠 한 번에 한 몫씩 매수, 매도 임계 위로 오르면 전량 매도해 현금화. 신호는 <b>전일 종가</b>로 판정(미래참조 방지). RSI 14·30/70이 일반적이고, 짧은 RSI(2~4)는 더 자주 거래해요. 거래비용·세금 미반영.</div>
       </section>
       <section id="rs_results"><div class="placeholder"><div class="big">종목·RSI 설정을 정하고 <span class="amb">RSI 매수 실행</span></div><div class="mono" style="font-size:12px">RSI 매수 vs 100% 보유 · 거래 내역 · 자산 곡선</div></div></section>
+    </div>
+  </div>
+
+  <!-- =================== TAB: DOUBLE-BB (더블비) =================== -->
+  <div class="tabpane" id="pane-doubleb" hidden>
+    <div class="grid">
+      <section class="card">
+        <h2>더블비 그리드 백테스트</h2>
+        <div class="intro"><b>돌파더블비</b> · 4,4(시가) 볼밴과 20,2(종가) 볼밴을 겹친 <b>더블비</b> 상단을 종가가 처음 돌파한 봉을 잡아, 그 봉 전체(꼬리 포함)를 <b>N등분</b>해 분할매수합니다. 손절은 저점 −<b>손절×TR</b>, 익절은 <b>익절×TR</b>. <b>등분·손절·익절</b>을 격자로 돌려 조합별 성과를 비교해요. (TR=돌파봉 고가−저가)</div>
+
+        <div class="field"><label>데이터 소스</label>
+          <div class="subtabs" id="db_src" data-cur="stored">
+            <button data-s="stored" class="on">저장된 골드</button><button data-s="upload">CSV 업로드</button><button data-s="yahoo">야후 티커</button>
+          </div>
+          <div id="db_storedRow" class="hint" style="margin-top:-8px">레포의 <span class="mono">gold-m5.csv</span>(XAUUSD M5)를 자동으로 불러옵니다. 업로드 없이 ▶만 누르면 돼요. <button class="quickrange" id="db_reload" style="display:inline;padding:3px 8px;margin-left:6px;border:1px solid var(--border);background:#0c0f0e;color:var(--ink-dim);border-radius:6px;font-size:11px;cursor:pointer">↻ 다시 불러오기</button></div>
+          <div id="db_uploadRow" style="display:none;margin-top:6px"><input id="db_file" type="file" accept=".csv,text/csv"><div class="hint">MT4/MT5 export(.csv) — 콤마/탭/세미콜론, 헤더 유무 무관. OHLC만 있으면 됩니다.</div></div>
+          <div id="db_yahooRow" style="display:none;margin-top:6px">
+            <input id="db_sym" placeholder="예: QQQ, SPY, GC=F" autocomplete="off" style="margin-bottom:8px">
+            <div class="row2"><div class="field" style="margin-bottom:0"><label>시작일</label><input id="db_from" type="date"></div><div class="field" style="margin-bottom:0"><label>종료일</label><input id="db_to" type="date"></div></div>
+            <div class="hint">야후 분봉은 최근 60일(60분=2년), 일봉은 전체. <b>워커 v2 재배포 필요</b>(OHLC+interval). 골드는 '저장된 골드' 권장.</div>
+          </div>
+        </div>
+
+        <div class="row2">
+          <div class="field"><label>타임프레임</label><select id="db_tf"><option value="5m">5분봉</option><option value="10m">10분봉 (5분 합성)</option><option value="1d">일봉</option></select></div>
+          <div class="field"><label>익절 기준</label>
+            <div class="subtabs" id="db_tpmode" data-cur="fixed" style="margin-bottom:0">
+              <button data-m="fixed" class="on">돌파봉 고가</button><button data-m="avg">평단</button>
+            </div></div>
+        </div>
+
+        <div class="field"><label>등분 N (정수, 콤마 구분)</label><input id="db_N" class="mono" value="2,3,4,5,6"></div>
+        <div class="row2">
+          <div class="field"><label>손절폭 ×TR</label><input id="db_sl" class="mono" value="0.25,0.33,0.5,0.75,1,1.25,1.5"></div>
+          <div class="field"><label>익절폭 ×TR</label><input id="db_tp" class="mono" value="0.5,1,1.5,2,3,4,5"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>미체결 만료 (봉)</label><input id="db_expiry" class="mono" type="number" value="20" min="1" step="1"></div>
+          <div class="field"><label>최소 거래수 필터</label><input id="db_min" class="mono" type="number" value="30" min="0" step="1"></div>
+        </div>
+
+        <button class="runbtn" id="db_run">▶ 그리드 돌리기</button>
+        <div class="err" id="db_err"></div>
+        <div class="mono" id="db_status" style="font-size:11px;color:var(--ink-faint);margin-top:8px;line-height:1.5"></div>
+        <div class="note"><b>로직</b> · 더블비 상단=max(4,4 시가밴드, 20,2 종가밴드)(모집단σ). 돌파는 종가가 상단을 <b>처음</b> 넘을 때만(추세 중 중복신호 무시). 진입=고가~저가 끝점포함 N등분(N=3→고/중/저). 체결=다음 봉부터 저가≤주문가면 1/N씩. 손절=저가−손절×TR, 익절=(고정)돌파봉 고가+익절×TR 또는 평단+익절×TR. 한 봉에 손절·익절 동시 터치 시 <b>손절 우선</b>. 동시 1포지션, 부분체결분만 평단 계산. 수수료·스프레드 미반영.</div>
+      </section>
+      <section id="db_results"><div class="placeholder"><div class="big">데이터 소스를 고르고 <span class="amb">그리드 돌리기</span></div><div class="mono" style="font-size:12px">조합별 거래수·승률·손익비·총수익·MDD·MAR · 헤더 클릭 정렬</div></div></section>
     </div>
   </div>
 
@@ -1731,6 +1782,241 @@ function drawRSI(rCurve,holdCurve,log){
     scales:{x:{grid:{color:GRIDC,drawTicks:false},ticks:{color:TICKC,maxTicksLimit:8,font:{family:"JetBrains Mono",size:10}}},
       y:log?{type:"logarithmic",grid:{color:GRIDC},ticks:{color:TICKC,font:{family:"JetBrains Mono",size:10},callback:v=>fmtShort(v)}}:{grid:{color:GRIDC},ticks:{color:TICKC,font:{family:"JetBrains Mono",size:10},callback:v=>fmtShort(v)}}}}});
 }
+
+/* ============================================================
+   TAB: DOUBLE-BB (더블비) — 돌파더블비 분할매수 그리드 백테스터
+   엔진은 손계산 10단언 + 실데이터 파리티(+37.1% 재현) 통과본.
+   ============================================================ */
+(function(){
+  /* ---------- 볼린저 상단 (모집단 표준편차) ---------- */
+  function bandUpper(series,period,mult){
+    const n=series.length, up=new Array(n).fill(null);
+    for(let i=period-1;i<n;i++){
+      let s=0; for(let k=i-period+1;k<=i;k++)s+=series[k];
+      const m=s/period; let v=0;
+      for(let k=i-period+1;k<=i;k++){const d=series[k]-m; v+=d*d;}
+      up[i]=m+mult*Math.sqrt(v/period);
+    }
+    return up;
+  }
+  /* 더블비 상단 = max(4,4 시가밴드 상단, 20,2 종가밴드 상단) */
+  function doubleUpper(bars){
+    const u1=bandUpper(bars.map(b=>b.o),4,4);
+    const u2=bandUpper(bars.map(b=>b.c),20,2);
+    return bars.map((_,i)=> (u1[i]==null||u2[i]==null)?null:Math.max(u1[i],u2[i]));
+  }
+  /* ---------- 그리드 한 칸 백테스트 ---------- */
+  function backtest(bars,upper,N,slK,tpK,tpMode,expiryM){
+    const n=bars.length;
+    let equity=1, peak=1, maxDD=0;
+    let trades=0, wins=0, losses=0, sumWin=0, sumLoss=0, tpC=0, slC=0, eodC=0;
+    let i=1;
+    while(i<n){
+      const u=upper[i], up1=upper[i-1];
+      if(u==null||up1==null){ i++; continue; }
+      if(!(bars[i].c>u && bars[i-1].c<=up1)){ i++; continue; } // 돌파더블비(처음 넘김)
+      const H=bars[i].h, L=bars[i].l, TR=H-L;
+      if(TR<=0){ i++; continue; }
+      const orders=[];                                          // 방식 가: 끝점 포함 N등분
+      for(let k=0;k<N;k++) orders.push({p:N===1?H:H-(H-L)*k/(N-1),filled:false});
+      const SL=L-slK*TR;
+      let filled=0,sumFill=0,exited=false,exitPx=0,reason="",exitIdx=-1;
+      for(let j=i+1;j<n;j++){
+        const b=bars[j];
+        for(const o of orders){ if(!o.filled && b.l<=o.p){ o.filled=true; filled++; sumFill+=o.p; } }
+        if(filled===0){ if(j-i>=expiryM)break; else continue; } // 미체결 만료
+        const avg=sumFill/filled;
+        const TP=tpMode==="avg"?avg+tpK*TR:H+tpK*TR;
+        if(b.l<=SL){ exited=true; exitPx=SL; reason="SL"; exitIdx=j; break; } // 손절 우선
+        if(b.h>=TP){ exited=true; exitPx=TP; reason="TP"; exitIdx=j; break; }
+      }
+      if(filled===0){ i++; continue; }
+      if(!exited){ exitPx=bars[n-1].c; reason="EOD"; exitIdx=n-1; }
+      const avg=sumFill/filled, frac=filled/N, ret=frac*(exitPx-avg)/avg;
+      equity*=(1+ret); if(equity>peak)peak=equity;
+      const dd=equity/peak-1; if(dd<maxDD)maxDD=dd;
+      trades++;
+      if(ret>0){wins++;sumWin+=ret;}else{losses++;sumLoss+=Math.abs(ret);}
+      if(reason==="TP")tpC++; else if(reason==="SL")slC++; else eodC++;
+      i=exitIdx+1;
+    }
+    const winrate=trades?wins/trades:0;
+    const avgWin=wins?sumWin/wins:0, avgLoss=losses?sumLoss/losses:0;
+    const payoff=avgLoss>0?avgWin/avgLoss:(avgWin>0?Infinity:0);
+    const totalRet=equity-1;
+    const mar=maxDD<0?totalRet/Math.abs(maxDD):(totalRet>0?Infinity:0);
+    return {N,slK,tpK,trades,winrate,payoff,totalRet,mdd:maxDD,mar,tpC,slC,eodC};
+  }
+  /* ---------- 데이터: MT5 CSV 파서 + 리샘플 ---------- */
+  function parseMT5(text){
+    const lines=text.split(/\r?\n/), out=[];
+    const start=/date|open|time/i.test(lines[0]||"")?1:0;
+    for(let i=start;i<lines.length;i++){
+      const ln=lines[i].trim(); if(!ln)continue;
+      const p=ln.split(/[\t,;]+/); if(p.length<6)continue;
+      const d=p[0].replace(/\./g,"-").replace(/\//g,"-").slice(0,10);
+      const o=+p[2],h=+p[3],l=+p[4],c=+p[5];
+      if(!isFinite(o)||!isFinite(h)||!isFinite(l)||!isFinite(c)||c<=0)continue;
+      out.push({day:d,date:d+" "+(p[1]||"00:00:00"),o,h,l,c});
+    }
+    if(out.length<2)throw new Error("CSV에서 유효한 OHLC 행을 못 찾음");
+    return out;
+  }
+  function groupByDay(bars){ const m={},order=[]; for(const b of bars){ if(!m[b.day]){m[b.day]=[];order.push(b.day);} m[b.day].push(b);} return {m,order}; }
+  function agg(g){ let h=-Infinity,l=Infinity; for(const x of g){ if(x.h>h)h=x.h; if(x.l<l)l=x.l; } return {day:g[0].day,date:g[0].date,o:g[0].o,h,l,c:g[g.length-1].c}; }
+  function intradayOnly(bars){ const {m}=groupByDay(bars); return bars.filter(b=>m[b.day].length>1); }
+  function resampleN(bars,nn){ const {m,order}=groupByDay(bars); const out=[]; for(const d of order){const a=m[d]; for(let k=0;k<a.length;k+=nn)out.push(agg(a.slice(k,k+nn)));} return out; }
+  function resampleDaily(bars){ const {m,order}=groupByDay(bars); return order.map(d=>agg(m[d])); }
+  /* MT5(혼합: 앞 일봉 + 뒤 5분) → 타임프레임 */
+  function buildTF_MT5(raw,tf){
+    if(tf==="5m")return intradayOnly(raw);
+    if(tf==="10m")return resampleN(intradayOnly(raw),2);
+    return resampleDaily(raw); // 1d: 앞 일봉 그대로 + 뒤 5분→일봉 합성
+  }
+  /* ---------- 야후 ---------- */
+  async function fetchYahoo(sym,interval,from,to){
+    const u=`${PROXY}/?yahoo=${encodeURIComponent(sym)}&from=${from}&to=${to}&interval=${interval}`;
+    const r=await fetch(u); const j=await r.json();
+    if(!r.ok||!j.data)throw new Error(j.error||("프록시 오류 "+r.status));
+    return j.data.map(x=>({day:String(x.date).slice(0,10),date:String(x.date),o:+x.o,h:+x.h,l:+x.l,c:+x.c}));
+  }
+  function daysAgo(n){ const d=new Date(); d.setDate(d.getDate()-n); return d.toISOString().slice(0,10); }
+
+  /* ====================== UI ====================== */
+  /* uses page globals: $, $$, PROXY, today */
+  let RAW=null, RAWLABEL="", RESULTS=[], SORT={key:"mar",dir:-1};
+  const el=id=>document.getElementById(id);
+
+  function setSrc(s){
+    $$("#db_src button").forEach(b=>b.classList.toggle("on",b.dataset.s===s));
+    el("db_src").dataset.cur=s;
+    el("db_uploadRow").style.display = s==="upload"?"":"none";
+    el("db_yahooRow").style.display  = s==="yahoo"?"":"none";
+    el("db_storedRow").style.display = s==="stored"?"":"none";
+  }
+  function setTpMode(m){ $$("#db_tpmode button").forEach(b=>b.classList.toggle("on",b.dataset.m===m)); el("db_tpmode").dataset.cur=m; }
+
+  function parseList(str,intOnly,minV){
+    return String(str).split(/[,\s]+/).map(x=>+x).filter(x=>isFinite(x)&&x>=(minV||0)&&(!intOnly||Number.isInteger(x)));
+  }
+  function err(msg){ el("db_err").textContent=msg||""; }
+  function status(msg){ el("db_status").textContent=msg||""; }
+
+  async function loadData(tf){
+    const src=el("db_src").dataset.cur;
+    if(src==="yahoo"){
+      const sym=el("db_sym").value.trim(); if(!sym)throw new Error("야후 티커를 입력하세요");
+      const from=el("db_from").value, to=el("db_to").value;
+      status(`야후 ${sym} ${tf} 불러오는 중…`);
+      if(tf==="10m"){ const b5=await fetchYahoo(sym,"5m",from,to); return resampleN(b5,2); }
+      return fetchYahoo(sym, tf==="1d"?"1d":"5m", from, to);
+    }
+    // stored / upload  → RAW (MT5 base) 사용
+    if(!RAW){
+      if(src==="upload"){ throw new Error("CSV 파일을 먼저 선택하세요"); }
+      status("저장된 골드(gold-m5.csv) 불러오는 중…");
+      const r=await fetch("gold-m5.csv",{cache:"force-cache"});
+      if(!r.ok)throw new Error("gold-m5.csv 못 찾음(404). 레포 루트에 올렸는지 확인하거나 'CSV 업로드'를 쓰세요.");
+      RAW=parseMT5(await r.text()); RAWLABEL="저장된 골드";
+    }
+    return buildTF_MT5(RAW,tf);
+  }
+
+  async function run(){
+    err(""); RESULTS=[];
+    const btn=el("db_run"); btn.disabled=true;
+    try{
+      const tf=el("db_tf").value;
+      const Ns=parseList(el("db_N").value,true,2);
+      const slKs=parseList(el("db_sl").value,false,0);
+      const tpKs=parseList(el("db_tp").value,false,0);
+      if(!Ns.length||!slKs.length||!tpKs.length)throw new Error("등분 N(≥2)·손절·익절 값을 1개 이상 입력하세요");
+      const tpMode=el("db_tpmode").dataset.cur;
+      const expiryM=Math.max(1,+el("db_expiry").value||20);
+      const minTr=Math.max(0,+el("db_min").value||0);
+      const bars=await loadData(tf);
+      if(bars.length<60)throw new Error(`봉 수가 너무 적음(${bars.length}). 기간·소스를 확인하세요.`);
+      status(`엔진 실행: ${bars.length.toLocaleString()}봉 · ${Ns.length*slKs.length*tpKs.length}조합…`);
+      const upper=doubleUpper(bars);
+      const res=[];
+      for(const N of Ns)for(const s of slKs)for(const t of tpKs){
+        const r=backtest(bars,upper,N,s,t,tpMode,expiryM);
+        if(r.trades>=minTr)res.push(r);
+      }
+      RESULTS=res;
+      const span=bars[0].day+" ~ "+bars[bars.length-1].day;
+      status(`${RAWLABEL||el("db_sym").value||"데이터"} · ${tf} · ${bars.length.toLocaleString()}봉 · ${span} · 표시 ${res.length}/${Ns.length*slKs.length*tpKs.length}조합(최소거래 ${minTr})`);
+      render();
+    }catch(e){ err("⚠ "+e.message); status(""); }
+    finally{ btn.disabled=false; }
+  }
+
+  function pct(x){ return (x>=0?"+":"")+(x*100).toFixed(1)+"%"; }
+  function payoffStr(p){ return p===Infinity?"∞":p.toFixed(2); }
+  function marStr(m){ return m===Infinity?"∞":m.toFixed(2); }
+  function arrow(k){ return SORT.key===k?(SORT.dir<0?" ▾":" ▴"):""; }
+
+  function render(){
+    const wrap=el("db_results");
+    if(!RESULTS.length){ wrap.innerHTML=`<div class="placeholder"><div class="big">조건에 맞는 조합이 없어요</div><div class="mono" style="font-size:12px">최소 거래수를 낮추거나 파라미터 범위를 넓혀보세요</div></div>`; return; }
+    const rs=RESULTS.slice().sort((a,b)=>{
+      const v=(SORT.key==="mar"?a.mar-b.mar:SORT.key==="totalRet"?a.totalRet-b.totalRet:SORT.key==="payoff"?a.payoff-b.payoff:SORT.key==="winrate"?a.winrate-b.winrate:SORT.key==="mdd"?a.mdd-b.mdd:SORT.key==="trades"?a.trades-b.trades:SORT.key==="N"?a.N-b.N:SORT.key==="slK"?a.slK-b.slK:a.tpK-b.tpK);
+      return SORT.dir*v;
+    });
+    const bestMar=Math.max(...RESULTS.map(r=>r.mar===Infinity?-1:r.mar));
+    const bestRet=Math.max(...RESULTS.map(r=>r.totalRet));
+    const worstMdd=Math.min(...RESULTS.map(r=>r.mdd));
+    const best=RESULTS.slice().sort((a,b)=>(b.mar===Infinity?1e9:b.mar)-(a.mar===Infinity?1e9:a.mar))[0];
+    const head=(k,main,sub)=>`<th class="db-sort" data-k="${k}"><span class="th-main">${main}${arrow(k)}</span><span class="th-sub">${sub}</span></th>`;
+    const rows=rs.map(r=>{
+      const hot=(r.N===best.N&&r.slK===best.slK&&r.tpK===best.tpK);
+      return `<tr class="${hot?'db-hot':''}">
+        <td class="num">${r.N}</td>
+        <td class="num">${r.slK}</td>
+        <td class="num">${r.tpK}</td>
+        <td class="num">${r.trades}</td>
+        <td class="num">${(r.winrate*100).toFixed(0)}%</td>
+        <td class="num ${r.payoff>=1?'pos':'neg'}">${payoffStr(r.payoff)}</td>
+        <td class="num ${r.totalRet===bestRet?'hl-good':(r.totalRet>=0?'pos':'neg')}">${pct(r.totalRet)}</td>
+        <td class="num ${r.mdd===worstMdd?'hl-bad':'neg'}">${(r.mdd*100).toFixed(1)}%</td>
+        <td class="num ${r.mar===bestMar&&r.mar!==Infinity?'hl-good':'cy'}">${marStr(r.mar)}</td>
+        <td class="num dimv">${r.tpC}/${r.slC}${r.eodC?'/'+r.eodC:''}</td></tr>`;
+    }).join("");
+    wrap.innerHTML=`
+      <div class="db-best">최적 조합(MAR) · <b class="amb">${best.N}등분 · 손절 ${best.slK}TR · 익절 ${best.tpK}TR</b>
+        → 총수익 <b class="${best.totalRet>=0?'pos':'neg'}">${pct(best.totalRet)}</b> · MDD <b class="neg">${(best.mdd*100).toFixed(1)}%</b> · MAR <b class="cy">${marStr(best.mar)}</b> · 거래 ${best.trades} · 승률 ${(best.winrate*100).toFixed(0)}%</div>
+      <div class="ctable-wrap"><table class="ctable"><thead><tr>
+        ${head("N","등분","N")}${head("slK","손절","×TR")}${head("tpK","익절","×TR")}
+        ${head("trades","거래","TRADES")}${head("winrate","승률","WIN")}${head("payoff","손익비","PAYOFF")}
+        ${head("totalRet","총수익","RETURN")}${head("mdd","최대낙폭","MDD")}${head("mar","위험대비","MAR")}
+        <th><span class="th-main">청산</span><span class="th-sub">TP/SL</span></th>
+      </tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="note" style="margin-top:14px"><b class="hl-good">초록</b>=최고 총수익/MAR · <b class="hl-bad">빨강</b>=최대 낙폭 · 호박색 줄=MAR 최적 · 헤더 클릭 정렬 · 청산열=익절/손절(+미청산) 횟수. 손익비=평균이익÷평균손실, MAR=총수익÷|MDD|.</div>`;
+    wrap.querySelectorAll(".db-sort").forEach(th=>th.onclick=()=>{
+      const k=th.dataset.k;
+      if(SORT.key===k)SORT.dir*=-1; else{ SORT.key=k; SORT.dir=(k==="mdd"?1:-1); }
+      render();
+    });
+  }
+
+  /* ---------- wire up ---------- */
+  function init(){
+    if(!el("db_run"))return;
+    $$("#db_src button").forEach(b=>b.onclick=()=>setSrc(b.dataset.s));
+    $$("#db_tpmode button").forEach(b=>b.onclick=()=>setTpMode(b.dataset.m));
+    el("db_file").onchange=async e=>{
+      const f=e.target.files[0]; if(!f)return;
+      try{ RAW=parseMT5(await f.text()); RAWLABEL=f.name; status(`업로드됨: ${f.name} · ${RAW.length.toLocaleString()}행`); err(""); }
+      catch(ex){ err("⚠ "+ex.message); }
+    };
+    el("db_reload").onclick=()=>{ RAW=null; RAWLABEL=""; status("저장된 골드 캐시 비움 — 다시 돌리면 새로 불러옵니다"); };
+    el("db_run").onclick=run;
+    el("db_from").value=daysAgo(730); el("db_to").value=today();
+    setSrc("stored"); setTpMode("fixed");
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init); else init();
+})();
+
 </script>
 </body>
 </html>

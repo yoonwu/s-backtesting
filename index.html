@@ -516,7 +516,7 @@
         </div>
 
         <div class="row2">
-          <div class="field"><label>타임프레임</label><select id="db_tf"><option value="5m">5분봉</option><option value="10m">10분봉 (5분 합성)</option><option value="1d">일봉</option></select></div>
+          <div class="field"><label>타임프레임</label><select id="db_tf"><option value="5m">5분봉</option><option value="10m">10분봉 (5분 합성)</option><option value="1h">1시간봉</option><option value="1d">일봉</option></select></div>
           <div class="field"><label>익절 기준</label>
             <div class="subtabs" id="db_tpmode" data-cur="fixed" style="margin-bottom:0">
               <button data-m="fixed" class="on">돌파봉 고가</button><button data-m="avg">평단</button>
@@ -1871,6 +1871,7 @@ function drawRSI(rCurve,holdCurve,log){
   function buildTF_MT5(raw,tf){
     if(tf==="5m")return intradayOnly(raw);
     if(tf==="10m")return resampleN(intradayOnly(raw),2);
+    if(tf==="1h")return resampleN(intradayOnly(raw),12); // 5분 12개 = 1시간
     return resampleDaily(raw); // 1d: 앞 일봉 그대로 + 뒤 5분→일봉 합성
   }
   /* ---------- 야후 ---------- */
@@ -1909,7 +1910,7 @@ function drawRSI(rCurve,holdCurve,log){
       const from=el("db_from").value, to=el("db_to").value;
       status(`야후 ${sym} ${tf} 불러오는 중…`);
       if(tf==="10m"){ const b5=await fetchYahoo(sym,"5m",from,to); return resampleN(b5,2); }
-      return fetchYahoo(sym, tf==="1d"?"1d":"5m", from, to);
+      return fetchYahoo(sym, tf==="1d"?"1d":tf==="1h"?"60m":"5m", from, to);
     }
     // stored / upload  → RAW (MT5 base) 사용
     if(!RAW){

@@ -1,17 +1,18 @@
 /* ============================================================================
-   YOGIBAG DATA PROXY  ·  Cloudflare Worker
+   YOGIBAG DATA PROXY v2  ·  Cloudflare Worker
    ----------------------------------------------------------------------------
-   주가/지수 일별 종가 데이터 프록시.
-   요청 예) GET https://xxx.workers.dev/?yahoo=^NDX&stooq=^ndx&from=2010-01-01&to=2026-06-08
-   동작 순서: 1) 야후  2) Stooq  3) (선택) Alpha Vantage  순으로 시도
-   응답 예) { "source":"yahoo", "count":4012, "data":[{"date":"2010-01-04","close":1860.31}, ...] }
-   - 서버 측 요청이라 CORS/외부요청 차단 문제 없음
-   - 응답에 Access-Control-Allow-Origin:* 부여 → 어떤 웹페이지에서도 호출 가능
-   - 6시간 엣지 캐싱 → 야후 호출 최소화 + 무료 한도 절약
+   주가/지수 데이터 프록시. (일봉 + 분봉 OHLC)
+   요청 예) GET .../?yahoo=QQQ&stooq=qqq.us&from=2024-06-01&to=2026-06-28&interval=1d
+           GET .../?yahoo=QQQ&from=2026-05-01&to=2026-06-28&interval=5m
+   - interval 미지정 → 1d (기존 동작 그대로)
+   - 응답 행: { date, o, h, l, c, close }
+       · o/h/l/c = 원시(raw) OHLC  ← 더블비 등 캔들 전략용
+       · close   = 일봉이면 adjclose(배당반영), 분봉이면 raw c  ← 기존 탭 하위호환
+   - 분봉은 정규장만(includePrePost=false), date 는 ISO datetime
+   - 야후 분봉 히스토리 한도: 5/15/30분=60일, 60분=730일, 1일=전체
    ----------------------------------------------------------------------------
-   (선택) Alpha Vantage 폴백을 쓰려면:
-     Cloudflare 대시보드 → 이 Worker → Settings → Variables and Secrets →
-     Add → type: Secret, name: AV_KEY, value: (alphavantage.co 무료 키) → Deploy
+   v1 대비 변경: interval 파라미터 추가, 행에 o/h/l/c 추가(close 필드는 유지).
+   기존 탭은 .close/.date 만 읽으므로 영향 없음.
    ========================================================================== */
 
 const CORS = {
@@ -20,6 +21,9 @@ const CORS = {
   "Access-Control-Allow-Headers": "*",
 };
 
+// 야후 분봉 최대 조회 일수 (안전하게 -1)
+const INTRADAY_LIMIT_DAYS = { "1m": 7, "2m": 59, "5m": 59, "15m": 59, "30m": 59, "60m": 729, "90m": 59 };
+
 export default {
   async fetch(request, env, ctx) {
     if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
@@ -27,14 +31,14 @@ export default {
     const url = new URL(request.url);
     const yahoo = url.searchParams.get("yahoo");
     const stooq = url.searchParams.get("stooq");
-    const from = url.searchParams.get("from"); // YYYY-MM-DD
-    const to = url.searchParams.get("to");     // YYYY-MM-DD
+    const from = url.searchParams.get("from");           // YYYY-MM-DD
+    const to = url.searchParams.get("to");               // YYYY-MM-DD
+    const interval = url.searchParams.get("interval") || "1d";
 
     if (!from || !to || (!yahoo && !stooq)) {
       return json({ error: "필수 파라미터: (yahoo 또는 stooq), from, to" }, 400);
     }
 
-    // 엣지 캐시 (6시간) — 동일 요청은 야후를 다시 안 때림
     const cache = caches.default;
     const cacheKey = new Request(url.toString(), { method: "GET" });
     const cached = await cache.match(cacheKey);
@@ -44,14 +48,15 @@ export default {
     let data = null, source = null;
 
     if (yahoo) {
-      try { data = await fromYahoo(yahoo, from, to); source = "yahoo"; }
+      try { data = await fromYahoo(yahoo, from, to, interval); source = "yahoo"; }
       catch (e) { errors.push("yahoo: " + e.message); }
     }
-    if (!data && stooq) {
+    // 분봉은 stooq/AV 폴백 없음 (일봉만 폴백)
+    if (!data && stooq && interval === "1d") {
       try { data = await fromStooq(stooq, from, to); source = "stooq"; }
       catch (e) { errors.push("stooq: " + e.message); }
     }
-    if (!data && env.AV_KEY && stooq && stooq.endsWith(".us")) {
+    if (!data && interval === "1d" && env.AV_KEY && stooq && stooq.endsWith(".us")) {
       try {
         data = await fromAlpha(stooq.replace(".us", "").toUpperCase(), from, to, env.AV_KEY);
         source = "alphavantage";
@@ -60,8 +65,8 @@ export default {
 
     if (!data) return json({ error: "모든 데이터 소스 실패", detail: errors }, 502);
 
-    const res = json({ source, count: data.length, data });
-    res.headers.set("Cache-Control", "public, max-age=21600");
+    const res = json({ source, interval, count: data.length, data });
+    res.headers.set("Cache-Control", interval === "1d" ? "public, max-age=21600" : "public, max-age=1800");
     ctx.waitUntil(cache.put(cacheKey, res.clone()));
     return res;
   },
@@ -74,12 +79,21 @@ function json(obj, status = 200) {
   });
 }
 
-/* ---- Yahoo Finance chart API ---- */
-async function fromYahoo(symbol, from, to) {
-  const p1 = Math.floor(Date.parse(from) / 1000);
-  const p2 = Math.floor(Date.parse(to) / 1000) + 86400; // 종료일 포함
-  const u = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}`
-          + `?period1=${p1}&period2=${p2}&interval=1d`;
+/* ---- Yahoo Finance chart API (OHLC + interval) ---- */
+async function fromYahoo(symbol, from, to, interval) {
+  let p1 = Math.floor(Date.parse(from) / 1000);
+  let p2 = Math.floor(Date.parse(to) / 1000) + 86400; // 종료일 포함
+  const intraday = interval !== "1d";
+
+  if (intraday && INTRADAY_LIMIT_DAYS[interval]) {
+    const minP1 = p2 - INTRADAY_LIMIT_DAYS[interval] * 86400;
+    if (p1 < minP1) p1 = minP1;
+  }
+
+  let u = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}`
+        + `?period1=${p1}&period2=${p2}&interval=${interval}`;
+  if (intraday) u += `&includePrePost=false`;
+
   const r = await fetch(u, {
     headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
     cf: { cacheTtl: 0 },
@@ -88,22 +102,27 @@ async function fromYahoo(symbol, from, to) {
   const j = await r.json();
   const result = j?.chart?.result?.[0];
   if (!result || j?.chart?.error) throw new Error(j?.chart?.error?.description || "결과 없음");
+
   const ts = result.timestamp || [];
+  const q = result.indicators?.quote?.[0] || {};
   const adj = result.indicators?.adjclose?.[0]?.adjclose;
-  const cls = result.indicators?.quote?.[0]?.close;
-  const px = adj || cls;
-  if (!ts.length || !px) throw new Error("빈 시계열");
+  const O = q.open, H = q.high, L = q.low, C = q.close;
+  if (!ts.length || !O || !H || !L || !C) throw new Error("빈 시계열");
+
   const out = [];
   for (let i = 0; i < ts.length; i++) {
-    const v = px[i];
-    if (v == null) continue;
-    out.push({ date: new Date(ts[i] * 1000).toISOString().slice(0, 10), close: +v });
+    const o = O[i], h = H[i], l = L[i], c = C[i];
+    if (o == null || h == null || l == null || c == null) continue;
+    const iso = new Date(ts[i] * 1000).toISOString();
+    const date = intraday ? iso : iso.slice(0, 10);
+    const close = (!intraday && adj && adj[i] != null) ? +adj[i] : +c;
+    out.push({ date, o: +o, h: +h, l: +l, c: +c, close });
   }
   if (out.length < 2) throw new Error("행 부족");
   return out;
 }
 
-/* ---- Stooq CSV ---- */
+/* ---- Stooq CSV (일봉 폴백) ---- */
 async function fromStooq(symbol, from, to) {
   const d = s => s.replaceAll("-", "");
   const u = `https://stooq.com/q/d/l/?s=${encodeURIComponent(symbol)}&d1=${d(from)}&d2=${d(to)}&i=d`;
@@ -113,20 +132,23 @@ async function fromStooq(symbol, from, to) {
   if (/N\/D|<html/i.test(t)) throw new Error("데이터 없음");
   const lines = t.trim().split(/\r?\n/);
   const h = lines[0].toLowerCase().split(",");
-  const di = h.indexOf("date");
-  const ci = h.indexOf("close");
+  const di = h.indexOf("date"), oi = h.indexOf("open"), hi = h.indexOf("high"), li = h.indexOf("low"), ci = h.indexOf("close");
   if (di < 0 || ci < 0) throw new Error("CSV 형식 오류");
   const out = [];
   for (let i = 1; i < lines.length; i++) {
     const p = lines[i].split(",");
-    const v = parseFloat(p[ci]);
-    if (p[di] && !isNaN(v) && v > 0) out.push({ date: p[di].slice(0, 10), close: v });
+    const c = parseFloat(p[ci]);
+    if (!p[di] || isNaN(c) || c <= 0) continue;
+    const o = oi >= 0 ? parseFloat(p[oi]) : c;
+    const hh = hi >= 0 ? parseFloat(p[hi]) : c;
+    const ll = li >= 0 ? parseFloat(p[li]) : c;
+    out.push({ date: p[di].slice(0, 10), o, h: hh, l: ll, c, close: c });
   }
   if (out.length < 2) throw new Error("행 부족");
   return out;
 }
 
-/* ---- Alpha Vantage (선택 폴백, ETF용) ---- */
+/* ---- Alpha Vantage (선택 폴백, 일봉 ETF용) ---- */
 async function fromAlpha(symbol, from, to, key) {
   const u = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED`
           + `&symbol=${symbol}&outputsize=full&apikey=${key}`;
@@ -138,8 +160,12 @@ async function fromAlpha(symbol, from, to, key) {
   const out = [];
   for (const day in ts) {
     if (day >= from && day <= to) {
-      const v = parseFloat(ts[day]["5. adjusted close"] || ts[day]["4. close"]);
-      if (!isNaN(v)) out.push({ date: day, close: v });
+      const o = parseFloat(ts[day]["1. open"]);
+      const h = parseFloat(ts[day]["2. high"]);
+      const l = parseFloat(ts[day]["3. low"]);
+      const c = parseFloat(ts[day]["4. close"]);
+      const adj = parseFloat(ts[day]["5. adjusted close"] || ts[day]["4. close"]);
+      if (!isNaN(c)) out.push({ date: day, o, h, l, c, close: isNaN(adj) ? c : adj });
     }
   }
   out.sort((a, b) => (a.date < b.date ? -1 : 1));

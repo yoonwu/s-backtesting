@@ -144,6 +144,7 @@
   .namecell .cdot{width:10px;height:10px;border-radius:50%;flex-shrink:0;box-shadow:0 0 8px 0 currentColor}
   .hl-good{color:var(--green);font-weight:700} .hl-bad{color:var(--red);font-weight:700}
   th.db-sort{cursor:pointer;user-select:none} th.db-sort:hover .th-main{color:var(--amber)}
+  th.saved-sort{user-select:none} th.saved-sort:hover .th-main{color:var(--amber)}
   button.db-save{padding:4px 11px;border:1px solid var(--amber);background:rgba(255,176,0,.1);color:var(--amber);border-radius:6px;font-size:11px;font-weight:700;cursor:pointer}
   button.db-save:hover:not(:disabled){background:var(--amber);color:#0c0f0e}
   button.db-save:disabled{border-color:var(--border);background:transparent;color:var(--ink-faint);cursor:default}
@@ -871,9 +872,10 @@ const $$ = s=>document.querySelectorAll(s);
 const today = ()=>new Date().toISOString().slice(0,10);
 
 /* ===== 저장된 전략 (localStorage) — 좋은 전략만 클릭해서 모아보기 ===== */
+let SAVED_SORT={key:"months",dir:1};
 const StrategyStore = {
   KEY: "leverageLab_savedStrategies_v1",
-  _sig(s){ return [s.data,s.strategy,s.direction,s.entry,s.slK,s.tpK,s.tpMode,s.confW].join("|"); },
+  _sig(s){ return [s.data,s.strategy,s.direction,s.entry,s.slK,s.tpK,s.tpMode,s.confW,s.months||0].join("|"); },
   getAll(){ try{ return JSON.parse(localStorage.getItem(this.KEY)||"[]"); }catch(e){ return []; } },
   _save(arr){ try{ localStorage.setItem(this.KEY, JSON.stringify(arr)); }catch(e){} },
   add(s){
@@ -898,7 +900,22 @@ function renderSavedStrategies(){
   if(!arr.length){ wrap.innerHTML=`<div class="placeholder"><div class="big">아직 저장된 전략이 없어요</div><div class="mono" style="font-size:12px">더블비 결과표에서 <span class="amb">저장</span> 버튼을 눌러 좋은 전략을 모아보세요</div></div>`; return; }
   const pf=x=>(x>=0?"+":"")+(x*100).toFixed(1)+"%";
   const mar=x=>x===Infinity||x>=99?"∞":(+x).toFixed(2);
-  const rows=arr.map((s,i)=>`<tr>
+  const periodLabel=m=>(!m||m<=0)?"전체":`최근 ${m}개월`;
+  // 원래 인덱스를 보존(삭제용)하면서 정렬
+  const idx=arr.map((s,i)=>i);
+  const SK=SAVED_SORT.key, SD=SAVED_SORT.dir;
+  const val=s=>({
+    months:(s.months||0), data:s.data||"", strategy:s.strategy||"", direction:s.direction||"",
+    entry:s.entry||"", slK:+s.slK, tpK:+s.tpK, tpMode:s.tpMode||"",
+    trades:+s.trades, winrate:+s.winrate, payoff:+s.payoff, totalRet:+s.totalRet, mdd:+s.mdd, mar:(s.mar===Infinity?1e9:+s.mar),
+  }[SK]);
+  idx.sort((a,b)=>{
+    const va=val(arr[a]), vb=val(arr[b]);
+    const c=(typeof va==="string")?va.localeCompare(vb,"ko"):(va-vb);
+    return SD*c;
+  });
+  const rows=idx.map(i=>{ const s=arr[i]; return `<tr>
+    <td class="mono">${periodLabel(s.months)}</td>
     <td class="mono dimv">${s.data||""}</td>
     <td class="mono">${s.strategy||""}</td>
     <td>${s.direction||""}</td>
@@ -913,27 +930,36 @@ function renderSavedStrategies(){
     <td class="num neg">${(s.mdd*100).toFixed(1)}%</td>
     <td class="num cy">${mar(s.mar)}</td>
     <td class="num"><button class="saved-del" data-i="${i}" title="삭제">✕</button></td>
-  </tr>`).join("");
+  </tr>`; }).join("");
+  const arrow=k=>SK===k?(SD>0?" ▲":" ▼"):"";
+  const h=(k,main,sub)=>`<th class="saved-sort" data-k="${k}" style="cursor:pointer"><span class="th-main">${main}${arrow(k)}</span><span class="th-sub">${sub}</span></th>`;
   wrap.innerHTML=`
-    <div class="db-best">저장된 전략 <b class="amb">${arr.length}개</b> · 자동매매 후보로 모아둔 목록 (브라우저에 저장됨)
+    <div class="db-best">저장된 전략 <b class="amb">${arr.length}개</b> · 자동매매 후보로 모아둔 목록 (브라우저에 저장됨) · 헤더 클릭 정렬 (기간별 소팅 가능)
       <button id="saved_clear" style="float:right;padding:4px 10px;border:1px solid var(--border);background:#0c0f0e;color:var(--ink-dim);border-radius:6px;font-size:11px;cursor:pointer">전체 비우기</button></div>
     <div class="ctable-wrap"><table class="ctable"><thead><tr>
-      <th><span class="th-main">데이터</span><span class="th-sub">CSV</span></th>
-      <th><span class="th-main">전략</span><span class="th-sub">TYPE</span></th>
-      <th><span class="th-main">방향</span><span class="th-sub">DIR</span></th>
-      <th><span class="th-main">진입</span><span class="th-sub">ENTRY</span></th>
-      <th><span class="th-main">손절</span><span class="th-sub">×TR</span></th>
-      <th><span class="th-main">익절</span><span class="th-sub">×TR</span></th>
-      <th><span class="th-main">익절기준</span><span class="th-sub">TP</span></th>
-      <th><span class="th-main">거래</span><span class="th-sub">TRADES</span></th>
-      <th><span class="th-main">승률</span><span class="th-sub">WIN</span></th>
-      <th><span class="th-main">손익비</span><span class="th-sub">PAYOFF</span></th>
-      <th><span class="th-main">총수익</span><span class="th-sub">RETURN</span></th>
-      <th><span class="th-main">최대낙폭</span><span class="th-sub">MDD</span></th>
-      <th><span class="th-main">위험대비</span><span class="th-sub">MAR</span></th>
+      ${h("months","기간","PERIOD")}
+      ${h("data","데이터","CSV")}
+      ${h("strategy","전략","TYPE")}
+      ${h("direction","방향","DIR")}
+      ${h("entry","진입","ENTRY")}
+      ${h("slK","손절","×TR")}
+      ${h("tpK","익절","×TR")}
+      ${h("tpMode","익절기준","TP")}
+      ${h("trades","거래","TRADES")}
+      ${h("winrate","승률","WIN")}
+      ${h("payoff","손익비","PAYOFF")}
+      ${h("totalRet","총수익","RETURN")}
+      ${h("mdd","최대낙폭","MDD")}
+      ${h("mar","위험대비","MAR")}
       <th><span class="th-main">삭제</span><span class="th-sub">DEL</span></th>
     </tr></thead><tbody>${rows}</tbody></table></div>
-    <div class="note" style="margin-top:14px">이 목록은 이 브라우저에 저장돼요(localStorage). "자동매매 후보 리스트"로 활용하세요. ✕로 개별 삭제, 전체 비우기로 초기화.</div>`;
+    <div class="note" style="margin-top:14px">이 목록은 이 브라우저에 저장돼요(localStorage). 같은 전략도 기간(전체/최근 N개월)이 다르면 따로 저장됩니다. <b>기간</b> 헤더를 누르면 기간끼리 모아 정렬돼요. ✕로 개별 삭제, 전체 비우기로 초기화.</div>`;
+  wrap.querySelectorAll(".saved-sort").forEach(th=>th.onclick=()=>{
+    const k=th.dataset.k;
+    if(SAVED_SORT.key===k)SAVED_SORT.dir*=-1;
+    else SAVED_SORT={key:k, dir:(k==="mdd"||k==="months"||k==="data"||k==="strategy"||k==="direction"||k==="entry"||k==="tpMode")?1:-1};
+    renderSavedStrategies();
+  });
   wrap.querySelectorAll(".saved-del").forEach(btn=>btn.onclick=()=>{ StrategyStore.remove(+btn.dataset.i); renderSavedStrategies(); });
   const clr=$("#saved_clear"); if(clr)clr.onclick=()=>{ if(confirm("저장된 전략을 모두 지울까요?")){ StrategyStore.clear(); renderSavedStrategies(); } };
 }
@@ -2520,13 +2546,14 @@ function drawRSI(rCurve,holdCurve,log){
     });
     const tpModeNow=el("db_tpmode").dataset.cur;
     const confWNow=Math.max(1,Math.round(+el("db_confw").value||5));
+    const monthsNow=+el("db_months").value||0;
     wrap.querySelectorAll(".db-save").forEach(btn=>btn.onclick=()=>{
       const r=rs[+btn.dataset.i]; if(!r)return;
       const entry=r.entryMode==="tr"?`TR${r.key}분할`:(r.key===1?"단일":`${r.key}등분`);
       const ok=StrategyStore.add({
         data:r.dataLabel||"", strategy:r.strategy||"", direction:r.direction==="short"?"숏":"롱",
         entry, slK:r.slK, tpK:r.tpK, tpMode:tpModeNow==="avg"?"평단":"돌파봉",
-        confW:r.useConfirm?confWNow:null,
+        confW:r.useConfirm?confWNow:null, months:monthsNow,
         trades:r.trades, winrate:r.winrate, payoff:r.payoff, totalRet:r.totalRet, mdd:r.mdd, mar:r.mar,
       });
       btn.textContent=ok?"✓ 저장됨":"이미 있음";

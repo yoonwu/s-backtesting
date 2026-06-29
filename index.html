@@ -530,7 +530,11 @@
           <div id="db_storedRow" style="margin-top:6px">
             <div class="csv-checkbar">
               <label><input id="db_csv_all" type="checkbox"> 전체선택</label>
-              <div class="csv-actions"><button type="button" id="db_csv_clear">선택해제</button></div>
+              <div class="csv-actions">
+                <button type="button" id="db_csv_gold">골드 선택</button>
+                <button type="button" id="db_csv_us100">나스닥 선택</button>
+                <button type="button" id="db_csv_clear">선택해제</button>
+              </div>
             </div>
             <div id="db_csv_list" class="csv-checklist"></div>
             <button class="quickrange" id="db_reload" style="padding:3px 8px;border:1px solid var(--border);background:#0c0f0e;color:var(--ink-dim);border-radius:6px;font-size:11px;cursor:pointer">↻ 캐시 비우기</button>
@@ -563,6 +567,16 @@
         <div class="field"><label>기간 (최근 N개월)</label>
           <select id="db_months"></select>
           <div class="hint">데이터 마지막 시점 기준 최근 N개월만 백테스트. 전체=전 구간.</div>
+        </div>
+
+        <div class="field"><label>장기이평 필터</label>
+          <div class="subtabs" id="db_ma_filter" data-cur="0">
+            <button data-ma="0" class="on">필터 없음</button>
+            <button data-ma="120">120</button>
+            <button data-ma="200">200</button>
+            <button data-ma="240">240</button>
+          </div>
+          <div class="hint">롱은 돌파봉 종가가 선택 이평 위, 숏은 선택 이평 아래일 때만 신호로 인정합니다.</div>
         </div>
 
         <div class="field"><label>방향</label>
@@ -609,7 +623,11 @@
           <div id="dc_storedRow" style="margin-top:6px">
             <div class="csv-checkbar">
               <label><input id="dc_csv_all" type="checkbox"> 전체선택</label>
-              <div class="csv-actions"><button type="button" id="dc_csv_clear">선택해제</button></div>
+              <div class="csv-actions">
+                <button type="button" id="dc_csv_gold">골드 선택</button>
+                <button type="button" id="dc_csv_us100">나스닥 선택</button>
+                <button type="button" id="dc_csv_clear">선택해제</button>
+              </div>
             </div>
             <div id="dc_csv_list" class="csv-checklist"></div>
             <button class="quickrange" id="dc_reload" style="padding:3px 8px;border:1px solid var(--border);background:#0c0f0e;color:var(--ink-dim);border-radius:6px;font-size:11px;cursor:pointer">↻ 캐시 비우기</button>
@@ -867,7 +885,7 @@ const today = ()=>new Date().toISOString().slice(0,10);
 let SAVED_SORT={key:"months",dir:1};
 const StrategyStore = {
   KEY: "leverageLab_savedStrategies_v1",
-  _sig(s){ return [s.data,s.strategy,s.direction,s.entry,s.slK,s.tpK,s.tpMode,s.confW,s.months||0].join("|"); },
+  _sig(s){ return [s.data,s.strategy,s.direction,s.entry,s.slK,s.tpK,s.tpMode,s.trend||"없음",s.confW,s.months||0].join("|"); },
   getAll(){ try{ return JSON.parse(localStorage.getItem(this.KEY)||"[]"); }catch(e){ return []; } },
   _save(arr){ try{ localStorage.setItem(this.KEY, JSON.stringify(arr)); }catch(e){} },
   add(s){
@@ -898,7 +916,7 @@ function renderSavedStrategies(){
   const SK=SAVED_SORT.key, SD=SAVED_SORT.dir;
   const val=s=>({
     months:(s.months||0), data:s.data||"", strategy:s.strategy||"", direction:s.direction||"",
-    entry:s.entry||"", slK:+s.slK, tpK:+s.tpK, tpMode:s.tpMode||"",
+    entry:s.entry||"", slK:+s.slK, tpK:+s.tpK, tpMode:s.tpMode||"", trend:s.trend||"없음",
     trades:+s.trades, winrate:+s.winrate, payoff:+s.payoff, totalRet:+s.totalRet, mdd:+s.mdd, mar:(s.mar===Infinity?1e9:+s.mar),
   }[SK]);
   idx.sort((a,b)=>{
@@ -915,6 +933,7 @@ function renderSavedStrategies(){
     <td class="num">${s.slK}</td>
     <td class="num">${s.tpK}</td>
     <td class="dimv">${s.tpMode||""}</td>
+    <td class="mono dimv">${s.trend||"없음"}</td>
     <td class="num">${s.trades}</td>
     <td class="num">${(s.winrate*100).toFixed(0)}%</td>
     <td class="num ${s.payoff>=1?'pos':'neg'}">${(+s.payoff).toFixed(2)}</td>
@@ -937,6 +956,7 @@ function renderSavedStrategies(){
       ${h("slK","손절","×TR")}
       ${h("tpK","익절","×TR")}
       ${h("tpMode","익절기준","TP")}
+      ${h("trend","추세","MA")}
       ${h("trades","거래","TRADES")}
       ${h("winrate","승률","WIN")}
       ${h("payoff","손익비","PAYOFF")}
@@ -949,7 +969,7 @@ function renderSavedStrategies(){
   wrap.querySelectorAll(".saved-sort").forEach(th=>th.onclick=()=>{
     const k=th.dataset.k;
     if(SAVED_SORT.key===k)SAVED_SORT.dir*=-1;
-    else SAVED_SORT={key:k, dir:(k==="mdd"||k==="months"||k==="data"||k==="strategy"||k==="direction"||k==="entry"||k==="tpMode")?1:-1};
+    else SAVED_SORT={key:k, dir:(k==="mdd"||k==="months"||k==="data"||k==="strategy"||k==="direction"||k==="entry"||k==="tpMode"||k==="trend")?1:-1};
     renderSavedStrategies();
   });
   wrap.querySelectorAll(".saved-del").forEach(btn=>btn.onclick=()=>{ StrategyStore.remove(+btn.dataset.i); renderSavedStrategies(); });
@@ -958,6 +978,7 @@ function renderSavedStrategies(){
 const csvLabel = cf => `${cf.sym} · ${cf.tf} (${cf.file})`;
 function renderCsvChecks(prefix, defaultIdx){
   const list=$("#"+prefix+"_csv_list"), all=$("#"+prefix+"_csv_all"), clear=$("#"+prefix+"_csv_clear");
+  const gold=$("#"+prefix+"_csv_gold"), us100=$("#"+prefix+"_csv_us100");
   if(!list||!all)return;
   list.innerHTML=CSV_FILES.map((cf,i)=>`
     <label class="csv-check">
@@ -972,6 +993,16 @@ function renderCsvChecks(prefix, defaultIdx){
   };
   boxes().forEach(b=>b.onchange=sync);
   all.onchange=()=>{ boxes().forEach(b=>{b.checked=all.checked;}); all.indeterminate=false; };
+  const selectKind=kind=>{
+    boxes().forEach(b=>{
+      const cf=CSV_FILES[+b.dataset.idx];
+      const hay=`${cf?.sym||""} ${cf?.file||""}`.toUpperCase();
+      b.checked = kind==="gold" ? (hay.includes("XAUUSD")||hay.includes("GOLD")) : hay.includes("US100");
+    });
+    sync();
+  };
+  if(gold)gold.onclick=()=>selectKind("gold");
+  if(us100)us100.onclick=()=>selectKind("us100");
   if(clear)clear.onclick=()=>{ boxes().forEach(b=>{b.checked=false;}); sync(); };
   sync();
 }
@@ -2216,7 +2247,7 @@ function drawRSI(rCurve,holdCurve,log){
     const l2=bandBand(bars.map(b=>b.c),20,2,false);
     return bars.map((_,i)=>(l1[i]==null||l2[i]==null)?null:Math.min(l1[i],l2[i]));
   }
-  function backtest(bars,upper,lower,direction,entryMode,N,numTR,slK,tpK,tpMode,expiryM,useConfirm=false,confW=5){
+  function backtest(bars,upper,lower,direction,entryMode,N,numTR,slK,tpK,tpMode,expiryM,useConfirm=false,confW=5,trendMa=null){
     const n=bars.length, isShort=direction==="short";
     let equity=1, peak=1, maxDD=0;
     let trades=0, wins=0, losses=0, sumWin=0, sumLoss=0, tpC=0, slC=0, eodC=0, confSkip=0;
@@ -2228,6 +2259,11 @@ function drawRSI(rCurve,holdCurve,log){
       // 돌파: 롱=상단 상향돌파, 숏=하단 하향이탈
       if(isShort){ if(!(bars[i].c<u && bars[i-1].c>=up1)){ i++; continue; } }
       else        { if(!(bars[i].c>u && bars[i-1].c<=up1)){ i++; continue; } }
+      if(trendMa){
+        const ma=trendMa[i];
+        if(ma==null){ i++; continue; }
+        if(isShort ? !(bars[i].c<ma) : !(bars[i].c>ma)){ i++; continue; }
+      }
       const H=bars[i].h, L=bars[i].l, TR=H-L;
       if(TR<=0){ i++; continue; }
       let entryStart=i+1, expiryBase=i;
@@ -2324,7 +2360,7 @@ function drawRSI(rCurve,holdCurve,log){
   function daysAgo(n){ const d=new Date(); d.setDate(d.getDate()-n); return d.toISOString().slice(0,10); }
 
   /* ====================== UI ====================== */
-  let RAWCACHE={}, RAWLABEL="", RESULTS=[], SORT={key:"mar",dir:-1}, EMODE="n", DIRECTION="long";
+  let RAWCACHE={}, RAWLABEL="", RESULTS=[], SORT={key:"mar",dir:-1}, EMODE="n", DIRECTION="long", MA_FILTER=0;
   const el=id=>document.getElementById(id);
 
   function setSrc(s){
@@ -2343,6 +2379,11 @@ function drawRSI(rCurve,holdCurve,log){
     if(el("db_trrow_hint"))el("db_trrow_hint").textContent=isS
       ?"1TR→저가만, 2TR→저가·저가+TR … 손절은 마지막 매도가 위"
       :"1TR→고가만, 2TR→고가·고가−TR, 3TR→고가·고가−TR·고가−2TR … 손절은 마지막 매수가 아래";
+  }
+  function setMaFilter(v){
+    MA_FILTER=Math.max(0,+v||0);
+    $$("#db_ma_filter button").forEach(b=>b.classList.toggle("on",+b.dataset.ma===MA_FILTER));
+    el("db_ma_filter").dataset.cur=String(MA_FILTER);
   }
 
   function parseList(str,intOnly,minV){
@@ -2416,6 +2457,8 @@ function drawRSI(rCurve,holdCurve,log){
       const tpModes=["fixed","avg"];   // 돌파봉·평단 둘 다
       const dir=DIRECTION;
       const months=+el("db_months").value||0;
+      const maLen=MA_FILTER;
+      const maLabel=maLen?`MA${maLen}`:"필터 없음";
       const sources=await loadDataSources();
       const dimCount=entryModes.reduce((a,em)=>a+em.dims.length,0);
       const perTotal=dimCount*slKs.length*tpKs.length*strategies.length*tpModes.length;
@@ -2425,14 +2468,15 @@ function drawRSI(rCurve,holdCurve,log){
         const src=sources[si], bars=sliceRecentMonths(src.bars, months);
         if(bars.length<60){ status(`${src.label} 봉 수가 너무 적어 건너뜀(${bars.length}${months?` · 최근 ${months}개월`:""})`); await pauseUI(); continue; }
         total+=perTotal;
-        status(`엔진 실행 (${si+1}/${sources.length}) ${src.label} · ${bars.length.toLocaleString()}봉 · ${perTotal}조합…`);
+        status(`엔진 실행 (${si+1}/${sources.length}) ${src.label} · ${bars.length.toLocaleString()}봉 · ${maLabel} · ${perTotal}조합…`);
         const upper=doubleUpper(bars), lower=doubleLower(bars);
+        const trendMa=maLen?smaArr(bars.map(b=>b.c),maLen):null;
         const span=bars[0].day+" ~ "+bars[bars.length-1].day;
         for(const st of strategies)for(const em of entryModes)for(const d of em.dims)for(const s of slKs)for(const t of tpKs)for(const tpm of tpModes){
           const r = em.mode==="tr"
-            ? backtest(bars,upper,lower,dir,"tr",1,d,s,t,tpm,expiryM,st.confirm,confW)
-            : backtest(bars,upper,lower,dir,"n",d,1,s,t,tpm,expiryM,st.confirm,confW);
-          r.strategy=st.label; r.dataLabel=src.label; r.file=src.file; r.bars=bars.length; r.span=span;
+            ? backtest(bars,upper,lower,dir,"tr",1,d,s,t,tpm,expiryM,st.confirm,confW,trendMa)
+            : backtest(bars,upper,lower,dir,"n",d,1,s,t,tpm,expiryM,st.confirm,confW,trendMa);
+          r.strategy=st.label; r.dataLabel=src.label; r.file=src.file; r.bars=bars.length; r.span=span; r.trendMa=maLen; r.trend=maLen?`MA${maLen}`:"없음";
           if(r.trades>=minTr)res.push(r);
         }
         await pauseUI();
@@ -2444,7 +2488,7 @@ function drawRSI(rCurve,holdCurve,log){
       const src=el("db_src").dataset.cur;
       const lbl=src==="stored"?RAWLABEL:(src==="upload"?(RAWCACHE.__uploadName__||"업로드"):el("db_sym").value)||"데이터";
       const capNote=matched>CAP?` · 총수익 상위 ${CAP}개만 표시`:"";
-      status(`${lbl} · [${dir==="short"?"숏":"롱"}] · ${strategies.map(s=>s.label).join("+")} · ${months?`최근 ${months}개월`:"전체기간"} 표시 ${RESULTS.length}/${matched}조합(최소거래 ${minTr})${capNote}`);
+      status(`${lbl} · [${dir==="short"?"숏":"롱"}] · ${strategies.map(s=>s.label).join("+")} · 추세 ${maLabel} · ${months?`최근 ${months}개월`:"전체기간"} 표시 ${RESULTS.length}/${matched}조합(최소거래 ${minTr})${capNote}`);
       render();
     }catch(e){ err("⚠ "+e.message); status(""); }
     finally{ btn.disabled=false; }
@@ -2464,6 +2508,7 @@ function drawRSI(rCurve,holdCurve,log){
     if(!RESULTS.length){ wrap.innerHTML=`<div class="placeholder"><div class="big">조건에 맞는 조합이 없어요</div><div class="mono" style="font-size:12px">최소 거래수를 낮추거나 파라미터 범위를 넓혀보세요</div></div>`; return; }
     const entOf=r=>r.entryMode==="tr"?`TR${r.key}`:(r.key===1?"단일":`${r.key}등분`);
     const tpOf=r=>r.tpMode==="avg"?"평단":"돌파봉";
+    const trendOf=r=>r.trend||((r.trendMa||0)?`MA${r.trendMa}`:"없음");
     const entOrd=r=>(r.entryMode==="tr"?1e6:0)+(+r.key);
     const bank=Math.max(0,+el("db_bank").value||10000);
     const rs=RESULTS.slice().sort((a,b)=>{
@@ -2471,6 +2516,8 @@ function drawRSI(rCurve,holdCurve,log){
         ? String(a.dataLabel||"").localeCompare(String(b.dataLabel||""),"ko")
         : SORT.key==="strategy"
           ? String(a.strategy||"").localeCompare(String(b.strategy||""),"ko")
+        : SORT.key==="trend"
+          ? (a.trendMa||0)-(b.trendMa||0)
         : SORT.key==="tpMode"
           ? String(a.tpMode||"").localeCompare(String(b.tpMode||""),"ko")
         : SORT.key==="entry"
@@ -2489,6 +2536,7 @@ function drawRSI(rCurve,holdCurve,log){
       return `<tr class="${hot?'db-hot':''}">
         <td class="mono dimv">${r.dataLabel||""}</td>
         <td class="mono">${r.strategy||""}</td>
+        <td class="mono dimv">${trendOf(r)}</td>
         <td class="mono">${entOf(r)}</td>
         <td class="dimv">${tpOf(r)}</td>
         <td class="num">${r.slK}</td>
@@ -2506,11 +2554,12 @@ function drawRSI(rCurve,holdCurve,log){
     const bestLabel=best.entryMode==="tr"?`TR${best.key}분할`:(best.key===1?"단일":`${best.key}등분`);
     const bestProfit=best.totalRet*bank;
     wrap.innerHTML=`
-      <div class="db-best">최적 조합(MAR) · <b class="amb">${best.dataLabel||"데이터"} · ${best.strategy||"전략"} · ${bestLabel} · ${tpOf(best)}익절 · 손절 ${best.slK}TR · 익절 ${best.tpK}TR</b>
+      <div class="db-best">최적 조합(MAR) · <b class="amb">${best.dataLabel||"데이터"} · ${best.strategy||"전략"} · ${trendOf(best)} · ${bestLabel} · ${tpOf(best)}익절 · 손절 ${best.slK}TR · 익절 ${best.tpK}TR</b>
         → 총수익 <b class="${best.totalRet>=0?'pos':'neg'}">${pct(best.totalRet)}</b> · 총 수익금 <b class="${bestProfit>=0?'pos':'neg'}">${money(bestProfit)}</b> <span class="dimv">($${bank.toLocaleString("en-US")} 기준)</span> · MDD <b class="neg">${(best.mdd*100).toFixed(1)}%</b> · MAR <b class="cy">${marStr(best.mar)}</b> · 거래 ${best.trades} · 승률 ${(best.winrate*100).toFixed(0)}%</div>
       <div class="ctable-wrap"><table class="ctable"><thead><tr>
         ${head("dataLabel","데이터","CSV")}
         ${head("strategy","전략","TYPE")}
+        ${head("trend","추세","MA")}
         ${head("entry","진입","ENTRY")}${head("tpMode","익절기준","TP")}${head("slK","손절","×TR")}${head("tpK","익절","×TR")}
         ${head("trades","거래","TRADES")}${head("winrate","승률","WIN")}${head("payoff","손익비","PAYOFF")}
         ${head("totalRet","총수익","RETURN")}${head("profit","총 수익금","$")}
@@ -2521,7 +2570,7 @@ function drawRSI(rCurve,holdCurve,log){
       <div class="note" style="margin-top:14px"><b class="hl-good">초록</b>=최고 총수익/MAR · <b class="hl-bad">빨강</b>=최대 낙폭 · 호박색 줄=MAR 최적 · 더블비/더블비컨펌·등분/TR분할·돌파봉/평단 익절을 모두 한 표에 합쳐 비교 · 총 수익금은 기준자금×총수익률 단순 환산 · 청산열=익절/손절(+미청산) 횟수. 손익비=평균이익÷평균손실, MAR=총수익÷|MDD|.</div>`;
     wrap.querySelectorAll(".db-sort").forEach(th=>th.onclick=()=>{
       const k=th.dataset.k;
-      if(SORT.key===k)SORT.dir*=-1; else{ SORT.key=k; SORT.dir=(k==="mdd"||k==="dataLabel"||k==="strategy"||k==="entry"||k==="tpMode"||k==="confSkip"?1:-1); }
+      if(SORT.key===k)SORT.dir*=-1; else{ SORT.key=k; SORT.dir=(k==="mdd"||k==="dataLabel"||k==="strategy"||k==="trend"||k==="entry"||k==="tpMode"||k==="confSkip"?1:-1); }
       render();
     });
     const confWNow=Math.max(1,Math.round(+el("db_confw").value||5));
@@ -2532,6 +2581,7 @@ function drawRSI(rCurve,holdCurve,log){
       const ok=StrategyStore.add({
         data:r.dataLabel||"", strategy:r.strategy||"", direction:r.direction==="short"?"숏":"롱",
         entry, slK:r.slK, tpK:r.tpK, tpMode:r.tpMode==="avg"?"평단":"돌파봉",
+        trend:trendOf(r),
         confW:r.useConfirm?confWNow:null, months:monthsNow,
         trades:r.trades, winrate:r.winrate, payoff:r.payoff, totalRet:r.totalRet, mdd:r.mdd, mar:r.mar,
       });
@@ -2554,10 +2604,11 @@ function drawRSI(rCurve,holdCurve,log){
     };
     el("db_reload").onclick=()=>{ RAWCACHE={}; RAWLABEL=""; status("캐시 비움 — 다시 돌리면 새로 불러옵니다"); };
     $$("#db_dir button").forEach(b=>b.onclick=()=>setDir(b.dataset.d));
+    $$("#db_ma_filter button").forEach(b=>b.onclick=()=>setMaFilter(b.dataset.ma));
     el("db_bank").oninput=()=>{ if(RESULTS.length)render(); };
     el("db_run").onclick=run;
     el("db_from").value=daysAgo(730); el("db_to").value=today();
-    setSrc("stored"); setDir("long");
+    setSrc("stored"); setDir("long"); setMaFilter(0);
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init); else init();
 })();

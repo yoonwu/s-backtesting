@@ -232,7 +232,6 @@
       <button data-tab="shannon">도깨비<span class="sub">Shannon</span></button>
       <button data-tab="rsirev">RSI 매수<span class="sub">Mean Rev</span></button>
       <button data-tab="doubleb">더블비<span class="sub">Double-BB</span></button>
-      <button data-tab="doublebc">더블비컨펌<span class="sub">DB-Confirm</span></button>
       <button data-tab="break120">돌파 후 120선<span class="sub">Break-120</span></button>
       <button data-tab="paper">가상매매<span class="sub">Paper Lot</span></button>
       <button data-tab="board">비교 보드 <span class="badge" id="tab_board_badge"></span><span class="sub">Board</span></button>
@@ -541,6 +540,19 @@
           <div class="field"><label>타임프레임</label><select id="db_tf"><option value="5m">5분봉</option><option value="10m">10분봉 (5분 합성)</option><option value="1h">1시간봉</option><option value="1d">일봉</option></select></div>
         </div>
 
+        <div class="field"><label>전략 선택</label>
+          <div class="csv-checkbar" style="justify-content:flex-start;gap:18px;margin-bottom:0">
+            <label><input id="db_use_base" type="checkbox" checked> 더블비</label>
+            <label><input id="db_use_confirm" type="checkbox" checked> 더블비컨펌</label>
+          </div>
+          <div class="hint">체크된 전략을 같은 CSV·같은 파라미터로 동시에 돌려서 한 표에서 비교합니다.</div>
+        </div>
+
+        <div class="row2">
+          <div class="field"><label>컨펌 윈도우 (봉)</label><input id="db_confw" class="mono" type="number" value="5" min="1" step="1"></div>
+          <div class="field"><label>가상 기준자금 ($)</label><input id="db_bank" class="mono" type="number" value="10000" min="0" step="100"></div>
+        </div>
+
         <div class="field"><label>방향</label>
           <div class="subtabs" id="db_dir" data-cur="long">
             <button data-d="long" class="on">롱 (매수)</button><button data-d="short">숏 (매도)</button>
@@ -573,7 +585,7 @@
         <button class="runbtn" id="db_run">▶ 그리드 돌리기</button>
         <div class="err" id="db_err"></div>
         <div class="mono" id="db_status" style="font-size:11px;color:var(--ink-faint);margin-top:8px;line-height:1.5"></div>
-        <div class="note"><b>로직</b> · 더블비 상단=max(4,4 시가밴드, 20,2 종가밴드)(모집단σ). 돌파는 종가가 상단을 <b>처음</b> 넘을 때만. <b>등분N</b>: 고가~저가 끝점포함 N등분. <b>TR분할</b>: 1차=고가, 2차=고가−TR, 3차=고가−2TR… 손절=최하단 매수가−손절×TR(숏은 최상단 매도가+손절×TR), 익절=(고정)돌파봉 고가+익절×TR 또는 평단+익절×TR. 손절·익절 동시 터치 시 <b>손절 우선</b>. 동시 1포지션. 수수료·스프레드 미반영.</div>
+        <div class="note"><b>로직</b> · 더블비 상단=max(4,4 시가밴드, 20,2 종가밴드)(모집단σ). 돌파는 종가가 상단을 <b>처음</b> 넘을 때만. <b>더블비컨펌</b>은 돌파봉 이후 컨펌 윈도우 안에 종가가 돌파봉 종가보다 높은 봉이 나올 때만 진입하고, 체결은 컨펌봉 다음 봉부터 봅니다. <b>등분N</b>: 고가~저가 끝점포함 N등분. <b>TR분할</b>: 1차=고가, 2차=고가−TR, 3차=고가−2TR… 손절=최하단 매수가−손절×TR(숏은 최상단 매도가+손절×TR), 익절=(고정)돌파봉 고가+익절×TR 또는 평단+익절×TR. 총 수익금은 기준자금×총수익률 단순 환산. 손절·익절 동시 터치 시 <b>손절 우선</b>. 동시 1포지션. 수수료·스프레드 미반영.</div>
       </section>
       <section id="db_results"><div class="placeholder"><div class="big">데이터를 고르고 <span class="amb">그리드 돌리기</span></div><div class="mono" style="font-size:12px">조합별 거래수·승률·손익비·총수익·MDD·MAR · 헤더 클릭 정렬</div></div></section>
     </div>
@@ -2096,10 +2108,10 @@ function drawRSI(rCurve,holdCurve,log){
     const l2=bandBand(bars.map(b=>b.c),20,2,false);
     return bars.map((_,i)=>(l1[i]==null||l2[i]==null)?null:Math.min(l1[i],l2[i]));
   }
-  function backtest(bars,upper,lower,direction,entryMode,N,numTR,slK,tpK,tpMode,expiryM){
+  function backtest(bars,upper,lower,direction,entryMode,N,numTR,slK,tpK,tpMode,expiryM,useConfirm=false,confW=5){
     const n=bars.length, isShort=direction==="short";
     let equity=1, peak=1, maxDD=0;
-    let trades=0, wins=0, losses=0, sumWin=0, sumLoss=0, tpC=0, slC=0, eodC=0;
+    let trades=0, wins=0, losses=0, sumWin=0, sumLoss=0, tpC=0, slC=0, eodC=0, confSkip=0;
     let i=1;
     while(i<n){
       const band=isShort?lower:upper;
@@ -2110,6 +2122,16 @@ function drawRSI(rCurve,holdCurve,log){
       else        { if(!(bars[i].c>u && bars[i-1].c<=up1)){ i++; continue; } }
       const H=bars[i].h, L=bars[i].l, TR=H-L;
       if(TR<=0){ i++; continue; }
+      let entryStart=i+1, expiryBase=i;
+      if(useConfirm){
+        let conf=-1;
+        for(let j=i+1;j<n && j<=i+confW;j++){
+          if(isShort?bars[j].c<bars[i].c:bars[j].c>bars[i].c){ conf=j; break; }
+        }
+        if(conf<0){ confSkip++; i++; continue; }
+        entryStart=conf+1;
+        expiryBase=conf;
+      }
       const orders=[];
       if(isShort){
         // 숏: 저가~고가 구간 매도 (저가부터 위로)
@@ -2125,11 +2147,11 @@ function drawRSI(rCurve,holdCurve,log){
         ? Math.max(...orders.map(o=>o.p)) + slK*TR
         : Math.min(...orders.map(o=>o.p)) - slK*TR;
       let filled=0,sumFill=0,exited=false,exitPx=0,reason="",exitIdx=-1;
-      for(let j=i+1;j<n;j++){
+      for(let j=entryStart;j<n;j++){
         const b=bars[j];
         if(isShort){ for(const o of orders){ if(!o.filled && b.h>=o.p){ o.filled=true; filled++; sumFill+=o.p; } } }
         else        { for(const o of orders){ if(!o.filled && b.l<=o.p){ o.filled=true; filled++; sumFill+=o.p; } } }
-        if(filled===0){ if(j-i>=expiryM)break; else continue; }
+        if(filled===0){ if(j-expiryBase>=expiryM)break; else continue; }
         const avg=sumFill/filled;
         if(isShort){
           const TP=tpMode==="avg"?avg-tpK*TR:L-tpK*TR;
@@ -2158,7 +2180,7 @@ function drawRSI(rCurve,holdCurve,log){
     const totalRet=equity-1;
     const mar=maxDD<0?totalRet/Math.abs(maxDD):(totalRet>0?Infinity:0);
     const key=entryMode==="tr"?numTR:N;
-    return {entryMode,direction,key,slK,tpK,trades,winrate,payoff,totalRet,mdd:maxDD,mar,tpC,slC,eodC};
+    return {entryMode,direction,key,slK,tpK,trades,winrate,payoff,totalRet,mdd:maxDD,mar,tpC,slC,eodC,confSkip,useConfirm,strategy:useConfirm?"더블비컨펌":"더블비"};
   }
   function parseMT5(text){
     const lines=text.split(/\r?\n/), out=[];
@@ -2283,6 +2305,13 @@ function drawRSI(rCurve,holdCurve,log){
       const tpMode=el("db_tpmode").dataset.cur;
       const expiryM=Math.max(1,+el("db_expiry").value||20);
       const minTr=Math.max(0,+el("db_min").value||0);
+      const useBase=el("db_use_base").checked;
+      const useConfirm=el("db_use_confirm").checked;
+      if(!useBase&&!useConfirm)throw new Error("비교할 전략을 1개 이상 체크하세요.");
+      const confW=Math.max(1,Math.round(+el("db_confw").value||5));
+      const strategies=[];
+      if(useBase)strategies.push({label:"더블비",confirm:false});
+      if(useConfirm)strategies.push({label:"더블비컨펌",confirm:true});
       const slKs=parseList(el("db_sl").value,false,0);
       const tpKs=parseList(el("db_tp").value,false,0);
       const gridDim = emode==="tr"
@@ -2291,7 +2320,7 @@ function drawRSI(rCurve,holdCurve,log){
       if(!gridDim.length||!slKs.length||!tpKs.length)throw new Error("매수 파라미터·손절·익절 값을 1개 이상 입력하세요");
       const dir=DIRECTION;
       const sources=await loadDataSources();
-      const perTotal=gridDim.length*slKs.length*tpKs.length;
+      const perTotal=gridDim.length*slKs.length*tpKs.length*strategies.length;
       let total=0;
       const res=[];
       for(let si=0; si<sources.length; si++){
@@ -2301,11 +2330,11 @@ function drawRSI(rCurve,holdCurve,log){
         status(`엔진 실행 (${si+1}/${sources.length}) ${src.label} · ${bars.length.toLocaleString()}봉 · ${perTotal}조합…`);
         const upper=doubleUpper(bars), lower=doubleLower(bars);
         const span=bars[0].day+" ~ "+bars[bars.length-1].day;
-        for(const d of gridDim)for(const s of slKs)for(const t of tpKs){
+        for(const st of strategies)for(const d of gridDim)for(const s of slKs)for(const t of tpKs){
           const r = emode==="tr"
-            ? backtest(bars,upper,lower,dir,"tr",1,d,s,t,tpMode,expiryM)
-            : backtest(bars,upper,lower,dir,"n",d,1,s,t,tpMode,expiryM);
-          r.dataLabel=src.label; r.file=src.file; r.bars=bars.length; r.span=span;
+            ? backtest(bars,upper,lower,dir,"tr",1,d,s,t,tpMode,expiryM,st.confirm,confW)
+            : backtest(bars,upper,lower,dir,"n",d,1,s,t,tpMode,expiryM,st.confirm,confW);
+          r.strategy=st.label; r.dataLabel=src.label; r.file=src.file; r.bars=bars.length; r.span=span;
           if(r.trades>=minTr)res.push(r);
         }
         await pauseUI();
@@ -2313,7 +2342,7 @@ function drawRSI(rCurve,holdCurve,log){
       RESULTS=res;
       const src=el("db_src").dataset.cur;
       const lbl=src==="stored"?RAWLABEL:(src==="upload"?(RAWCACHE.__uploadName__||"업로드"):el("db_sym").value)||"데이터";
-      status(`${lbl} · [${dir==="short"?"숏":"롱"}] 표시 ${res.length}/${total}조합(최소거래 ${minTr})`);
+      status(`${lbl} · [${dir==="short"?"숏":"롱"}] · ${strategies.map(s=>s.label).join("+")} 표시 ${res.length}/${total}조합(최소거래 ${minTr})`);
       render();
     }catch(e){ err("⚠ "+e.message); status(""); }
     finally{ btn.disabled=false; }
@@ -2323,16 +2352,23 @@ function drawRSI(rCurve,holdCurve,log){
   function payoffStr(p){ return p===Infinity?"∞":p.toFixed(2); }
   function marStr(m){ return m===Infinity?"∞":m.toFixed(2); }
   function arrow(k){ return SORT.key===k?(SORT.dir<0?" ▾":" ▴"):""; }
+  function money(x){
+    if(!isFinite(x))return "-";
+    return (x>=0?"+":"-")+"$"+Math.abs(x).toLocaleString("en-US",{maximumFractionDigits:0});
+  }
 
   function render(){
     const wrap=el("db_results");
     if(!RESULTS.length){ wrap.innerHTML=`<div class="placeholder"><div class="big">조건에 맞는 조합이 없어요</div><div class="mono" style="font-size:12px">최소 거래수를 낮추거나 파라미터 범위를 넓혀보세요</div></div>`; return; }
     const isT=EMODE==="tr";
     const dimLabel=isT?"TR수":"등분";
+    const bank=Math.max(0,+el("db_bank").value||10000);
     const rs=RESULTS.slice().sort((a,b)=>{
       const v=SORT.key==="dataLabel"
         ? String(a.dataLabel||"").localeCompare(String(b.dataLabel||""),"ko")
-        : (SORT.key==="mar"?a.mar-b.mar:SORT.key==="totalRet"?a.totalRet-b.totalRet:SORT.key==="payoff"?a.payoff-b.payoff:SORT.key==="winrate"?a.winrate-b.winrate:SORT.key==="mdd"?a.mdd-b.mdd:SORT.key==="trades"?a.trades-b.trades:SORT.key==="key"?a.key-b.key:SORT.key==="slK"?a.slK-b.slK:a.tpK-b.tpK);
+        : SORT.key==="strategy"
+          ? String(a.strategy||"").localeCompare(String(b.strategy||""),"ko")
+          : (SORT.key==="mar"?a.mar-b.mar:SORT.key==="totalRet"||SORT.key==="profit"?a.totalRet-b.totalRet:SORT.key==="payoff"?a.payoff-b.payoff:SORT.key==="winrate"?a.winrate-b.winrate:SORT.key==="mdd"?a.mdd-b.mdd:SORT.key==="trades"?a.trades-b.trades:SORT.key==="confSkip"?(a.confSkip||0)-(b.confSkip||0):SORT.key==="key"?a.key-b.key:SORT.key==="slK"?a.slK-b.slK:a.tpK-b.tpK);
       return SORT.dir*v;
     });
     const bestMar=Math.max(...RESULTS.map(r=>r.mar===Infinity?-1:r.mar));
@@ -2342,8 +2378,10 @@ function drawRSI(rCurve,holdCurve,log){
     const head=(k,main,sub)=>`<th class="db-sort" data-k="${k}"><span class="th-main">${main}${arrow(k)}</span><span class="th-sub">${sub}</span></th>`;
     const rows=rs.map(r=>{
       const hot=r===best;
+      const profit=r.totalRet*bank;
       return `<tr class="${hot?'db-hot':''}">
         <td class="mono dimv">${r.dataLabel||""}</td>
+        <td class="mono">${r.strategy||""}</td>
         <td class="num">${r.key}</td>
         <td class="num">${r.slK}</td>
         <td class="num">${r.tpK}</td>
@@ -2351,25 +2389,31 @@ function drawRSI(rCurve,holdCurve,log){
         <td class="num">${(r.winrate*100).toFixed(0)}%</td>
         <td class="num ${r.payoff>=1?'pos':'neg'}">${payoffStr(r.payoff)}</td>
         <td class="num ${r.totalRet===bestRet?'hl-good':(r.totalRet>=0?'pos':'neg')}">${pct(r.totalRet)}</td>
+        <td class="num ${profit>=0?'pos':'neg'}">${money(profit)}</td>
         <td class="num ${r.mdd===worstMdd?'hl-bad':'neg'}">${(r.mdd*100).toFixed(1)}%</td>
         <td class="num ${r.mar===bestMar&&r.mar!==Infinity?'hl-good':'cy'}">${marStr(r.mar)}</td>
-        <td class="num dimv">${r.tpC}/${r.slC}${r.eodC?'/'+r.eodC:''}</td></tr>`;
+        <td class="num dimv">${r.tpC}/${r.slC}${r.eodC?'/'+r.eodC:''}</td>
+        <td class="num dimv">${r.useConfirm?(r.confSkip||0):"-"}</td></tr>`;
     }).join("");
     const bestLabel=isT?`TR${best.key}분할`:`${best.key}등분`;
+    const bestProfit=best.totalRet*bank;
     wrap.innerHTML=`
-      <div class="db-best">최적 조합(MAR) · <b class="amb">${best.dataLabel||"데이터"} · ${bestLabel} · 손절 ${best.slK}TR · 익절 ${best.tpK}TR</b>
-        → 총수익 <b class="${best.totalRet>=0?'pos':'neg'}">${pct(best.totalRet)}</b> · MDD <b class="neg">${(best.mdd*100).toFixed(1)}%</b> · MAR <b class="cy">${marStr(best.mar)}</b> · 거래 ${best.trades} · 승률 ${(best.winrate*100).toFixed(0)}%</div>
+      <div class="db-best">최적 조합(MAR) · <b class="amb">${best.dataLabel||"데이터"} · ${best.strategy||"전략"} · ${bestLabel} · 손절 ${best.slK}TR · 익절 ${best.tpK}TR</b>
+        → 총수익 <b class="${best.totalRet>=0?'pos':'neg'}">${pct(best.totalRet)}</b> · 총 수익금 <b class="${bestProfit>=0?'pos':'neg'}">${money(bestProfit)}</b> <span class="dimv">($${bank.toLocaleString("en-US")} 기준)</span> · MDD <b class="neg">${(best.mdd*100).toFixed(1)}%</b> · MAR <b class="cy">${marStr(best.mar)}</b> · 거래 ${best.trades} · 승률 ${(best.winrate*100).toFixed(0)}%</div>
       <div class="ctable-wrap"><table class="ctable"><thead><tr>
         ${head("dataLabel","데이터","CSV")}
+        ${head("strategy","전략","TYPE")}
         ${head("key",dimLabel,isT?"TR":"N")}${head("slK","손절","×TR")}${head("tpK","익절","×TR")}
         ${head("trades","거래","TRADES")}${head("winrate","승률","WIN")}${head("payoff","손익비","PAYOFF")}
-        ${head("totalRet","총수익","RETURN")}${head("mdd","최대낙폭","MDD")}${head("mar","위험대비","MAR")}
+        ${head("totalRet","총수익","RETURN")}${head("profit","총 수익금","$")}
+        ${head("mdd","최대낙폭","MDD")}${head("mar","위험대비","MAR")}
         <th><span class="th-main">청산</span><span class="th-sub">TP/SL</span></th>
+        ${head("confSkip","폐기","CONF")}
       </tr></thead><tbody>${rows}</tbody></table></div>
-      <div class="note" style="margin-top:14px"><b class="hl-good">초록</b>=최고 총수익/MAR · <b class="hl-bad">빨강</b>=최대 낙폭 · 호박색 줄=MAR 최적 · 여러 CSV 체크 시 한 표에 합쳐 비교 · 헤더 클릭 정렬 · 청산열=익절/손절(+미청산) 횟수. 손익비=평균이익÷평균손실, MAR=총수익÷|MDD|.</div>`;
+      <div class="note" style="margin-top:14px"><b class="hl-good">초록</b>=최고 총수익/MAR · <b class="hl-bad">빨강</b>=최대 낙폭 · 호박색 줄=MAR 최적 · 더블비/더블비컨펌을 같은 표에 합쳐 비교 · 총 수익금은 기준자금×총수익률 단순 환산 · 청산열=익절/손절(+미청산) 횟수. 손익비=평균이익÷평균손실, MAR=총수익÷|MDD|.</div>`;
     wrap.querySelectorAll(".db-sort").forEach(th=>th.onclick=()=>{
       const k=th.dataset.k;
-      if(SORT.key===k)SORT.dir*=-1; else{ SORT.key=k; SORT.dir=(k==="mdd"||k==="dataLabel"?1:-1); }
+      if(SORT.key===k)SORT.dir*=-1; else{ SORT.key=k; SORT.dir=(k==="mdd"||k==="dataLabel"||k==="strategy"||k==="confSkip"?1:-1); }
       render();
     });
   }
@@ -2387,6 +2431,7 @@ function drawRSI(rCurve,holdCurve,log){
     };
     el("db_reload").onclick=()=>{ RAWCACHE={}; RAWLABEL=""; status("캐시 비움 — 다시 돌리면 새로 불러옵니다"); };
     $$("#db_dir button").forEach(b=>b.onclick=()=>setDir(b.dataset.d));
+    el("db_bank").oninput=()=>{ if(RESULTS.length)render(); };
     el("db_run").onclick=run;
     el("db_from").value=daysAgo(730); el("db_to").value=today();
     setSrc("stored"); setTpMode("fixed"); setDir("long"); setEmode("n");
@@ -2744,6 +2789,10 @@ function drawRSI(rCurve,holdCurve,log){
   function pct(x){ return (x>=0?"+":"")+(x*100).toFixed(1)+"%"; }
   function payoffStr(p){ return p===Infinity?"∞":p.toFixed(2); }
   function marStr(m){ return m===Infinity?"∞":m.toFixed(2); }
+  function money(x){
+    if(!isFinite(x))return "-";
+    return (x>=0?"+":"-")+"$"+Math.abs(x).toLocaleString("en-US",{maximumFractionDigits:0});
+  }
   function arrow(k){ return SORT.key===k?(SORT.dir<0?" ▾":" ▴"):""; }
   function toMs(date){ return new Date(String(date).replace(" ","T")).getTime(); }
   function pause(){ return new Promise(resolve=>setTimeout(resolve,0)); }

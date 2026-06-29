@@ -58,6 +58,18 @@
   input:focus,select:focus{outline:none;border-color:var(--amber);box-shadow:0 0 0 3px rgba(255,176,0,.12)}
   select{cursor:pointer}
   select option,select optgroup{background:#15191a;color:var(--ink)}
+  .csv-checkbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px}
+  .csv-checkbar label{display:inline-flex;align-items:center;gap:7px;margin:0;color:var(--ink-dim);font-size:11.5px;letter-spacing:0;text-transform:none;cursor:pointer}
+  .csv-checkbar input,.csv-check input{width:auto;accent-color:var(--amber)}
+  .csv-actions{display:flex;gap:6px;flex-shrink:0}
+  .csv-actions button{padding:4px 8px;border:1px solid var(--border);background:#0c0f0e;color:var(--ink-dim);border-radius:6px;font-size:11px;cursor:pointer}
+  .csv-actions button:hover{border-color:var(--amber);color:var(--amber)}
+  .csv-checklist{max-height:260px;overflow:auto;background:#0c0f0e;border:1px solid var(--border);border-radius:8px;margin-bottom:7px}
+  .csv-check{display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--grid);font-family:"JetBrains Mono",monospace;font-size:12px;line-height:1.25;cursor:pointer}
+  .csv-check:last-child{border-bottom:none}
+  .csv-check:hover{background:rgba(255,176,0,.07)}
+  .csv-check .csv-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .csv-check input:checked + .csv-name{color:var(--amber-soft)}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
   .suffix{position:relative}
@@ -509,7 +521,11 @@
             <button data-s="stored" class="on">저장된 CSV</button><button data-s="upload">CSV 업로드</button><button data-s="yahoo">야후 티커</button>
           </div>
           <div id="db_storedRow" style="margin-top:6px">
-            <select id="db_csv_sel" style="width:100%;margin-bottom:6px;background:#0c0f0e;color:var(--ink);border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:13px"></select>
+            <div class="csv-checkbar">
+              <label><input id="db_csv_all" type="checkbox"> 전체선택</label>
+              <div class="csv-actions"><button type="button" id="db_csv_clear">선택해제</button></div>
+            </div>
+            <div id="db_csv_list" class="csv-checklist"></div>
             <button class="quickrange" id="db_reload" style="padding:3px 8px;border:1px solid var(--border);background:#0c0f0e;color:var(--ink-dim);border-radius:6px;font-size:11px;cursor:pointer">↻ 캐시 비우기</button>
           </div>
           <div id="db_uploadRow" style="display:none;margin-top:6px"><input id="db_file" type="file" accept=".csv,text/csv"><div class="hint">MT4/MT5 export(.csv) — 콤마/탭/세미콜론, 헤더 유무 무관.</div></div>
@@ -542,7 +558,7 @@
           <div class="hint" id="db_emode_hint">고가~저가를 N등분해 각 가격에 지정가 매수</div>
         </div>
         <div id="db_nrow" class="field"><label>등분 N (정수, 콤마 구분 · 1=단일진입)</label><input id="db_N" class="mono" value="1,2,3,4,5,6"></div>
-        <div id="db_trrow" class="field" style="display:none"><label>TR 분할수 (정수, 콤마 구분)</label><input id="db_trN" class="mono" value="3,5,8,10"><div class="hint" id="db_trrow_hint">1TR→고가만, 2TR→고가·고가−TR, 3TR→고가·고가−TR·고가−2TR … (SL 아래까지 뻗을 수 있음)</div></div>
+        <div id="db_trrow" class="field" style="display:none"><label>TR 분할수 (정수, 콤마 구분)</label><input id="db_trN" class="mono" value="3,5,8,10"><div class="hint" id="db_trrow_hint">1TR→고가만, 2TR→고가·고가−TR, 3TR→고가·고가−TR·고가−2TR … 손절은 마지막 매수가 아래</div></div>
 
         <div class="row2">
           <div class="field"><label>손절폭 ×TR</label><input id="db_sl" class="mono" value="0.25,0.33,0.5,0.75,1,1.25,1.5"></div>
@@ -556,7 +572,7 @@
         <button class="runbtn" id="db_run">▶ 그리드 돌리기</button>
         <div class="err" id="db_err"></div>
         <div class="mono" id="db_status" style="font-size:11px;color:var(--ink-faint);margin-top:8px;line-height:1.5"></div>
-        <div class="note"><b>로직</b> · 더블비 상단=max(4,4 시가밴드, 20,2 종가밴드)(모집단σ). 돌파는 종가가 상단을 <b>처음</b> 넘을 때만. <b>등분N</b>: 고가~저가 끝점포함 N등분. <b>TR분할</b>: 1차=고가, 2차=고가−TR, 3차=고가−2TR… 손절=저가−손절×TR, 익절=(고정)돌파봉 고가+익절×TR 또는 평단+익절×TR. 손절·익절 동시 터치 시 <b>손절 우선</b>. 동시 1포지션. 수수료·스프레드 미반영.</div>
+        <div class="note"><b>로직</b> · 더블비 상단=max(4,4 시가밴드, 20,2 종가밴드)(모집단σ). 돌파는 종가가 상단을 <b>처음</b> 넘을 때만. <b>등분N</b>: 고가~저가 끝점포함 N등분. <b>TR분할</b>: 1차=고가, 2차=고가−TR, 3차=고가−2TR… 손절=최하단 매수가−손절×TR(숏은 최상단 매도가+손절×TR), 익절=(고정)돌파봉 고가+익절×TR 또는 평단+익절×TR. 손절·익절 동시 터치 시 <b>손절 우선</b>. 동시 1포지션. 수수료·스프레드 미반영.</div>
       </section>
       <section id="db_results"><div class="placeholder"><div class="big">데이터를 고르고 <span class="amb">그리드 돌리기</span></div><div class="mono" style="font-size:12px">조합별 거래수·승률·손익비·총수익·MDD·MAR · 헤더 클릭 정렬</div></div></section>
     </div>
@@ -574,7 +590,11 @@
             <button data-s="stored" class="on">저장된 CSV</button><button data-s="upload">CSV 업로드</button><button data-s="yahoo">야후 티커</button>
           </div>
           <div id="dc_storedRow" style="margin-top:6px">
-            <select id="dc_csv_sel" style="width:100%;margin-bottom:6px;background:#0c0f0e;color:var(--ink);border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:13px"></select>
+            <div class="csv-checkbar">
+              <label><input id="dc_csv_all" type="checkbox"> 전체선택</label>
+              <div class="csv-actions"><button type="button" id="dc_csv_clear">선택해제</button></div>
+            </div>
+            <div id="dc_csv_list" class="csv-checklist"></div>
             <button class="quickrange" id="dc_reload" style="padding:3px 8px;border:1px solid var(--border);background:#0c0f0e;color:var(--ink-dim);border-radius:6px;font-size:11px;cursor:pointer">↻ 캐시 비우기</button>
           </div>
           <div id="dc_uploadRow" style="display:none;margin-top:6px"><input id="dc_file" type="file" accept=".csv,text/csv"><div class="hint">MT4/MT5 export(.csv) — 콤마/탭/세미콜론, 헤더 유무 무관. OHLC만 있으면 됩니다.</div></div>
@@ -607,7 +627,7 @@
           <div class="hint" id="dc_emode_hint">고가~저가를 N등분해 각 가격에 지정가 매수</div>
         </div>
         <div id="dc_nrow" class="field"><label>등분 N (정수, 콤마 구분 · 1=단일진입)</label><input id="dc_N" class="mono" value="1,2,3,4,5,6"></div>
-        <div id="dc_trrow" class="field" style="display:none"><label>TR 분할수 (정수, 콤마 구분)</label><input id="dc_trN" class="mono" value="3,5,8,10"><div class="hint" id="dc_trrow_hint">1TR→고가만, 2TR→고가·고가−TR, … (SL 아래까지 뻗을 수 있음)</div></div>
+        <div id="dc_trrow" class="field" style="display:none"><label>TR 분할수 (정수, 콤마 구분)</label><input id="dc_trN" class="mono" value="3,5,8,10"><div class="hint" id="dc_trrow_hint">1TR→고가만, 2TR→고가·고가−TR, … 손절은 마지막 매수가 아래</div></div>
         <div class="row2">
           <div class="field"><label>손절폭 ×TR</label><input id="dc_sl" class="mono" value="0.25,0.33,0.5,0.75,1,1.25,1.5"></div>
           <div class="field"><label>익절폭 ×TR</label><input id="dc_tp" class="mono" value="0.5,1,1.5,2,3,4,5"></div>
@@ -621,7 +641,7 @@
         <button class="runbtn" id="dc_run">▶ 그리드 돌리기</button>
         <div class="err" id="dc_err"></div>
         <div class="mono" id="dc_status" style="font-size:11px;color:var(--ink-faint);margin-top:8px;line-height:1.5"></div>
-        <div class="note"><b>로직</b> · 더블비 상단=max(4,4 시가밴드, 20,2 종가밴드)(모집단σ). 종가가 상단을 <b>처음</b> 넘긴 봉=돌파봉. <b>컨펌 조건</b>: 돌파봉 이후 컨펌 윈도우 봉 안에 종가가 돌파봉 종가보다 높은 봉이 나와야만 진입(없으면 폐기). 진입=고가~저가 끝점포함 N등분, <b>체결은 컨펌봉 다음 봉부터</b> 저가≤주문가면 1/N씩. 손절=저가−손절×TR, 익절=(고정)돌파봉 고가+익절×TR 또는 평단+익절×TR. 한 봉에 손절·익절 동시 터치 시 <b>손절 우선</b>. 동시 1포지션, 부분체결분만 평단 계산. 미체결 만료는 컨펌봉 이후 봉 수로 셈. 수수료·스프레드 미반영.</div>
+        <div class="note"><b>로직</b> · 더블비 상단=max(4,4 시가밴드, 20,2 종가밴드)(모집단σ). 종가가 상단을 <b>처음</b> 넘긴 봉=돌파봉. <b>컨펌 조건</b>: 돌파봉 이후 컨펌 윈도우 봉 안에 종가가 돌파봉 종가보다 높은 봉이 나와야만 진입(없으면 폐기). 진입=고가~저가 끝점포함 N등분, <b>체결은 컨펌봉 다음 봉부터</b> 저가≤주문가면 1/N씩. 손절=최하단 매수가−손절×TR(숏은 최상단 매도가+손절×TR), 익절=(고정)돌파봉 고가+익절×TR 또는 평단+익절×TR. 한 봉에 손절·익절 동시 터치 시 <b>손절 우선</b>. 동시 1포지션, 부분체결분만 평단 계산. 미체결 만료는 컨펌봉 이후 봉 수로 셈. 수수료·스프레드 미반영.</div>
       </section>
       <section id="dc_results"><div class="placeholder"><div class="big">데이터 소스를 고르고 <span class="amb">그리드 돌리기</span></div><div class="mono" style="font-size:12px">컨펌봉 필터 적용 · 조합별 거래수·승률·손익비·총수익·MDD·MAR · 헤더 클릭 정렬</div></div></section>
     </div>
@@ -696,7 +716,7 @@
         <button class="runbtn" id="pt_run">▶ 가상매매 돌리기</button>
         <div class="err" id="pt_err"></div>
         <div class="mono" id="pt_status" style="font-size:11px;color:var(--ink-faint);margin-top:8px;line-height:1.5"></div>
-        <div class="note"><b>로직</b> · 더블비/더블비컨펌과 동일한 진입. 등분 N: 고가~저가 끝점포함 N등분, 각 가격에 지정가 매수. TR 분할: 고가, 고가−TR, 고가−2TR … 순으로 분할 매수. 각 차수에 지정한 랏만큼 매수, 평단=Σ(체결가×랏)/Σ랏. 청산 시 손익($)=총 체결랏×계약크기×(청산가−평단). 손절=저가−손절×TR, 익절=돌파봉 고가/평단+익절×TR, 동시 터치 시 손절 우선. 고정 랏(복리 아님) — 잔고는 달러 손익 누적.</div>
+        <div class="note"><b>로직</b> · 더블비/더블비컨펌과 동일한 진입. 등분 N: 고가~저가 끝점포함 N등분, 각 가격에 지정가 매수. TR 분할: 고가, 고가−TR, 고가−2TR … 순으로 분할 매수. 각 차수에 지정한 랏만큼 매수, 평단=Σ(체결가×랏)/Σ랏. 청산 시 손익($)=총 체결랏×계약크기×(청산가−평단). 손절=최하단 매수가−손절×TR(숏은 최상단 매도가+손절×TR), 익절=돌파봉 고가/평단+익절×TR, 동시 터치 시 손절 우선. 고정 랏(복리 아님) — 잔고는 달러 손익 누적.</div>
       </section>
       <section id="pt_results"><div class="placeholder"><div class="big">랏을 정하고 <span class="amb">가상매매 돌리기</span></div><div class="mono" style="font-size:12px">달러 손익 · 잔고 곡선 · 매매 내역</div></div></section>
     </div>
@@ -765,6 +785,32 @@ const CSV_FILES = [
 const $ = s=>document.querySelector(s);
 const $$ = s=>document.querySelectorAll(s);
 const today = ()=>new Date().toISOString().slice(0,10);
+const csvLabel = cf => `${cf.sym} · ${cf.tf} (${cf.file})`;
+function renderCsvChecks(prefix, defaultIdx){
+  const list=$("#"+prefix+"_csv_list"), all=$("#"+prefix+"_csv_all"), clear=$("#"+prefix+"_csv_clear");
+  if(!list||!all)return;
+  list.innerHTML=CSV_FILES.map((cf,i)=>`
+    <label class="csv-check">
+      <input type="checkbox" data-idx="${i}" ${i===defaultIdx?"checked":""}>
+      <span class="csv-name">${csvLabel(cf)}</span>
+    </label>`).join("");
+  const boxes=()=>Array.from(list.querySelectorAll('input[type="checkbox"]'));
+  const sync=()=>{
+    const bs=boxes(), n=bs.filter(b=>b.checked).length;
+    all.checked=bs.length>0 && n===bs.length;
+    all.indeterminate=n>0 && n<bs.length;
+  };
+  boxes().forEach(b=>b.onchange=sync);
+  all.onchange=()=>{ boxes().forEach(b=>{b.checked=all.checked;}); all.indeterminate=false; };
+  if(clear)clear.onclick=()=>{ boxes().forEach(b=>{b.checked=false;}); sync(); };
+  sync();
+}
+function selectedCsvFiles(prefix){
+  return Array.from($$("#"+prefix+"_csv_list input[type='checkbox']:checked"))
+    .map(b=>CSV_FILES[+b.dataset.idx])
+    .filter(Boolean);
+}
+function pauseUI(){ return new Promise(resolve=>setTimeout(resolve,0)); }
 
 ["c_end","r_end","s_end","u_end","t_end","p_end","sh_end","a_end","rs_end"].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=today(); });
 setInterval(()=>{ $("#clock").textContent = new Date().toLocaleTimeString("ko-KR",{hour12:false}); },1000);
@@ -2023,7 +2069,9 @@ function drawRSI(rCurve,holdCurve,log){
         else { for(let k=0;k<N;k++) orders.push({p:N===1?H:H-(H-L)*k/(N-1),filled:false}); }
       }
       const ordCount=orders.length;
-      const SL=isShort ? H+slK*TR : L-slK*TR;
+      const SL=isShort
+        ? Math.max(...orders.map(o=>o.p)) + slK*TR
+        : Math.min(...orders.map(o=>o.p)) - slK*TR;
       let filled=0,sumFill=0,exited=false,exitPx=0,reason="",exitIdx=-1;
       for(let j=i+1;j<n;j++){
         const b=bars[j];
@@ -2124,11 +2172,11 @@ function drawRSI(rCurve,holdCurve,log){
     const isS=DIRECTION==="short";
     if(e==="tr"){
       el("db_emode_hint").textContent=isS
-        ?"1차=저가, 2차=저가+TR, 3차=저가+2TR … (SL 위까지 뻗을 수 있음)"
-        :"1차=고가, 2차=고가−TR, 3차=고가−2TR … (SL 아래까지 뻗을 수 있음)";
+        ?"1차=저가, 2차=저가+TR, 3차=저가+2TR … 손절은 마지막 매도가 위"
+        :"1차=고가, 2차=고가−TR, 3차=고가−2TR … 손절은 마지막 매수가 아래";
       el("db_trrow_hint").textContent=isS
-        ?"1TR→저가만, 2TR→저가·저가+TR … (SL 위까지 뻗을 수 있음)"
-        :"1TR→고가만, 2TR→고가·고가−TR, 3TR→고가·고가−TR·고가−2TR … (SL 아래까지 뻗을 수 있음)";
+        ?"1TR→저가만, 2TR→저가·저가+TR … 손절은 마지막 매도가 위"
+        :"1TR→고가만, 2TR→고가·고가−TR, 3TR→고가·고가−TR·고가−2TR … 손절은 마지막 매수가 아래";
     } else {
       el("db_emode_hint").textContent=isS
         ?"저가~고가를 N등분해 각 가격에 지정가 매도"
@@ -2142,31 +2190,37 @@ function drawRSI(rCurve,holdCurve,log){
   function err(msg){ el("db_err").textContent=msg||""; }
   function status(msg){ el("db_status").textContent=msg||""; }
 
-  async function loadData(){
+  async function loadDataSources(){
     const src=el("db_src").dataset.cur;
     if(src==="yahoo"){
       const sym=el("db_sym").value.trim(); if(!sym)throw new Error("야후 티커를 입력하세요");
       const tf=el("db_tf").value;
       const from=el("db_from").value, to=el("db_to").value;
       status(`야후 ${sym} ${tf} 불러오는 중…`);
-      if(tf==="10m"){ const b5=await fetchYahoo(sym,"5m",from,to); return resampleN(b5,2); }
-      return fetchYahoo(sym, tf==="1d"?"1d":tf==="1h"?"60m":"5m", from, to);
+      const bars=tf==="10m"
+        ? resampleN(await fetchYahoo(sym,"5m",from,to),2)
+        : await fetchYahoo(sym, tf==="1d"?"1d":tf==="1h"?"60m":"5m", from, to);
+      return [{label:sym||"야후", file:sym, bars}];
     }
     if(src==="upload"){
       if(!RAWCACHE.__upload__)throw new Error("CSV 파일을 먼저 선택하세요");
-      return buildTF_MT5(RAWCACHE.__upload__,el("db_tf").value);
+      return [{label:RAWCACHE.__uploadName__||"업로드", file:"upload", bars:buildTF_MT5(RAWCACHE.__upload__,el("db_tf").value)}];
     }
-    const idx=+el("db_csv_sel").value;
-    const cf=CSV_FILES[idx];
-    if(!RAWCACHE[cf.file]){
-      status(`${cf.sym} ${cf.tf} 불러오는 중…`);
-      const r=await fetch(cf.file,{cache:"force-cache"});
-      if(!r.ok)throw new Error(`${cf.file} 못 찾음(404). 레포 루트에 올렸는지 확인하세요.`);
-      const parsed=parseMT5(await r.text());
-      RAWCACHE[cf.file]=cf.raw?intradayOnly(parsed):parsed;
+    const picks=selectedCsvFiles("db");
+    if(!picks.length)throw new Error("비교할 저장 CSV를 1개 이상 체크하세요");
+    const out=[];
+    for(const cf of picks){
+      if(!RAWCACHE[cf.file]){
+        status(`${cf.sym} ${cf.tf} 불러오는 중…`);
+        const r=await fetch(cf.file,{cache:"force-cache"});
+        if(!r.ok)throw new Error(`${cf.file} 못 찾음(404). 레포 루트에 올렸는지 확인하세요.`);
+        const parsed=parseMT5(await r.text());
+        RAWCACHE[cf.file]=cf.raw?intradayOnly(parsed):parsed;
+      }
+      out.push({label:`${cf.sym} · ${cf.tf}`, file:cf.file, bars:RAWCACHE[cf.file]});
     }
-    RAWLABEL=`${cf.sym} · ${cf.tf}`;
-    return RAWCACHE[cf.file];
+    RAWLABEL=picks.length===1?`${picks[0].sym} · ${picks[0].tf}`:`${picks.length}개 CSV`;
+    return out;
   }
 
   async function run(){
@@ -2184,23 +2238,30 @@ function drawRSI(rCurve,holdCurve,log){
         : parseList(el("db_N").value,true,1);
       if(!gridDim.length||!slKs.length||!tpKs.length)throw new Error("매수 파라미터·손절·익절 값을 1개 이상 입력하세요");
       const dir=DIRECTION;
-      const bars=await loadData();
-      if(bars.length<60)throw new Error(`봉 수가 너무 적음(${bars.length}).`);
-      const total=gridDim.length*slKs.length*tpKs.length;
-      status(`엔진 실행: ${bars.length.toLocaleString()}봉 · ${total}조합…`);
-      const upper=doubleUpper(bars), lower=doubleLower(bars);
+      const sources=await loadDataSources();
+      const perTotal=gridDim.length*slKs.length*tpKs.length;
+      let total=0;
       const res=[];
-      for(const d of gridDim)for(const s of slKs)for(const t of tpKs){
-        const r = emode==="tr"
-          ? backtest(bars,upper,lower,dir,"tr",1,d,s,t,tpMode,expiryM)
-          : backtest(bars,upper,lower,dir,"n",d,1,s,t,tpMode,expiryM);
-        if(r.trades>=minTr)res.push(r);
+      for(let si=0; si<sources.length; si++){
+        const src=sources[si], bars=src.bars;
+        if(bars.length<60){ status(`${src.label} 봉 수가 너무 적어 건너뜀(${bars.length})`); await pauseUI(); continue; }
+        total+=perTotal;
+        status(`엔진 실행 (${si+1}/${sources.length}) ${src.label} · ${bars.length.toLocaleString()}봉 · ${perTotal}조합…`);
+        const upper=doubleUpper(bars), lower=doubleLower(bars);
+        const span=bars[0].day+" ~ "+bars[bars.length-1].day;
+        for(const d of gridDim)for(const s of slKs)for(const t of tpKs){
+          const r = emode==="tr"
+            ? backtest(bars,upper,lower,dir,"tr",1,d,s,t,tpMode,expiryM)
+            : backtest(bars,upper,lower,dir,"n",d,1,s,t,tpMode,expiryM);
+          r.dataLabel=src.label; r.file=src.file; r.bars=bars.length; r.span=span;
+          if(r.trades>=minTr)res.push(r);
+        }
+        await pauseUI();
       }
       RESULTS=res;
       const src=el("db_src").dataset.cur;
       const lbl=src==="stored"?RAWLABEL:(src==="upload"?(RAWCACHE.__uploadName__||"업로드"):el("db_sym").value)||"데이터";
-      const span=bars[0].day+" ~ "+bars[bars.length-1].day;
-      status(`${lbl} · ${bars.length.toLocaleString()}봉 · ${span} · [${dir==="short"?"숏":"롱"}] 표시 ${res.length}/${total}조합(최소거래 ${minTr})`);
+      status(`${lbl} · [${dir==="short"?"숏":"롱"}] 표시 ${res.length}/${total}조합(최소거래 ${minTr})`);
       render();
     }catch(e){ err("⚠ "+e.message); status(""); }
     finally{ btn.disabled=false; }
@@ -2217,7 +2278,9 @@ function drawRSI(rCurve,holdCurve,log){
     const isT=EMODE==="tr";
     const dimLabel=isT?"TR수":"등분";
     const rs=RESULTS.slice().sort((a,b)=>{
-      const v=(SORT.key==="mar"?a.mar-b.mar:SORT.key==="totalRet"?a.totalRet-b.totalRet:SORT.key==="payoff"?a.payoff-b.payoff:SORT.key==="winrate"?a.winrate-b.winrate:SORT.key==="mdd"?a.mdd-b.mdd:SORT.key==="trades"?a.trades-b.trades:SORT.key==="key"?a.key-b.key:SORT.key==="slK"?a.slK-b.slK:a.tpK-b.tpK);
+      const v=SORT.key==="dataLabel"
+        ? String(a.dataLabel||"").localeCompare(String(b.dataLabel||""),"ko")
+        : (SORT.key==="mar"?a.mar-b.mar:SORT.key==="totalRet"?a.totalRet-b.totalRet:SORT.key==="payoff"?a.payoff-b.payoff:SORT.key==="winrate"?a.winrate-b.winrate:SORT.key==="mdd"?a.mdd-b.mdd:SORT.key==="trades"?a.trades-b.trades:SORT.key==="key"?a.key-b.key:SORT.key==="slK"?a.slK-b.slK:a.tpK-b.tpK);
       return SORT.dir*v;
     });
     const bestMar=Math.max(...RESULTS.map(r=>r.mar===Infinity?-1:r.mar));
@@ -2226,8 +2289,9 @@ function drawRSI(rCurve,holdCurve,log){
     const best=RESULTS.slice().sort((a,b)=>(b.mar===Infinity?1e9:b.mar)-(a.mar===Infinity?1e9:a.mar))[0];
     const head=(k,main,sub)=>`<th class="db-sort" data-k="${k}"><span class="th-main">${main}${arrow(k)}</span><span class="th-sub">${sub}</span></th>`;
     const rows=rs.map(r=>{
-      const hot=(r.key===best.key&&r.slK===best.slK&&r.tpK===best.tpK);
+      const hot=r===best;
       return `<tr class="${hot?'db-hot':''}">
+        <td class="mono dimv">${r.dataLabel||""}</td>
         <td class="num">${r.key}</td>
         <td class="num">${r.slK}</td>
         <td class="num">${r.tpK}</td>
@@ -2241,29 +2305,26 @@ function drawRSI(rCurve,holdCurve,log){
     }).join("");
     const bestLabel=isT?`TR${best.key}분할`:`${best.key}등분`;
     wrap.innerHTML=`
-      <div class="db-best">최적 조합(MAR) · <b class="amb">${bestLabel} · 손절 ${best.slK}TR · 익절 ${best.tpK}TR</b>
+      <div class="db-best">최적 조합(MAR) · <b class="amb">${best.dataLabel||"데이터"} · ${bestLabel} · 손절 ${best.slK}TR · 익절 ${best.tpK}TR</b>
         → 총수익 <b class="${best.totalRet>=0?'pos':'neg'}">${pct(best.totalRet)}</b> · MDD <b class="neg">${(best.mdd*100).toFixed(1)}%</b> · MAR <b class="cy">${marStr(best.mar)}</b> · 거래 ${best.trades} · 승률 ${(best.winrate*100).toFixed(0)}%</div>
       <div class="ctable-wrap"><table class="ctable"><thead><tr>
+        ${head("dataLabel","데이터","CSV")}
         ${head("key",dimLabel,isT?"TR":"N")}${head("slK","손절","×TR")}${head("tpK","익절","×TR")}
         ${head("trades","거래","TRADES")}${head("winrate","승률","WIN")}${head("payoff","손익비","PAYOFF")}
         ${head("totalRet","총수익","RETURN")}${head("mdd","최대낙폭","MDD")}${head("mar","위험대비","MAR")}
         <th><span class="th-main">청산</span><span class="th-sub">TP/SL</span></th>
       </tr></thead><tbody>${rows}</tbody></table></div>
-      <div class="note" style="margin-top:14px"><b class="hl-good">초록</b>=최고 총수익/MAR · <b class="hl-bad">빨강</b>=최대 낙폭 · 호박색 줄=MAR 최적 · 헤더 클릭 정렬 · 청산열=익절/손절(+미청산) 횟수. 손익비=평균이익÷평균손실, MAR=총수익÷|MDD|.</div>`;
+      <div class="note" style="margin-top:14px"><b class="hl-good">초록</b>=최고 총수익/MAR · <b class="hl-bad">빨강</b>=최대 낙폭 · 호박색 줄=MAR 최적 · 여러 CSV 체크 시 한 표에 합쳐 비교 · 헤더 클릭 정렬 · 청산열=익절/손절(+미청산) 횟수. 손익비=평균이익÷평균손실, MAR=총수익÷|MDD|.</div>`;
     wrap.querySelectorAll(".db-sort").forEach(th=>th.onclick=()=>{
       const k=th.dataset.k;
-      if(SORT.key===k)SORT.dir*=-1; else{ SORT.key=k; SORT.dir=(k==="mdd"?1:-1); }
+      if(SORT.key===k)SORT.dir*=-1; else{ SORT.key=k; SORT.dir=(k==="mdd"||k==="dataLabel"?1:-1); }
       render();
     });
   }
 
   function init(){
     if(!el("db_run"))return;
-    CSV_FILES.forEach((cf,i)=>{
-      const o=document.createElement("option");
-      o.value=i; o.textContent=`${cf.sym} · ${cf.tf}  (${cf.file})`;
-      el("db_csv_sel").appendChild(o);
-    });
+    renderCsvChecks("db", Math.max(0, CSV_FILES.findIndex(cf=>cf.sym==="US100"&&cf.tf==="M5")));
     $$("#db_src button").forEach(b=>b.onclick=()=>setSrc(b.dataset.s));
     $$("#db_tpmode button").forEach(b=>b.onclick=()=>setTpMode(b.dataset.m));
     $$("#db_emode button").forEach(b=>b.onclick=()=>setEmode(b.dataset.e));
@@ -2335,7 +2396,9 @@ function drawRSI(rCurve,holdCurve,log){
         else { for(let k=0;k<N;k++) orders.push({p:N===1?H:H-(H-L)*k/(N-1),filled:false}); }
       }
       const ordCount=orders.length;
-      const SL=isShort ? H+slK*TR : L-slK*TR;
+      const SL=isShort
+        ? Math.max(...orders.map(o=>o.p)) + slK*TR
+        : Math.min(...orders.map(o=>o.p)) - slK*TR;
       let filled=0,sumFill=0,exited=false,exitPx=0,reason="",exitIdx=-1;
       for(let j=conf+1;j<n;j++){
         const b=bars[j];
@@ -2436,11 +2499,11 @@ function drawRSI(rCurve,holdCurve,log){
     const isS=DIRECTION==="short";
     if(e==="tr"){
       el("dc_emode_hint").textContent=isS
-        ?"1차=저가, 2차=저가+TR, 3차=저가+2TR … (SL 위까지 뻗을 수 있음)"
-        :"1차=고가, 2차=고가−TR, 3차=고가−2TR … (SL 아래까지 뻗을 수 있음)";
+        ?"1차=저가, 2차=저가+TR, 3차=저가+2TR … 손절은 마지막 매도가 위"
+        :"1차=고가, 2차=고가−TR, 3차=고가−2TR … 손절은 마지막 매수가 아래";
       el("dc_trrow_hint").textContent=isS
-        ?"1TR→저가만, 2TR→저가·저가+TR … (SL 위까지 뻗을 수 있음)"
-        :"1TR→고가만, 2TR→고가·고가−TR, … (SL 아래까지 뻗을 수 있음)";
+        ?"1TR→저가만, 2TR→저가·저가+TR … 손절은 마지막 매도가 위"
+        :"1TR→고가만, 2TR→고가·고가−TR, … 손절은 마지막 매수가 아래";
     } else {
       el("dc_emode_hint").textContent=isS
         ?"저가~고가를 N등분해 각 가격에 지정가 매도"
@@ -2454,31 +2517,37 @@ function drawRSI(rCurve,holdCurve,log){
   function err(msg){ el("dc_err").textContent=msg||""; }
   function status(msg){ el("dc_status").textContent=msg||""; }
 
-  async function loadData(){
+  async function loadDataSources(){
     const src=el("dc_src").dataset.cur;
     if(src==="yahoo"){
       const sym=el("dc_sym").value.trim(); if(!sym)throw new Error("야후 티커를 입력하세요");
       const tf=el("dc_tf").value;
       const from=el("dc_from").value, to=el("dc_to").value;
       status(`야후 ${sym} ${tf} 불러오는 중…`);
-      if(tf==="10m"){ const b5=await fetchYahoo(sym,"5m",from,to); return resampleN(b5,2); }
-      return fetchYahoo(sym, tf==="1d"?"1d":tf==="1h"?"60m":"5m", from, to);
+      const bars=tf==="10m"
+        ? resampleN(await fetchYahoo(sym,"5m",from,to),2)
+        : await fetchYahoo(sym, tf==="1d"?"1d":tf==="1h"?"60m":"5m", from, to);
+      return [{label:sym||"야후", file:sym, bars}];
     }
     if(src==="upload"){
       if(!RAWCACHE.__upload__)throw new Error("CSV 파일을 먼저 선택하세요");
-      return buildTF_MT5(RAWCACHE.__upload__,el("dc_tf").value);
+      return [{label:RAWCACHE.__uploadName__||"업로드", file:"upload", bars:buildTF_MT5(RAWCACHE.__upload__,el("dc_tf").value)}];
     }
-    const idx=+el("dc_csv_sel").value;
-    const cf=CSV_FILES[idx];
-    if(!RAWCACHE[cf.file]){
-      status(`${cf.sym} ${cf.tf} 불러오는 중…`);
-      const r=await fetch(cf.file,{cache:"force-cache"});
-      if(!r.ok)throw new Error(`${cf.file} 못 찾음(404). 레포 루트에 올렸는지 확인하세요.`);
-      const parsed=parseMT5(await r.text());
-      RAWCACHE[cf.file]=cf.raw?intradayOnly(parsed):parsed;
+    const picks=selectedCsvFiles("dc");
+    if(!picks.length)throw new Error("비교할 저장 CSV를 1개 이상 체크하세요");
+    const out=[];
+    for(const cf of picks){
+      if(!RAWCACHE[cf.file]){
+        status(`${cf.sym} ${cf.tf} 불러오는 중…`);
+        const r=await fetch(cf.file,{cache:"force-cache"});
+        if(!r.ok)throw new Error(`${cf.file} 못 찾음(404). 레포 루트에 올렸는지 확인하세요.`);
+        const parsed=parseMT5(await r.text());
+        RAWCACHE[cf.file]=cf.raw?intradayOnly(parsed):parsed;
+      }
+      out.push({label:`${cf.sym} · ${cf.tf}`, file:cf.file, bars:RAWCACHE[cf.file]});
     }
-    RAWLABEL=`${cf.sym} · ${cf.tf}`;
-    return RAWCACHE[cf.file];
+    RAWLABEL=picks.length===1?`${picks[0].sym} · ${picks[0].tf}`:`${picks.length}개 CSV`;
+    return out;
   }
 
   async function run(){
@@ -2496,25 +2565,34 @@ function drawRSI(rCurve,holdCurve,log){
         ? parseList(el("dc_trN").value,true,1)
         : parseList(el("dc_N").value,true,1);
       if(!gridDim.length||!slKs.length||!tpKs.length)throw new Error("매수 파라미터·손절·익절 값을 1개 이상 입력하세요");
-      const bars=await loadData();
-      if(bars.length<60)throw new Error(`봉 수가 너무 적음(${bars.length}).`);
-      const total=gridDim.length*slKs.length*tpKs.length;
       const dir=DIRECTION;
-      status(`엔진 실행: ${bars.length.toLocaleString()}봉 · ${total}조합 · 컨펌 윈도우 ${confW}봉…`);
-      const upper=doubleUpper(bars), lower=doubleLower(bars);
+      const sources=await loadDataSources();
+      const perTotal=gridDim.length*slKs.length*tpKs.length;
+      let total=0;
       const res=[];
-      for(const d of gridDim)for(const s of slKs)for(const t of tpKs){
-        const r = emode==="tr"
-          ? backtest(bars,upper,lower,dir,"tr",1,d,s,t,tpMode,expiryM,confW)
-          : backtest(bars,upper,lower,dir,"n",d,1,s,t,tpMode,expiryM,confW);
-        SKIPTOT=r.confSkip;
-        if(r.trades>=minTr)res.push(r);
+      for(let si=0; si<sources.length; si++){
+        const src=sources[si], bars=src.bars;
+        if(bars.length<60){ status(`${src.label} 봉 수가 너무 적어 건너뜀(${bars.length})`); await pauseUI(); continue; }
+        total+=perTotal;
+        status(`엔진 실행 (${si+1}/${sources.length}) ${src.label} · ${bars.length.toLocaleString()}봉 · ${perTotal}조합 · 컨펌 윈도우 ${confW}봉…`);
+        const upper=doubleUpper(bars), lower=doubleLower(bars);
+        const span=bars[0].day+" ~ "+bars[bars.length-1].day;
+        let skipForSource=0;
+        for(const d of gridDim)for(const s of slKs)for(const t of tpKs){
+          const r = emode==="tr"
+            ? backtest(bars,upper,lower,dir,"tr",1,d,s,t,tpMode,expiryM,confW)
+            : backtest(bars,upper,lower,dir,"n",d,1,s,t,tpMode,expiryM,confW);
+          r.dataLabel=src.label; r.file=src.file; r.bars=bars.length; r.span=span;
+          skipForSource=r.confSkip;
+          if(r.trades>=minTr)res.push(r);
+        }
+        SKIPTOT+=skipForSource;
+        await pauseUI();
       }
       RESULTS=res;
       const src=el("dc_src").dataset.cur;
       const lbl=src==="stored"?RAWLABEL:(src==="upload"?(RAWCACHE.__uploadName__||"업로드"):el("dc_sym").value)||"데이터";
-      const span=bars[0].day+" ~ "+bars[bars.length-1].day;
-      status(`${lbl} · ${bars.length.toLocaleString()}봉 · ${span} · [${dir==="short"?"숏":"롱"}] 컨펌 윈도우 ${confW}봉(폐기 ${SKIPTOT}건) · 표시 ${res.length}/${total}조합(최소거래 ${minTr})`);
+      status(`${lbl} · [${dir==="short"?"숏":"롱"}] 컨펌 윈도우 ${confW}봉(폐기 ${SKIPTOT}건) · 표시 ${res.length}/${total}조합(최소거래 ${minTr})`);
       render();
     }catch(e){ err("⚠ "+e.message); status(""); }
     finally{ btn.disabled=false; }
@@ -2531,7 +2609,9 @@ function drawRSI(rCurve,holdCurve,log){
     const isT=EMODE==="tr";
     const dimLabel=isT?"TR수":"등분";
     const rs=RESULTS.slice().sort((a,b)=>{
-      const v=(SORT.key==="mar"?a.mar-b.mar:SORT.key==="totalRet"?a.totalRet-b.totalRet:SORT.key==="payoff"?a.payoff-b.payoff:SORT.key==="winrate"?a.winrate-b.winrate:SORT.key==="mdd"?a.mdd-b.mdd:SORT.key==="trades"?a.trades-b.trades:SORT.key==="key"?a.key-b.key:SORT.key==="slK"?a.slK-b.slK:a.tpK-b.tpK);
+      const v=SORT.key==="dataLabel"
+        ? String(a.dataLabel||"").localeCompare(String(b.dataLabel||""),"ko")
+        : (SORT.key==="mar"?a.mar-b.mar:SORT.key==="totalRet"?a.totalRet-b.totalRet:SORT.key==="payoff"?a.payoff-b.payoff:SORT.key==="winrate"?a.winrate-b.winrate:SORT.key==="mdd"?a.mdd-b.mdd:SORT.key==="trades"?a.trades-b.trades:SORT.key==="key"?a.key-b.key:SORT.key==="slK"?a.slK-b.slK:a.tpK-b.tpK);
       return SORT.dir*v;
     });
     const bestMar=Math.max(...RESULTS.map(r=>r.mar===Infinity?-1:r.mar));
@@ -2540,8 +2620,9 @@ function drawRSI(rCurve,holdCurve,log){
     const best=RESULTS.slice().sort((a,b)=>(b.mar===Infinity?1e9:b.mar)-(a.mar===Infinity?1e9:a.mar))[0];
     const head=(k,main,sub)=>`<th class="db-sort" data-k="${k}"><span class="th-main">${main}${arrow(k)}</span><span class="th-sub">${sub}</span></th>`;
     const rows=rs.map(r=>{
-      const hot=(r.key===best.key&&r.slK===best.slK&&r.tpK===best.tpK);
+      const hot=r===best;
       return `<tr class="${hot?'db-hot':''}">
+        <td class="mono dimv">${r.dataLabel||""}</td>
         <td class="num">${r.key}</td>
         <td class="num">${r.slK}</td>
         <td class="num">${r.tpK}</td>
@@ -2555,29 +2636,26 @@ function drawRSI(rCurve,holdCurve,log){
     }).join("");
     const bestLabel=isT?`TR${best.key}분할`:`${best.key}등분`;
     wrap.innerHTML=`
-      <div class="db-best">최적 조합(MAR) · <b class="amb">${bestLabel} · 손절 ${best.slK}TR · 익절 ${best.tpK}TR</b>
+      <div class="db-best">최적 조합(MAR) · <b class="amb">${best.dataLabel||"데이터"} · ${bestLabel} · 손절 ${best.slK}TR · 익절 ${best.tpK}TR</b>
         → 총수익 <b class="${best.totalRet>=0?'pos':'neg'}">${pct(best.totalRet)}</b> · MDD <b class="neg">${(best.mdd*100).toFixed(1)}%</b> · MAR <b class="cy">${marStr(best.mar)}</b> · 거래 ${best.trades} · 승률 ${(best.winrate*100).toFixed(0)}% <span class="dimv">· 컨펌없어 폐기 ${SKIPTOT}건</span></div>
       <div class="ctable-wrap"><table class="ctable"><thead><tr>
+        ${head("dataLabel","데이터","CSV")}
         ${head("key",dimLabel,isT?"TR":"N")}${head("slK","손절","×TR")}${head("tpK","익절","×TR")}
         ${head("trades","거래","TRADES")}${head("winrate","승률","WIN")}${head("payoff","손익비","PAYOFF")}
         ${head("totalRet","총수익","RETURN")}${head("mdd","최대낙폭","MDD")}${head("mar","위험대비","MAR")}
         <th><span class="th-main">청산</span><span class="th-sub">TP/SL</span></th>
       </tr></thead><tbody>${rows}</tbody></table></div>
-      <div class="note" style="margin-top:14px"><b class="hl-good">초록</b>=최고 총수익/MAR · <b class="hl-bad">빨강</b>=최대 낙폭 · 호박색 줄=MAR 최적 · 헤더 클릭 정렬 · 청산열=익절/손절(+미청산) 횟수. <b>컨펌봉 필터</b>: 돌파봉 이후 컨펌 윈도우 내 종가>돌파봉 종가인 봉이 나온 셋업만 거래. 손익비=평균이익÷평균손실, MAR=총수익÷|MDD|.</div>`;
+      <div class="note" style="margin-top:14px"><b class="hl-good">초록</b>=최고 총수익/MAR · <b class="hl-bad">빨강</b>=최대 낙폭 · 호박색 줄=MAR 최적 · 여러 CSV 체크 시 한 표에 합쳐 비교 · 헤더 클릭 정렬 · 청산열=익절/손절(+미청산) 횟수. <b>컨펌봉 필터</b>: 돌파봉 이후 컨펌 윈도우 내 종가>돌파봉 종가인 봉이 나온 셋업만 거래. 손익비=평균이익÷평균손실, MAR=총수익÷|MDD|.</div>`;
     wrap.querySelectorAll(".db-sort").forEach(th=>th.onclick=()=>{
       const k=th.dataset.k;
-      if(SORT.key===k)SORT.dir*=-1; else{ SORT.key=k; SORT.dir=(k==="mdd"?1:-1); }
+      if(SORT.key===k)SORT.dir*=-1; else{ SORT.key=k; SORT.dir=(k==="mdd"||k==="dataLabel"?1:-1); }
       render();
     });
   }
 
   function init(){
     if(!el("dc_run"))return;
-    CSV_FILES.forEach((cf,i)=>{
-      const o=document.createElement("option");
-      o.value=i; o.textContent=`${cf.sym} · ${cf.tf}  (${cf.file})`;
-      el("dc_csv_sel").appendChild(o);
-    });
+    renderCsvChecks("dc", Math.max(0, CSV_FILES.findIndex(cf=>cf.sym==="US100"&&cf.tf==="M5")));
     $$("#dc_src button").forEach(b=>b.onclick=()=>setSrc(b.dataset.s));
     $$("#dc_tpmode button").forEach(b=>b.onclick=()=>setTpMode(b.dataset.m));
     $$("#dc_emode button").forEach(b=>b.onclick=()=>setEmode(b.dataset.e));
@@ -2654,7 +2732,9 @@ function drawRSI(rCurve,holdCurve,log){
         if(entryMode==="tr"){ for(let k=0;k<numTR;k++) orders.push({p:H-k*TR,lot:lots[k]||0,filled:false}); }
         else { for(let k=0;k<N;k++) orders.push({p:N===1?H:H-(H-L)*k/(N-1),lot:lots[k]||0,filled:false}); }
       }
-      const SL=isShort ? H+slK*TR : L-slK*TR;
+      const SL=isShort
+        ? Math.max(...orders.map(o=>o.p)) + slK*TR
+        : Math.min(...orders.map(o=>o.p)) - slK*TR;
       let fLots=0,fCnt=0,wsum=0,exited=false,exitPx=0,reason="",exitIdx=-1;
       for(let j=start+1;j<n;j++){
         const b=bars[j];
@@ -2754,8 +2834,8 @@ function drawRSI(rCurve,holdCurve,log){
     el("pt_trrow").style.display= e==="tr"?"":"none";
     const isS=DIRECTION==="short";
     el("pt_emode_hint").textContent = e==="tr"
-      ?(isS?"1차=저가, 2차=저가+TR, 3차=저가+2TR … (SL 위까지 뻗을 수 있음)"
-           :"1차=고가, 2차=고가−TR, 3차=고가−2TR … (SL 아래까지 뻗을 수 있음)")
+      ?(isS?"1차=저가, 2차=저가+TR, 3차=저가+2TR … 손절은 마지막 매도가 위"
+           :"1차=고가, 2차=고가−TR, 3차=고가−2TR … 손절은 마지막 매수가 아래")
       :(isS?"저가~고가를 N등분해 각 가격에 지정가 매도"
            :"고가~저가를 N등분해 각 가격에 지정가 매수");
     buildLots();

@@ -221,6 +221,7 @@
       <button data-tab="rsirev">RSI 매수<span class="sub">Mean Rev</span></button>
       <button data-tab="doubleb">더블비<span class="sub">Double-BB</span></button>
       <button data-tab="doublebc">더블비컨펌<span class="sub">DB-Confirm</span></button>
+      <button data-tab="paper">가상매매<span class="sub">Paper Lot</span></button>
       <button data-tab="board">비교 보드 <span class="badge" id="tab_board_badge"></span><span class="sub">Board</span></button>
     </div>
   </div>
@@ -588,6 +589,64 @@
         <div class="note"><b>로직</b> · 더블비 상단=max(4,4 시가밴드, 20,2 종가밴드)(모집단σ). 종가가 상단을 <b>처음</b> 넘긴 봉=돌파봉. <b>컨펌 조건</b>: 돌파봉 이후 컨펌 윈도우 봉 안에 종가가 돌파봉 종가보다 높은 봉이 나와야만 진입(없으면 폐기). 진입=고가~저가 끝점포함 N등분, <b>체결은 컨펌봉 다음 봉부터</b> 저가≤주문가면 1/N씩. 손절=저가−손절×TR, 익절=(고정)돌파봉 고가+익절×TR 또는 평단+익절×TR. 한 봉에 손절·익절 동시 터치 시 <b>손절 우선</b>. 동시 1포지션, 부분체결분만 평단 계산. 미체결 만료는 컨펌봉 이후 봉 수로 셈. 수수료·스프레드 미반영.</div>
       </section>
       <section id="dc_results"><div class="placeholder"><div class="big">데이터 소스를 고르고 <span class="amb">그리드 돌리기</span></div><div class="mono" style="font-size:12px">컨펌봉 필터 적용 · 조합별 거래수·승률·손익비·총수익·MDD·MAR · 헤더 클릭 정렬</div></div></section>
+    </div>
+  </div>
+
+  <!-- =================== TAB: PAPER TRADE (가상매매) =================== -->
+  <div class="tabpane" id="pane-paper" hidden>
+    <div class="grid">
+      <section class="card">
+        <h2>골드 가상매매 (랏 단위)</h2>
+        <div class="intro">전략 하나를 골라 <b>실제 랏수</b>로 가상매매합니다. <b>골드 1랏=100온스</b>(0.01랏 → $1 움직임당 $1). 분할 <b>N차수만큼 랏 입력칸</b>이 생겨 각 차수에 랏을 따로 지정해요(1차=고가쪽 … N차=저가쪽). 손익은 달러로, 잔고 곡선과 매매 내역까지 보여줍니다. (부분체결분만 평단 계산 · 수수료·스프레드 미반영)</div>
+
+        <div class="field"><label>데이터 소스</label>
+          <div class="subtabs" id="pt_src" data-cur="stored">
+            <button data-s="stored" class="on">저장된 골드</button><button data-s="upload">CSV 업로드</button><button data-s="yahoo">야후 티커</button>
+          </div>
+          <div id="pt_storedRow" class="hint" style="margin-top:-8px">레포의 <span class="mono">gold-m5.csv</span>(XAUUSD M5)를 자동으로 불러옵니다. <button class="quickrange" id="pt_reload" style="display:inline;padding:3px 8px;margin-left:6px;border:1px solid var(--border);background:#0c0f0e;color:var(--ink-dim);border-radius:6px;font-size:11px;cursor:pointer">↻ 다시 불러오기</button></div>
+          <div id="pt_uploadRow" style="display:none;margin-top:6px"><input id="pt_file" type="file" accept=".csv,text/csv"><div class="hint">MT4/MT5 export(.csv) — 콤마/탭/세미콜론, 헤더 유무 무관.</div></div>
+          <div id="pt_yahooRow" style="display:none;margin-top:6px">
+            <input id="pt_sym" placeholder="예: QQQ, GC=F" autocomplete="off" style="margin-bottom:8px">
+            <div class="row2"><div class="field" style="margin-bottom:0"><label>시작일</label><input id="pt_from" type="date"></div><div class="field" style="margin-bottom:0"><label>종료일</label><input id="pt_to" type="date"></div></div>
+            <div class="hint">야후 분봉은 최근 60일(60분=2년). 골드는 '저장된 골드' 권장.</div>
+          </div>
+        </div>
+
+        <div class="row2">
+          <div class="field"><label>타임프레임</label><select id="pt_tf"><option value="5m">5분봉</option><option value="10m">10분봉 (5분 합성)</option><option value="1h">1시간봉</option><option value="1d">일봉</option></select></div>
+          <div class="field"><label>익절 기준</label>
+            <div class="subtabs" id="pt_tpmode" data-cur="fixed" style="margin-bottom:0">
+              <button data-m="fixed" class="on">돌파봉 고가</button><button data-m="avg">평단</button>
+            </div></div>
+        </div>
+
+        <div class="row2">
+          <div class="field"><label>전략</label>
+            <div class="subtabs" id="pt_strat" data-cur="base" style="margin-bottom:0">
+              <button data-x="base" class="on">더블비</button><button data-x="confirm">더블비컨펌</button>
+            </div></div>
+          <div class="field" id="pt_confwRow" style="display:none"><label>컨펌 윈도우 (봉)</label><input id="pt_confw" class="mono" type="number" value="5" min="1" step="1"></div>
+        </div>
+
+        <div class="field"><label>등분 N <span style="color:var(--ink-faint);font-weight:400">— 차수만큼 랏 입력칸이 생겨요</span></label><input id="pt_N" class="mono" type="number" value="3" min="1" max="12" step="1"></div>
+        <div class="field"><label>분할 랏 (차수별)</label><div id="pt_lots" style="display:flex;flex-wrap:wrap;align-items:flex-end"></div><div class="hint" id="pt_lotsum" style="margin-top:2px"></div></div>
+
+        <div class="row2">
+          <div class="field"><label>손절폭 ×TR</label><input id="pt_sl" class="mono" type="number" value="1.25" min="0" step="0.05"></div>
+          <div class="field"><label>익절폭 ×TR</label><input id="pt_tp" class="mono" type="number" value="2" min="0" step="0.05"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>미체결 만료 (봉)</label><input id="pt_expiry" class="mono" type="number" value="20" min="1" step="1"></div>
+          <div class="field"><label>시작 잔고 ($)</label><input id="pt_bal" class="mono" type="number" value="10000" min="0" step="100"></div>
+        </div>
+        <div class="field"><label>1랏 계약크기 (온스) <span style="color:var(--ink-faint);font-weight:400">— 골드 표준 100</span></label><input id="pt_contract" class="mono" type="number" value="100" min="1" step="1"></div>
+
+        <button class="runbtn" id="pt_run">▶ 가상매매 돌리기</button>
+        <div class="err" id="pt_err"></div>
+        <div class="mono" id="pt_status" style="font-size:11px;color:var(--ink-faint);margin-top:8px;line-height:1.5"></div>
+        <div class="note"><b>로직</b> · 더블비/더블비컨펌과 동일한 진입(돌파더블비, 끝점포함 N등분, 다음 봉부터 저가≤주문가면 체결). 각 차수에 지정한 랏만큼 매수, 평단=Σ(체결가×랏)/Σ랏. 청산 시 손익($)=총 체결랏×계약크기×(청산가−평단). 손절=저가−손절×TR, 익절=돌파봉 고가/평단+익절×TR, 동시 터치 시 손절 우선. 고정 랏(복리 아님) — 잔고는 달러 손익 누적.</div>
+      </section>
+      <section id="pt_results"><div class="placeholder"><div class="big">랏을 정하고 <span class="amb">가상매매 돌리기</span></div><div class="mono" style="font-size:12px">달러 손익 · 잔고 곡선 · 매매 내역</div></div></section>
     </div>
   </div>
 
@@ -2298,6 +2357,286 @@ function drawRSI(rCurve,holdCurve,log){
     el("dc_run").onclick=run;
     el("dc_from").value=daysAgo(730); el("dc_to").value=today();
     setSrc("stored"); setTpMode("fixed");
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init); else init();
+})();
+
+/* ============================================================
+   TAB: PAPER TRADE (가상매매) — 골드 랏 단위 가상매매
+   하나의 전략을 골라 차수별 랏 지정 → 달러 손익·잔고곡선·매매내역.
+   엔진 손계산 12단언 + 골드 5분 sanity 통과본.
+   ============================================================ */
+(function(){
+  function bandUpper(series,period,mult){
+    const n=series.length, up=new Array(n).fill(null);
+    for(let i=period-1;i<n;i++){
+      let s=0; for(let k=i-period+1;k<=i;k++)s+=series[k];
+      const m=s/period; let v=0;
+      for(let k=i-period+1;k<=i;k++){const d=series[k]-m; v+=d*d;}
+      up[i]=m+mult*Math.sqrt(v/period);
+    }
+    return up;
+  }
+  function doubleUpper(bars){
+    const u1=bandUpper(bars.map(b=>b.o),4,4);
+    const u2=bandUpper(bars.map(b=>b.c),20,2);
+    return bars.map((_,i)=> (u1[i]==null||u2[i]==null)?null:Math.max(u1[i],u2[i]));
+  }
+  /* ---------- 가상매매 시뮬레이션 ---------- */
+  function ptSim(bars,upper,o){
+    const {N,lots,slK,tpK,tpMode,expiryM,useConfirm,confW,contract,startBal}=o;
+    const n=bars.length, ledger=[];
+    let bal=startBal,peak=startBal,maxDD=0,maxDDpct=0;
+    let wins=0,losses=0,tpC=0,slC=0,eodC=0,confSkip=0,grossWin=0,grossLoss=0,totLots=0,maxPos=0;
+    let i=1;
+    while(i<n){
+      const u=upper[i],up1=upper[i-1];
+      if(u==null||up1==null){i++;continue;}
+      if(!(bars[i].c>u && bars[i-1].c<=up1)){i++;continue;}     // 돌파더블비
+      const H=bars[i].h,L=bars[i].l,TR=H-L;
+      if(TR<=0){i++;continue;}
+      let start=i;                                              // 체결은 start+1부터
+      if(useConfirm){
+        let conf=-1;
+        for(let j=i+1;j<n && j<=i+confW;j++){ if(bars[j].c>bars[i].c){conf=j;break;} }
+        if(conf<0){ confSkip++; i++; continue; }                // 컨펌 없으면 폐기
+        start=conf;
+      }
+      const orders=[];
+      for(let k=0;k<N;k++) orders.push({p:N===1?H:H-(H-L)*k/(N-1),lot:lots[k]||0,filled:false});
+      const SL=L-slK*TR;
+      let fLots=0,fCnt=0,wsum=0,exited=false,exitPx=0,reason="",exitIdx=-1;
+      for(let j=start+1;j<n;j++){
+        const b=bars[j];
+        for(const ord of orders){ if(!ord.filled && b.l<=ord.p){ord.filled=true;fCnt++;fLots+=ord.lot;wsum+=ord.p*ord.lot;} }
+        if(fLots<=0){ if(j-start>=expiryM)break; else continue; }
+        const avg=wsum/fLots;
+        const TP=tpMode==="avg"?avg+tpK*TR:H+tpK*TR;
+        if(b.l<=SL){exited=true;exitPx=SL;reason="SL";exitIdx=j;break;}  // 손절 우선
+        if(b.h>=TP){exited=true;exitPx=TP;reason="TP";exitIdx=j;break;}
+      }
+      if(fLots<=0){i++;continue;}
+      if(!exited){exitPx=bars[n-1].c;reason="EOD";exitIdx=n-1;}
+      const avg=wsum/fLots, pnl=fLots*contract*(exitPx-avg);
+      bal+=pnl; totLots+=fLots; if(fLots>maxPos)maxPos=fLots;
+      if(bal>peak)peak=bal;
+      const dd=bal-peak; if(dd<maxDD)maxDD=dd;
+      const ddp=peak>0?(bal-peak)/peak:0; if(ddp<maxDDpct)maxDDpct=ddp;
+      if(pnl>=0){wins++;grossWin+=pnl;}else{losses++;grossLoss+=Math.abs(pnl);}
+      if(reason==="TP")tpC++;else if(reason==="SL")slC++;else eodC++;
+      ledger.push({entry:bars[i].date,exit:bars[exitIdx].date,avg,lots:fLots,cnt:fCnt,exitPx,reason,pnl,bal});
+      i=exitIdx+1;
+    }
+    const trades=ledger.length, netPnl=bal-startBal;
+    const pf=grossLoss>0?grossWin/grossLoss:(grossWin>0?Infinity:0);
+    return {ledger,startBal,finalBal:bal,netPnl,retPct:startBal>0?netPnl/startBal:0,
+      maxDD,maxDDpct,trades,wins,losses,winrate:trades?wins/trades:0,pf,tpC,slC,eodC,confSkip,
+      avgWin:wins?grossWin/wins:0,avgLoss:losses?grossLoss/losses:0,totLots,maxPos};
+  }
+  /* ---------- 데이터(=다른 탭과 동일) ---------- */
+  function parseMT5(text){
+    const lines=text.split(/\r?\n/), out=[];
+    const start=/date|open|time/i.test(lines[0]||"")?1:0;
+    for(let i=start;i<lines.length;i++){
+      const ln=lines[i].trim(); if(!ln)continue;
+      const p=ln.split(/[\t,;]+/); if(p.length<6)continue;
+      const d=p[0].replace(/\./g,"-").replace(/\//g,"-").slice(0,10);
+      const o=+p[2],h=+p[3],l=+p[4],c=+p[5];
+      if(!isFinite(o)||!isFinite(h)||!isFinite(l)||!isFinite(c)||c<=0)continue;
+      out.push({day:d,date:d+" "+(p[1]||"00:00:00"),o,h,l,c});
+    }
+    if(out.length<2)throw new Error("CSV에서 유효한 OHLC 행을 못 찾음");
+    return out;
+  }
+  function groupByDay(bars){ const m={},order=[]; for(const b of bars){ if(!m[b.day]){m[b.day]=[];order.push(b.day);} m[b.day].push(b);} return {m,order}; }
+  function agg(g){ let h=-Infinity,l=Infinity; for(const x of g){ if(x.h>h)h=x.h; if(x.l<l)l=x.l; } return {day:g[0].day,date:g[0].date,o:g[0].o,h,l,c:g[g.length-1].c}; }
+  function intradayOnly(bars){ const {m}=groupByDay(bars); return bars.filter(b=>m[b.day].length>1); }
+  function resampleN(bars,nn){ const {m,order}=groupByDay(bars); const out=[]; for(const d of order){const a=m[d]; for(let k=0;k<a.length;k+=nn)out.push(agg(a.slice(k,k+nn)));} return out; }
+  function resampleDaily(bars){ const {m,order}=groupByDay(bars); return order.map(d=>agg(m[d])); }
+  function buildTF_MT5(raw,tf){
+    if(tf==="5m")return intradayOnly(raw);
+    if(tf==="10m")return resampleN(intradayOnly(raw),2);
+    if(tf==="1h")return resampleN(intradayOnly(raw),12);
+    return resampleDaily(raw);
+  }
+  async function fetchYahoo(sym,interval,from,to){
+    const u=`${PROXY}/?yahoo=${encodeURIComponent(sym)}&from=${from}&to=${to}&interval=${interval}`;
+    const r=await fetch(u); const j=await r.json();
+    if(!r.ok||!j.data)throw new Error(j.error||("프록시 오류 "+r.status));
+    return j.data.map(x=>({day:String(x.date).slice(0,10),date:String(x.date),o:+x.o,h:+x.h,l:+x.l,c:+x.c}));
+  }
+  function daysAgo(n){ const d=new Date(); d.setDate(d.getDate()-n); return d.toISOString().slice(0,10); }
+
+  /* ====================== UI ====================== */
+  let RAW=null, RAWLABEL="", LAST=null;
+  const el=id=>document.getElementById(id);
+
+  function setSrc(s){
+    $$("#pt_src button").forEach(b=>b.classList.toggle("on",b.dataset.s===s));
+    el("pt_src").dataset.cur=s;
+    el("pt_uploadRow").style.display = s==="upload"?"":"none";
+    el("pt_yahooRow").style.display  = s==="yahoo"?"":"none";
+    el("pt_storedRow").style.display = s==="stored"?"":"none";
+  }
+  function setTpMode(m){ $$("#pt_tpmode button").forEach(b=>b.classList.toggle("on",b.dataset.m===m)); el("pt_tpmode").dataset.cur=m; }
+  function setStrat(x){ $$("#pt_strat button").forEach(b=>b.classList.toggle("on",b.dataset.x===x)); el("pt_strat").dataset.cur=x; el("pt_confwRow").style.display = x==="confirm"?"":"none"; }
+
+  function buildLots(){
+    const N=Math.max(1,Math.min(12,Math.round(+el("pt_N").value||3)));
+    const cont=el("pt_lots");
+    const prev={}; cont.querySelectorAll("input").forEach(inp=>prev[inp.dataset.k]=inp.value);
+    let html="";
+    for(let k=0;k<N;k++){
+      const v=prev[k]!==undefined?prev[k]:"0.01";
+      const tag=k===0?" (고가)":k===N-1?" (저가)":"";
+      html+=`<span style="display:inline-flex;flex-direction:column;width:92px;margin:0 8px 8px 0">
+        <label style="font-size:10px;color:var(--ink-faint);margin-bottom:2px">${k+1}차${tag}</label>
+        <input data-k="${k}" class="mono" type="number" step="0.01" min="0" value="${v}" style="width:100%"></span>`;
+    }
+    cont.innerHTML=html;
+    cont.querySelectorAll("input").forEach(inp=>inp.oninput=sumLots);
+    sumLots();
+  }
+  function sumLots(){
+    let s=0; el("pt_lots").querySelectorAll("input").forEach(inp=>s+=(+inp.value||0));
+    const c=+el("pt_contract").value||100;
+    el("pt_lotsum").textContent=`최대 동시 보유 = ${s.toFixed(2)}랏 (1랏=${c}온스 · $1 움직임당 $${(s*c).toFixed(2)})`;
+  }
+  function readLots(){ return [...el("pt_lots").querySelectorAll("input")].map(inp=>+inp.value||0); }
+  function err(msg){ el("pt_err").textContent=msg||""; }
+  function status(msg){ el("pt_status").textContent=msg||""; }
+
+  async function loadData(tf){
+    const src=el("pt_src").dataset.cur;
+    if(src==="yahoo"){
+      const sym=el("pt_sym").value.trim(); if(!sym)throw new Error("야후 티커를 입력하세요");
+      const from=el("pt_from").value, to=el("pt_to").value;
+      status(`야후 ${sym} ${tf} 불러오는 중…`);
+      if(tf==="10m"){ const b5=await fetchYahoo(sym,"5m",from,to); return resampleN(b5,2); }
+      return fetchYahoo(sym, tf==="1d"?"1d":tf==="1h"?"60m":"5m", from, to);
+    }
+    if(!RAW){
+      if(src==="upload"){ throw new Error("CSV 파일을 먼저 선택하세요"); }
+      status("저장된 골드(gold-m5.csv) 불러오는 중…");
+      const r=await fetch("gold-m5.csv",{cache:"force-cache"});
+      if(!r.ok)throw new Error("gold-m5.csv 못 찾음(404). 'CSV 업로드'를 쓰세요.");
+      RAW=parseMT5(await r.text()); RAWLABEL="저장된 골드";
+    }
+    return buildTF_MT5(RAW,tf);
+  }
+
+  async function run(){
+    err(""); LAST=null;
+    const btn=el("pt_run"); btn.disabled=true;
+    try{
+      const tf=el("pt_tf").value;
+      const N=Math.max(1,Math.min(12,Math.round(+el("pt_N").value||3)));
+      const lots=readLots();
+      if(lots.reduce((a,b)=>a+b,0)<=0)throw new Error("랏을 1개 이상(>0) 입력하세요");
+      const o={
+        N, lots,
+        slK:Math.max(0,+el("pt_sl").value||0),
+        tpK:Math.max(0,+el("pt_tp").value||0),
+        tpMode:el("pt_tpmode").dataset.cur,
+        expiryM:Math.max(1,+el("pt_expiry").value||20),
+        useConfirm:el("pt_strat").dataset.cur==="confirm",
+        confW:Math.max(1,+el("pt_confw").value||5),
+        contract:Math.max(1,+el("pt_contract").value||100),
+        startBal:Math.max(0,+el("pt_bal").value||10000)
+      };
+      const bars=await loadData(tf);
+      if(bars.length<60)throw new Error(`봉 수가 너무 적음(${bars.length}).`);
+      status(`엔진 실행: ${bars.length.toLocaleString()}봉…`);
+      const upper=doubleUpper(bars);
+      const r=ptSim(bars,upper,o);
+      const span=bars[0].day+" ~ "+bars[bars.length-1].day;
+      LAST={r,o,tf,span,label:RAWLABEL||el("pt_sym").value||"데이터",bars:bars.length};
+      status(`${LAST.label} · ${tf} · ${bars.length.toLocaleString()}봉 · ${span}${o.useConfirm?` · 컨펌 ${o.confW}봉(폐기 ${r.confSkip})`:""}`);
+      render();
+    }catch(e){ err("⚠ "+e.message); status(""); }
+    finally{ btn.disabled=false; }
+  }
+
+  /* ---------- 출력 ---------- */
+  function money(x){ const s=x<0?"-":""; return s+"$"+Math.abs(x).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function equitySVG(led,startBal){
+    const pts=[startBal,...led.map(l=>l.bal)]; const n=pts.length; if(n<2)return "";
+    let mn=Math.min(...pts),mx=Math.max(...pts); if(mn===mx){mn-=1;mx+=1;}
+    const W=640,H=150,pad=5;
+    const x=i=>pad+(W-2*pad)*i/(n-1);
+    const y=v=>pad+(H-2*pad)*(1-(v-mn)/(mx-mn));
+    const d=pts.map((v,i)=>`${i?'L':'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+    const y0=y(startBal), up=pts[n-1]>=startBal;
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:150px;display:block;background:#0c0f0e;border:1px solid var(--border);border-radius:10px">
+      <line x1="0" y1="${y0.toFixed(1)}" x2="${W}" y2="${y0.toFixed(1)}" stroke="#3a3f3d" stroke-dasharray="4 3"/>
+      <path d="${d}" fill="none" stroke="${up?'#36e08a':'#ff6b6b'}" stroke-width="1.6"/></svg>`;
+  }
+  function render(){
+    const wrap=el("pt_results");
+    if(!LAST){ return; }
+    const {r,o,tf,span,label}=LAST;
+    if(!r.trades){ wrap.innerHTML=`<div class="placeholder"><div class="big">거래가 없어요</div><div class="mono" style="font-size:12px">기간·타임프레임·파라미터를 확인하세요${o.useConfirm?` (컨펌없어 폐기 ${r.confSkip}건)`:""}</div></div>`; return; }
+    const tile=(lab,val,cls)=>`<div style="background:#0c0f0e;border:1px solid var(--border);border-radius:10px;padding:10px 12px">
+      <div style="font-size:11px;color:var(--ink-faint)">${lab}</div>
+      <div class="${cls||''}" style="font-size:18px;font-weight:700;margin-top:2px">${val}</div></div>`;
+    const tiles=[
+      tile("최종 잔고", money(r.finalBal), r.netPnl>=0?'pos':'neg'),
+      tile("순손익", money(r.netPnl)+` (${r.retPct>=0?'+':''}${(r.retPct*100).toFixed(2)}%)`, r.netPnl>=0?'pos':'neg'),
+      tile("최대 낙폭", money(r.maxDD)+` (${(r.maxDDpct*100).toFixed(2)}%)`, 'neg'),
+      tile("거래수", r.trades, ''),
+      tile("승률", (r.winrate*100).toFixed(1)+"%", ''),
+      tile("손익비(PF)", r.pf===Infinity?"∞":r.pf.toFixed(2), r.pf>=1?'pos':'neg'),
+      tile("평균이익 / 평균손실", money(r.avgWin)+" / "+money(r.avgLoss), ''),
+      tile("청산 TP/SL/미청산", `${r.tpC}/${r.slC}/${r.eodC}`, '')
+    ].join("");
+    const rows=r.ledger.map((l,idx)=>{
+      const rc=l.reason==="TP"?'pos':l.reason==="SL"?'neg':'dimv';
+      const rt=l.reason==="TP"?"익절":l.reason==="SL"?"손절":"미청산";
+      return `<tr>
+        <td class="num dimv">${idx+1}</td>
+        <td class="mono" style="font-size:11px">${l.entry.slice(0,16)}</td>
+        <td class="mono" style="font-size:11px">${l.exit.slice(0,16)}</td>
+        <td class="num">${l.avg.toFixed(2)}</td>
+        <td class="num">${l.lots.toFixed(2)}<span class="dimv" style="font-size:10px">/${l.cnt}</span></td>
+        <td class="num">${l.exitPx.toFixed(2)}</td>
+        <td class="num ${rc}">${rt}</td>
+        <td class="num ${l.pnl>=0?'pos':'neg'}">${money(l.pnl)}</td>
+        <td class="num">${money(l.bal)}</td></tr>`;
+    }).join("");
+    const stratName=o.useConfirm?`더블비컨펌(컨펌 ${o.confW}봉)`:"더블비";
+    const lotStr=o.lots.map(x=>x.toFixed(2)).join("/");
+    wrap.innerHTML=`
+      <div class="db-best">${label} · ${tf} · <b class="amb">${stratName}</b> · ${o.N}등분 랏 ${lotStr} · 손절 ${o.slK}TR · 익절 ${o.tpK}TR
+        <span class="dimv">· 1랏=${o.contract}온스 · 시작 ${money(o.startBal)} · ${span}</span></div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0 14px">${tiles}</div>
+      <div style="font-size:11px;color:var(--ink-faint);margin-bottom:4px">잔고 곡선 (점선=시작 잔고)</div>
+      ${equitySVG(r.ledger,r.startBal)}
+      <div style="font-size:11px;color:var(--ink-faint);margin:14px 0 4px">매매 내역 (${r.trades}건)</div>
+      <div class="ctable-wrap" style="max-height:440px;overflow:auto"><table class="ctable"><thead><tr>
+        <th><span class="th-main">#</span></th><th><span class="th-main">진입</span></th><th><span class="th-main">청산</span></th>
+        <th><span class="th-main">평단</span></th><th><span class="th-main">랏</span><span class="th-sub">/체결수</span></th>
+        <th><span class="th-main">청산가</span></th><th><span class="th-main">사유</span></th>
+        <th><span class="th-main">손익</span></th><th><span class="th-main">잔고</span></th>
+      </tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="note" style="margin-top:14px">고정 랏(복리 아님) · 손익=총 체결랏×${o.contract}온스×(청산가−평단) · 평단은 부분체결분만 · 수수료·스프레드 미반영. 랏열의 작은 숫자=체결된 차수 개수.</div>`;
+  }
+
+  function init(){
+    if(!el("pt_run"))return;
+    $$("#pt_src button").forEach(b=>b.onclick=()=>setSrc(b.dataset.s));
+    $$("#pt_tpmode button").forEach(b=>b.onclick=()=>setTpMode(b.dataset.m));
+    $$("#pt_strat button").forEach(b=>b.onclick=()=>setStrat(b.dataset.x));
+    el("pt_N").oninput=buildLots;
+    el("pt_contract").oninput=sumLots;
+    el("pt_file").onchange=async e=>{
+      const f=e.target.files[0]; if(!f)return;
+      try{ RAW=parseMT5(await f.text()); RAWLABEL=f.name; status(`업로드됨: ${f.name} · ${RAW.length.toLocaleString()}행`); err(""); }
+      catch(ex){ err("⚠ "+ex.message); }
+    };
+    el("pt_reload").onclick=()=>{ RAW=null; RAWLABEL=""; status("저장된 골드 캐시 비움 — 다시 돌리면 새로 불러옵니다"); };
+    el("pt_run").onclick=run;
+    el("pt_from").value=daysAgo(730); el("pt_to").value=today();
+    setSrc("stored"); setTpMode("fixed"); setStrat("base"); buildLots();
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init); else init();
 })();

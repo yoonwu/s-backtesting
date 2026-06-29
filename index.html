@@ -2437,10 +2437,14 @@ function drawRSI(rCurve,holdCurve,log){
         }
         await pauseUI();
       }
-      RESULTS=res;
+      const CAP=500;
+      const matched=res.length;
+      res.sort((a,b)=>b.totalRet-a.totalRet);
+      RESULTS=res.slice(0,CAP);
       const src=el("db_src").dataset.cur;
       const lbl=src==="stored"?RAWLABEL:(src==="upload"?(RAWCACHE.__uploadName__||"업로드"):el("db_sym").value)||"데이터";
-      status(`${lbl} · [${dir==="short"?"숏":"롱"}] · ${strategies.map(s=>s.label).join("+")} · ${months?`최근 ${months}개월`:"전체기간"} 표시 ${res.length}/${total}조합(최소거래 ${minTr})`);
+      const capNote=matched>CAP?` · 총수익 상위 ${CAP}개만 표시`:"";
+      status(`${lbl} · [${dir==="short"?"숏":"롱"}] · ${strategies.map(s=>s.label).join("+")} · ${months?`최근 ${months}개월`:"전체기간"} 표시 ${RESULTS.length}/${matched}조합(최소거래 ${minTr})${capNote}`);
       render();
     }catch(e){ err("⚠ "+e.message); status(""); }
     finally{ btn.disabled=false; }

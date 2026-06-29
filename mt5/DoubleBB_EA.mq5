@@ -19,7 +19,7 @@
 //|   · 손절·익절 동시 = 손절 우선. 동시 1포지션.                      |
 //+------------------------------------------------------------------+
 #property copyright "LEVERAGE LAB"
-#property version   "1.00"
+#property version   "1.02"
 #property strict
 
 #include <Trade/Trade.mqh>
@@ -299,6 +299,7 @@ void ManageExit()
    double avg=0, vol=0;
    int npos=CountMyPositions(avg,vol);
    if(npos==0) return;
+   if(g_SL<=0 || g_brkTR<=0) return;   // 상태 유실(EA 재시작) 시: 브로커측 SL/TP가 보호. 가상청산 보류.
    bool isShort=(InpDir==DIR_SHORT);
    double bid=SymbolInfoDouble(_Symbol,SYMBOL_BID);
    double ask=SymbolInfoDouble(_Symbol,SYMBOL_ASK);
@@ -321,13 +322,56 @@ void ManageExit()
   }
 
 //+------------------------------------------------------------------+
+//| 매 틱: 보유 포지션에 브로커측 SL/TP 부착·갱신                      |
+//|  - 손절: 체결 즉시 g_SL 부착(고정)                                |
+//|  - 익절: 평단(TP_AVG)이면 체결 추가될 때마다 자동 갱신            |
+//|  EA/PC가 꺼져도 브로커가 SL/TP를 잡아줌(가상청산의 백업).         |
+//+------------------------------------------------------------------+
+void ApplyBrokerStops()
+  {
+   if(g_SL<=0 || g_brkTR<=0) return;          // 상태 없으면 기존 브로커 SL/TP 유지
+   double avg=0, vol=0;
+   int npos=CountMyPositions(avg,vol);
+   if(npos==0) return;
+   bool isShort=(InpDir==DIR_SHORT);
+   int    dig  =(int)SymbolInfoInteger(_Symbol,SYMBOL_DIGITS);
+   double point=SymbolInfoDouble(_Symbol,SYMBOL_POINT);
+   double stops=(double)SymbolInfoInteger(_Symbol,SYMBOL_TRADE_STOPS_LEVEL)*point;
+   double bid  =SymbolInfoDouble(_Symbol,SYMBOL_BID);
+   double ask  =SymbolInfoDouble(_Symbol,SYMBOL_ASK);
+
+   double tp;
+   if(InpTPMode==TP_AVG) tp = isShort ? avg - InpTP_x*g_brkTR : avg + InpTP_x*g_brkTR;
+   else                  tp = isShort ? g_brkL - InpTP_x*g_brkTR : g_brkH + InpTP_x*g_brkTR;
+   double sl=NormalizeDouble(g_SL,dig);
+   tp=NormalizeDouble(tp,dig);
+
+   // 스톱레벨 안쪽이면 이번 틱 보류(주문 거부 방지) — 그동안은 가상청산이 백업
+   if(isShort){ if(sl-ask < stops || bid-tp < stops) return; }
+   else       { if(bid-sl < stops || tp-ask < stops) return; }
+
+   double tol=point;
+   for(int i=PositionsTotal()-1;i>=0;i--)
+     {
+      ulong tkt=PositionGetTicket(i);
+      if(tkt==0) continue;
+      if(PositionGetString(POSITION_SYMBOL)!=_Symbol) continue;
+      if(PositionGetInteger(POSITION_MAGIC)!=InpMagic) continue;
+      double curSL=PositionGetDouble(POSITION_SL);
+      double curTP=PositionGetDouble(POSITION_TP);
+      if(MathAbs(curSL-sl)>tol || MathAbs(curTP-tp)>tol)
+         g_trade.PositionModify(tkt,sl,tp);
+     }
+  }
+
+//+------------------------------------------------------------------+
 void OnTick()
   {
    // 스프레드 필터
    if(InpMaxSpreadPts>0)
      {
       long sp=SymbolInfoInteger(_Symbol,SYMBOL_SPREAD);
-      if(sp>InpMaxSpreadPts) { ManageExit(); return; }  // 청산 감시는 유지
+      if(sp>InpMaxSpreadPts) { ApplyBrokerStops(); ManageExit(); return; }  // 청산 감시는 유지
      }
 
    // 새 봉 감지
@@ -348,7 +392,8 @@ void OnTick()
         }
      }
 
-   // 매 틱 SL/TP 감시 (인트라바 트리거)
+   // 매 틱: 브로커측 SL/TP 부착·갱신 + 가상청산 백업
+   ApplyBrokerStops();
    ManageExit();
   }
 //+------------------------------------------------------------------+

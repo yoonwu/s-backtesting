@@ -233,6 +233,7 @@
       <button data-tab="rsirev">RSI 매수<span class="sub">Mean Rev</span></button>
       <button data-tab="doubleb">더블비<span class="sub">Double-BB</span></button>
       <button data-tab="doublebc">더블비컨펌<span class="sub">DB-Confirm</span></button>
+      <button data-tab="break120">돌파 후 120선<span class="sub">Break-120</span></button>
       <button data-tab="paper">가상매매<span class="sub">Paper Lot</span></button>
       <button data-tab="board">비교 보드 <span class="badge" id="tab_board_badge"></span><span class="sub">Board</span></button>
     </div>
@@ -644,6 +645,57 @@
         <div class="note"><b>로직</b> · 더블비 상단=max(4,4 시가밴드, 20,2 종가밴드)(모집단σ). 종가가 상단을 <b>처음</b> 넘긴 봉=돌파봉. <b>컨펌 조건</b>: 돌파봉 이후 컨펌 윈도우 봉 안에 종가가 돌파봉 종가보다 높은 봉이 나와야만 진입(없으면 폐기). 진입=고가~저가 끝점포함 N등분, <b>체결은 컨펌봉 다음 봉부터</b> 저가≤주문가면 1/N씩. 손절=최하단 매수가−손절×TR(숏은 최상단 매도가+손절×TR), 익절=(고정)돌파봉 고가+익절×TR 또는 평단+익절×TR. 한 봉에 손절·익절 동시 터치 시 <b>손절 우선</b>. 동시 1포지션, 부분체결분만 평단 계산. 미체결 만료는 컨펌봉 이후 봉 수로 셈. 수수료·스프레드 미반영.</div>
       </section>
       <section id="dc_results"><div class="placeholder"><div class="big">데이터 소스를 고르고 <span class="amb">그리드 돌리기</span></div><div class="mono" style="font-size:12px">컨펌봉 필터 적용 · 조합별 거래수·승률·손익비·총수익·MDD·MAR · 헤더 클릭 정렬</div></div></section>
+    </div>
+  </div>
+
+  <!-- =================== TAB: BREAKOUT THEN MA120 =================== -->
+  <div class="tabpane" id="pane-break120" hidden>
+    <div class="grid">
+      <section class="card">
+        <h2>돌파 후 120선 백테스트</h2>
+        <div class="intro"><b>1시간봉 더블비 돌파</b> 이후 가격이 돌파봉 TR의 배수만큼 진행하면 추세로 인정하고, 선택한 분봉에서 <b>120이평선 첫 터치</b>를 기다려 분할매수합니다. 분할 간격(KR)은 돌파 1시간봉 안의 <b>10분봉 최대 TR</b>입니다.</div>
+
+        <div class="field"><label>심볼</label>
+          <div class="subtabs" id="br_syms" style="margin-bottom:0">
+            <button data-sym="XAUUSD" class="on">XAUUSD</button><button data-sym="US100" class="on">US100</button>
+          </div>
+          <div class="hint">선택된 심볼의 H1, M10, 진입분봉 CSV를 자동으로 조합합니다.</div>
+        </div>
+
+        <div class="field"><label>진입 분봉</label>
+          <div class="csv-checklist" id="br_tf_list" style="max-height:none">
+            <label class="csv-check"><input type="checkbox" data-tf="M1" checked><span class="csv-name">1분봉</span></label>
+            <label class="csv-check"><input type="checkbox" data-tf="M2" checked><span class="csv-name">2분봉</span></label>
+            <label class="csv-check"><input type="checkbox" data-tf="M3" checked><span class="csv-name">3분봉</span></label>
+            <label class="csv-check"><input type="checkbox" data-tf="M5" checked><span class="csv-name">5분봉</span></label>
+            <label class="csv-check"><input type="checkbox" data-tf="M10" checked><span class="csv-name">10분봉</span></label>
+            <label class="csv-check"><input type="checkbox" data-tf="M15" checked><span class="csv-name">15분봉</span></label>
+            <label class="csv-check"><input type="checkbox" data-tf="M30" checked><span class="csv-name">30분봉</span></label>
+          </div>
+        </div>
+
+        <div class="row2">
+          <div class="field"><label>추세 확인 ×돌파TR</label><input id="br_trendK" class="mono" type="number" value="2" min="0.1" step="0.1"></div>
+          <div class="field"><label>추세 확인 대기 (H1봉)</label><input id="br_trendWait" class="mono" type="number" value="24" min="1" step="1"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>120선 대기 (시간)</label><input id="br_touchWaitH" class="mono" type="number" value="168" min="1" step="1"></div>
+          <div class="field"><label>진입 후 만료 (봉)</label><input id="br_expiry" class="mono" type="number" value="240" min="1" step="1"></div>
+        </div>
+
+        <div class="field"><label>분할매수 횟수 (콤마 구분)</label><input id="br_n" class="mono" value="1,2,3,4,5"></div>
+        <div class="row2">
+          <div class="field"><label>손절폭 ×KR</label><input id="br_sl" class="mono" value="0.5,0.75,1,1.25,1.5,2"></div>
+          <div class="field"><label>익절폭 ×KR</label><input id="br_tp" class="mono" value="1,1.5,2,3"></div>
+        </div>
+        <div class="field"><label>최소 거래수 필터</label><input id="br_min" class="mono" type="number" value="20" min="0" step="1"></div>
+
+        <button class="runbtn" id="br_run">▶ 120선 전략 돌리기</button>
+        <div class="err" id="br_err"></div>
+        <div class="mono" id="br_status" style="font-size:11px;color:var(--ink-faint);margin-top:8px;line-height:1.5"></div>
+        <div class="note"><b>로직</b> · H1 더블비 상단 돌파 후 H1 고가가 돌파봉 고가+추세확인×돌파TR에 닿으면 추세 인정. 이후 선택 분봉의 120SMA 첫 터치에서 1차 매수. 분할 간격 KR=돌파 H1봉 안의 10분봉 중 최대(고가−저가). 추가 매수=120SMA−KR, −2KR… 손절=최하단 매수가−손절×KR, 익절=평단+익절×KR. 손절·익절 동시 터치 시 손절 우선. 수수료·스프레드 미반영.</div>
+      </section>
+      <section id="br_results"><div class="placeholder"><div class="big">조건을 고르고 <span class="amb">120선 전략 돌리기</span></div><div class="mono" style="font-size:12px">H1 돌파 · 추세확인 · 분봉 120SMA 첫 터치 · KR 분할매수</div></div></section>
     </div>
   </div>
 
@@ -2671,6 +2723,293 @@ function drawRSI(rCurve,holdCurve,log){
     setSrc("stored"); setTpMode("fixed"); setDir("long"); setEmode("n");
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init); else init();
+})();
+
+/* ============================================================
+   TAB: BREAKOUT THEN MA120
+   H1 double-BB breakout -> H1 trend continuation -> lower-TF MA120 touch.
+   ============================================================ */
+(function(){
+  const el=id=>document.getElementById(id);
+  if(!el("br_run"))return;
+
+  const TF_MIN={M1:1,M2:2,M3:3,M5:5,M10:10,M15:15,M30:30,H1:60};
+  let CACHE={}, RESULTS=[], SORT={key:"mar",dir:-1};
+
+  function parseList(str,intOnly,minV){
+    return String(str).split(/[,\s]+/).map(x=>+x).filter(x=>isFinite(x)&&x>=(minV||0)&&(!intOnly||Number.isInteger(x)));
+  }
+  function err(msg){ el("br_err").textContent=msg||""; }
+  function status(msg){ el("br_status").textContent=msg||""; }
+  function pct(x){ return (x>=0?"+":"")+(x*100).toFixed(1)+"%"; }
+  function payoffStr(p){ return p===Infinity?"∞":p.toFixed(2); }
+  function marStr(m){ return m===Infinity?"∞":m.toFixed(2); }
+  function arrow(k){ return SORT.key===k?(SORT.dir<0?" ▾":" ▴"):""; }
+  function toMs(date){ return new Date(String(date).replace(" ","T")).getTime(); }
+  function pause(){ return new Promise(resolve=>setTimeout(resolve,0)); }
+
+  function parseMT5(text){
+    const lines=text.split(/\r?\n/), out=[];
+    const start=/date|open|time/i.test(lines[0]||"")?1:0;
+    for(let i=start;i<lines.length;i++){
+      const ln=lines[i].trim(); if(!ln)continue;
+      const p=ln.split(/[\t,;]+/); if(p.length<6)continue;
+      const d=p[0].replace(/\./g,"-").replace(/\//g,"-").slice(0,10);
+      const date=d+" "+(p[1]||"00:00:00");
+      const o=+p[2],h=+p[3],l=+p[4],c=+p[5];
+      if(!isFinite(o)||!isFinite(h)||!isFinite(l)||!isFinite(c)||c<=0)continue;
+      out.push({day:d,date,t:toMs(date),o,h,l,c});
+    }
+    if(out.length<2)throw new Error("CSV에서 유효한 OHLC 행을 못 찾음");
+    out.sort((a,b)=>a.t-b.t);
+    return out;
+  }
+  function groupByDay(bars){ const m={},order=[]; for(const b of bars){ if(!m[b.day]){m[b.day]=[];order.push(b.day);} m[b.day].push(b);} return {m,order}; }
+  function intradayOnly(bars){ const {m}=groupByDay(bars); return bars.filter(b=>m[b.day].length>1); }
+
+  async function loadCsv(cf){
+    if(!cf)throw new Error("필요한 CSV 파일을 찾지 못했습니다");
+    if(!CACHE[cf.file]){
+      status(`${cf.sym} ${cf.tf} 불러오는 중…`);
+      const r=await fetch(cf.file,{cache:"force-cache"});
+      if(!r.ok)throw new Error(`${cf.file} 못 찾음(404). CSV가 HTML과 같은 서버 루트에 있는지 확인하세요.`);
+      const parsed=parseMT5(await r.text());
+      CACHE[cf.file]=cf.raw?intradayOnly(parsed):parsed;
+    }
+    return CACHE[cf.file];
+  }
+  function findCsv(sym,tf){ return CSV_FILES.find(cf=>cf.sym===sym&&cf.tf===tf); }
+
+  function sma(vals,n){
+    const out=new Array(vals.length).fill(null); let sum=0;
+    for(let i=0;i<vals.length;i++){
+      sum+=vals[i]; if(i>=n)sum-=vals[i-n];
+      if(i>=n-1)out[i]=sum/n;
+    }
+    return out;
+  }
+  function band(series,period,mult,up){
+    const out=new Array(series.length).fill(null);
+    for(let i=period-1;i<series.length;i++){
+      let sum=0; for(let k=i-period+1;k<=i;k++)sum+=series[k];
+      const mean=sum/period; let v=0;
+      for(let k=i-period+1;k<=i;k++)v+=(series[k]-mean)**2;
+      const sd=Math.sqrt(v/period);
+      out[i]=up?mean+mult*sd:mean-mult*sd;
+    }
+    return out;
+  }
+  function doubleUpper(bars){
+    const u1=band(bars.map(b=>b.o),4,4,true);
+    const u2=band(bars.map(b=>b.c),20,2,true);
+    return bars.map((_,i)=>(u1[i]==null||u2[i]==null)?null:Math.max(u1[i],u2[i]));
+  }
+
+  function maxM10TR(m10,startT,endT){
+    let kr=0, n=0;
+    for(const b of m10){
+      if(b.t<startT)continue;
+      if(b.t>=endT)break;
+      const tr=b.h-b.l;
+      if(tr>kr)kr=tr;
+      n++;
+    }
+    return n&&kr>0?kr:null;
+  }
+
+  function makeSetups(h1,m10,entryBars,opt){
+    const upper=doubleUpper(h1);
+    const ma=sma(entryBars.map(b=>b.c),120);
+    const setups=[];
+    const stats={breakouts:0,trend:0,noKr:0,noTouch:0};
+    const hour=60*60*1000;
+    const tfMin=TF_MIN[opt.tf]||1;
+    for(let i=1;i<h1.length;i++){
+      const b=h1[i], prev=h1[i-1];
+      const u=upper[i], up1=upper[i-1];
+      if(u==null||up1==null)continue;
+      if(!(b.c>u && prev.c<=up1))continue;
+      stats.breakouts++;
+      const H=b.h,L=b.l,TR=H-L;
+      if(TR<=0)continue;
+      let trendIdx=-1;
+      const target=H+opt.trendK*TR;
+      for(let k=i+1;k<h1.length && k<=i+opt.trendWait;k++){
+        if(h1[k].h>=target){ trendIdx=k; break; }
+      }
+      if(trendIdx<0)continue;
+      stats.trend++;
+      const kr=maxM10TR(m10,b.t,b.t+hour);
+      if(!kr){ stats.noKr++; continue; }
+      const startT=h1[trendIdx].t+hour;
+      const endT=startT+opt.touchWaitH*hour;
+      let touchIdx=-1, touchPx=0;
+      for(let j=0;j<entryBars.length;j++){
+        const x=entryBars[j];
+        if(x.t<startT)continue;
+        if(x.t>endT)break;
+        if(ma[j]!=null && x.l<=ma[j] && x.h>=ma[j]){ touchIdx=j; touchPx=ma[j]; break; }
+      }
+      if(touchIdx<0){ stats.noTouch++; continue; }
+      setups.push({
+        signalT:b.t,
+        trendT:h1[trendIdx].t,
+        touchT:entryBars[touchIdx].t,
+        touchIdx,
+        touchPx,
+        kr,
+        breakoutTR:TR,
+        signalDate:b.date,
+        touchDate:entryBars[touchIdx].date,
+        tfMin
+      });
+    }
+    return {setups,stats};
+  }
+
+  function backtest(entryBars,setups,N,slK,tpK,expiryBars){
+    let equity=1, peak=1, maxDD=0, busyUntil=-Infinity;
+    let trades=0,wins=0,losses=0,sumWin=0,sumLoss=0,tpC=0,slC=0,eodC=0,usedSetups=0,filledSteps=0;
+    for(const st of setups){
+      if(st.touchT<=busyUntil)continue;
+      usedSetups++;
+      const orders=[];
+      for(let k=0;k<N;k++)orders.push({p:st.touchPx-k*st.kr,filled:false});
+      const SL=Math.min(...orders.map(o=>o.p))-slK*st.kr;
+      let filled=0,sumFill=0,exited=false,exitPx=0,reason="",exitIdx=-1;
+      for(let j=st.touchIdx;j<entryBars.length;j++){
+        const x=entryBars[j];
+        for(const o of orders){
+          if(!o.filled && x.l<=o.p){ o.filled=true; filled++; sumFill+=o.p; }
+        }
+        if(filled>0){
+          const avg=sumFill/filled;
+          const TP=avg+tpK*st.kr;
+          if(x.l<=SL){ exited=true; exitPx=SL; reason="SL"; exitIdx=j; break; }
+          if(x.h>=TP){ exited=true; exitPx=TP; reason="TP"; exitIdx=j; break; }
+          if(j-st.touchIdx>=expiryBars){ exited=true; exitPx=x.c; reason="EOD"; exitIdx=j; break; }
+        }
+      }
+      if(filled===0)continue;
+      if(!exited){ exitPx=entryBars[entryBars.length-1].c; reason="EOD"; exitIdx=entryBars.length-1; }
+      const avg=sumFill/filled, frac=filled/N;
+      const ret=frac*(exitPx-avg)/avg;
+      equity*=(1+ret); if(equity>peak)peak=equity;
+      const dd=equity/peak-1; if(dd<maxDD)maxDD=dd;
+      trades++; filledSteps+=filled;
+      if(ret>0){wins++;sumWin+=ret;}else{losses++;sumLoss+=Math.abs(ret);}
+      if(reason==="TP")tpC++; else if(reason==="SL")slC++; else eodC++;
+      busyUntil=entryBars[exitIdx].t;
+    }
+    const totalRet=equity-1;
+    const avgWin=wins?sumWin/wins:0, avgLoss=losses?sumLoss/losses:0;
+    const payoff=avgLoss>0?avgWin/avgLoss:(avgWin>0?Infinity:0);
+    const mar=maxDD<0?totalRet/Math.abs(maxDD):(totalRet>0?Infinity:0);
+    return {N,slK,tpK,trades,winrate:trades?wins/trades:0,payoff,totalRet,mdd:maxDD,mar,tpC,slC,eodC,usedSetups,avgFilled:trades?filledSteps/trades:0};
+  }
+
+  function selectedSyms(){
+    return Array.from($$("#br_syms button.on")).map(b=>b.dataset.sym);
+  }
+  function selectedTfs(){
+    return Array.from($$("#br_tf_list input:checked")).map(b=>b.dataset.tf);
+  }
+
+  async function run(){
+    err(""); RESULTS=[];
+    const btn=el("br_run"); btn.disabled=true;
+    try{
+      const syms=selectedSyms(), tfs=selectedTfs();
+      if(!syms.length)throw new Error("심볼을 1개 이상 선택하세요");
+      if(!tfs.length)throw new Error("진입 분봉을 1개 이상 선택하세요");
+      const trendK=Math.max(0.1,+el("br_trendK").value||2);
+      const trendWait=Math.max(1,Math.round(+el("br_trendWait").value||24));
+      const touchWaitH=Math.max(1,+el("br_touchWaitH").value||168);
+      const expiryBars=Math.max(1,Math.round(+el("br_expiry").value||240));
+      const minTr=Math.max(0,+el("br_min").value||0);
+      const Ns=parseList(el("br_n").value,true,1);
+      const slKs=parseList(el("br_sl").value,false,0);
+      const tpKs=parseList(el("br_tp").value,false,0);
+      if(!Ns.length||!slKs.length||!tpKs.length)throw new Error("분할횟수·손절·익절 값을 1개 이상 입력하세요");
+      const totalPer=Ns.length*slKs.length*tpKs.length;
+      let total=0, skipped=[];
+      const rows=[];
+      for(const sym of syms){
+        const h1cf=findCsv(sym,"H1"), m10cf=findCsv(sym,"M10");
+        if(!h1cf||!m10cf){ skipped.push(`${sym}: H1/M10 없음`); continue; }
+        const h1=await loadCsv(h1cf);
+        const m10=await loadCsv(m10cf);
+        for(const tf of tfs){
+          const ecf=findCsv(sym,tf);
+          if(!ecf){ skipped.push(`${sym} ${tf}: CSV 없음`); continue; }
+          const entryBars=await loadCsv(ecf);
+          if(h1.length<60||m10.length<10||entryBars.length<140){ skipped.push(`${sym} ${tf}: 봉 수 부족`); continue; }
+          status(`${sym} ${tf} 셋업 추출 중…`);
+          const {setups,stats}=makeSetups(h1,m10,entryBars,{tf,trendK,trendWait,touchWaitH});
+          total+=totalPer;
+          status(`${sym} ${tf} 엔진 실행 · 셋업 ${setups.length}개 · ${totalPer}조합…`);
+          for(const N of Ns)for(const slK of slKs)for(const tpK of tpKs){
+            const r=backtest(entryBars,setups,N,slK,tpK,expiryBars);
+            r.sym=sym; r.tf=tf; r.label=`${sym} · ${tf}`; r.setups=setups.length; r.breakouts=stats.breakouts; r.trend=stats.trend; r.noTouch=stats.noTouch;
+            if(r.trades>=minTr)rows.push(r);
+          }
+          await pause();
+        }
+      }
+      RESULTS=rows;
+      status(`완료 · 표시 ${rows.length}/${total}조합(최소거래 ${minTr})${skipped.length?` · 건너뜀: ${skipped.join(", ")}`:""}`);
+      render();
+    }catch(e){ err("⚠ "+e.message); status(""); }
+    finally{ btn.disabled=false; }
+  }
+
+  function render(){
+    const wrap=el("br_results");
+    if(!RESULTS.length){ wrap.innerHTML=`<div class="placeholder"><div class="big">조건에 맞는 조합이 없어요</div><div class="mono" style="font-size:12px">최소 거래수나 대기시간을 조정해보세요</div></div>`; return; }
+    const rs=RESULTS.slice().sort((a,b)=>{
+      const v=SORT.key==="label"
+        ? String(a.label).localeCompare(String(b.label),"ko")
+        : (SORT.key==="mar"?a.mar-b.mar:SORT.key==="totalRet"?a.totalRet-b.totalRet:SORT.key==="payoff"?a.payoff-b.payoff:SORT.key==="winrate"?a.winrate-b.winrate:SORT.key==="mdd"?a.mdd-b.mdd:SORT.key==="trades"?a.trades-b.trades:SORT.key==="N"?a.N-b.N:SORT.key==="slK"?a.slK-b.slK:SORT.key==="setups"?a.setups-b.setups:a.tpK-b.tpK);
+      return SORT.dir*v;
+    });
+    const best=RESULTS.slice().sort((a,b)=>(b.mar===Infinity?1e9:b.mar)-(a.mar===Infinity?1e9:a.mar))[0];
+    const bestRet=Math.max(...RESULTS.map(r=>r.totalRet));
+    const bestMar=Math.max(...RESULTS.map(r=>r.mar===Infinity?-1:r.mar));
+    const worstMdd=Math.min(...RESULTS.map(r=>r.mdd));
+    const head=(k,main,sub)=>`<th class="br-sort" data-k="${k}"><span class="th-main">${main}${arrow(k)}</span>${sub?`<span class="th-sub">${sub}</span>`:""}</th>`;
+    const rows=rs.map(r=>`<tr class="${r===best?'db-hot':''}">
+      <td class="mono dimv">${r.label}</td>
+      <td class="num">${r.N}</td>
+      <td class="num">${r.slK}</td>
+      <td class="num">${r.tpK}</td>
+      <td class="num">${r.trades}</td>
+      <td class="num">${(r.winrate*100).toFixed(0)}%</td>
+      <td class="num ${r.payoff>=1?'pos':'neg'}">${payoffStr(r.payoff)}</td>
+      <td class="num ${r.totalRet===bestRet?'hl-good':(r.totalRet>=0?'pos':'neg')}">${pct(r.totalRet)}</td>
+      <td class="num ${r.mdd===worstMdd?'hl-bad':'neg'}">${(r.mdd*100).toFixed(1)}%</td>
+      <td class="num ${r.mar===bestMar&&r.mar!==Infinity?'hl-good':'cy'}">${marStr(r.mar)}</td>
+      <td class="num dimv">${r.tpC}/${r.slC}${r.eodC?"/"+r.eodC:""}</td>
+      <td class="num dimv">${r.setups}</td>
+    </tr>`).join("");
+    wrap.innerHTML=`
+      <div class="db-best">최적 조합(MAR) · <b class="amb">${best.label} · ${best.N}분할 · 손절 ${best.slK}KR · 익절 ${best.tpK}KR</b>
+        → 총수익 <b class="${best.totalRet>=0?'pos':'neg'}">${pct(best.totalRet)}</b> · MDD <b class="neg">${(best.mdd*100).toFixed(1)}%</b> · MAR <b class="cy">${marStr(best.mar)}</b> · 거래 ${best.trades} · 승률 ${(best.winrate*100).toFixed(0)}%</div>
+      <div class="ctable-wrap"><table class="ctable"><thead><tr>
+        ${head("label","데이터","TF")}${head("N","분할","N")}${head("slK","손절","×KR")}${head("tpK","익절","×KR")}
+        ${head("trades","거래","TRADES")}${head("winrate","승률","WIN")}${head("payoff","손익비","PAYOFF")}
+        ${head("totalRet","총수익","RETURN")}${head("mdd","최대낙폭","MDD")}${head("mar","위험대비","MAR")}
+        <th><span class="th-main">청산</span><span class="th-sub">TP/SL/E</span></th>${head("setups","셋업","120 touch")}
+      </tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="note" style="margin-top:14px"><b class="hl-good">초록</b>=최고 총수익/MAR · <b class="hl-bad">빨강</b>=최대 낙폭 · 호박색 줄=MAR 최적 · KR=돌파 H1 내부 10분봉 최대 TR · 셋업=추세확인 뒤 120SMA 첫 터치 발생 수.</div>`;
+    wrap.querySelectorAll(".br-sort").forEach(th=>th.onclick=()=>{
+      const k=th.dataset.k;
+      if(SORT.key===k)SORT.dir*=-1; else{ SORT.key=k; SORT.dir=(k==="mdd"||k==="label"?1:-1); }
+      render();
+    });
+  }
+
+  $$("#br_syms button").forEach(b=>b.onclick=()=>b.classList.toggle("on"));
+  el("br_run").onclick=run;
 })();
 
 /* ============================================================

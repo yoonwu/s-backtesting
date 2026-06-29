@@ -201,16 +201,26 @@ void PlaceEntryOrders()
    g_SL = isShort ? extreme + InpSL_x*g_brkTR : extreme - InpSL_x*g_brkTR;
 
    int    dig = (int)SymbolInfoInteger(_Symbol,SYMBOL_DIGITS);
+   double ask = SymbolInfoDouble(_Symbol,SYMBOL_ASK);
+   double bid = SymbolInfoDouble(_Symbol,SYMBOL_BID);
    ArrayResize(g_orderPrices,N);
    for(int k=0;k<N;k++)
      {
       double p=NormalizeDouble(prices[k],dig);
       g_orderPrices[k]=p;
-      // 롱=BUY LIMIT(현재가 아래), 숏=SELL LIMIT(현재가 위) 가정.
-      // 가격이 이미 지나간 차수는 시장가 근접 → 지정가 거부될 수 있으니 스킵 보호.
       bool ok;
-      if(isShort) ok=g_trade.SellLimit(InpLotPerEntry,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
-      else        ok=g_trade.BuyLimit (InpLotPerEntry,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
+      if(isShort)
+        {
+         // 숏: 현재가보다 위면 SellLimit, 아래면 SellStop
+         if(p >= bid) ok=g_trade.SellLimit(InpLotPerEntry,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
+         else         ok=g_trade.SellStop (InpLotPerEntry,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
+        }
+      else
+        {
+         // 롱: 현재가보다 아래면 BuyLimit, 위면 BuyStop
+         if(p <= ask) ok=g_trade.BuyLimit(InpLotPerEntry,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
+         else         ok=g_trade.BuyStop (InpLotPerEntry,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
+        }
       if(!ok) PrintFormat("주문 실패 차수%d @%.*f (%s)",k,dig,p,g_trade.ResultRetcodeDescription());
      }
    g_state=ST_ENTERING; g_barsSince=0;

@@ -571,19 +571,11 @@
           </div>
         </div>
 
-        <div class="field"><label>익절 기준</label>
-          <div class="subtabs" id="db_tpmode" data-cur="fixed" style="margin-bottom:0">
-            <button data-m="fixed" class="on" id="db_tpfixed_btn">돌파봉 고가</button><button data-m="avg">평단</button>
-          </div></div>
-
-        <div class="field"><label id="db_emode_label">매수 방식</label>
-          <div class="subtabs" id="db_emode" data-cur="n" style="margin-bottom:4px">
-            <button data-e="n" class="on">등분 N</button><button data-e="tr">TR 분할</button>
-          </div>
-          <div class="hint" id="db_emode_hint">고가~저가를 N등분해 각 가격에 지정가 매수</div>
+        <div class="field"><label>매수 방식 · 익절 기준</label>
+          <div class="hint">등분·TR분할, 돌파봉·평단 익절을 <b>모두 한 표에서 비교</b>합니다 (토글 없음). 안 쓸 방식은 칸을 비우세요.</div>
         </div>
-        <div id="db_nrow" class="field"><label>등분 N (정수, 콤마 구분 · 1=단일진입)</label><input id="db_N" class="mono" value="1,2,3,4,5,6"></div>
-        <div id="db_trrow" class="field" style="display:none"><label>TR 분할수 (정수, 콤마 구분)</label><input id="db_trN" class="mono" value="3,5,8,10"><div class="hint" id="db_trrow_hint">1TR→고가만, 2TR→고가·고가−TR, 3TR→고가·고가−TR·고가−2TR … 손절은 마지막 매수가 아래</div></div>
+        <div id="db_nrow" class="field"><label>등분 N (정수, 콤마 구분 · 1=단일진입 · 비우면 미사용)</label><input id="db_N" class="mono" value="1,2,3,4,5,6"></div>
+        <div id="db_trrow" class="field"><label>TR 분할수 (정수, 콤마 구분 · 비우면 미사용)</label><input id="db_trN" class="mono" value="1,2,3"><div class="hint" id="db_trrow_hint">1TR→고가만, 2TR→고가·고가−TR, 3TR→고가·고가−TR·고가−2TR … 손절은 마지막 매수가 아래</div></div>
 
         <div class="row2">
           <div class="field"><label>손절폭 ×TR</label><input id="db_sl" class="mono" value="0.25,0.33,0.5,0.75,1,1.25,1.5"></div>
@@ -2296,7 +2288,7 @@ function drawRSI(rCurve,holdCurve,log){
     const totalRet=equity-1;
     const mar=maxDD<0?totalRet/Math.abs(maxDD):(totalRet>0?Infinity:0);
     const key=entryMode==="tr"?numTR:N;
-    return {entryMode,direction,key,slK,tpK,trades,winrate,payoff,totalRet,mdd:maxDD,mar,tpC,slC,eodC,confSkip,useConfirm,strategy:useConfirm?"더블비컨펌":"더블비"};
+    return {entryMode,direction,key,slK,tpK,tpMode,trades,winrate,payoff,totalRet,mdd:maxDD,mar,tpC,slC,eodC,confSkip,useConfirm,strategy:useConfirm?"더블비컨펌":"더블비"};
   }
   function parseMT5(text){
     const lines=text.split(/\r?\n/), out=[];
@@ -2343,35 +2335,14 @@ function drawRSI(rCurve,holdCurve,log){
     el("db_storedRow").style.display = s==="stored"?"":"none";
     el("db_tfrow").style.display     = s==="stored"?"none":"";
   }
-  function setTpMode(m){ $$("#db_tpmode button").forEach(b=>b.classList.toggle("on",b.dataset.m===m)); el("db_tpmode").dataset.cur=m; }
   function setDir(d){
     DIRECTION=d;
     $$("#db_dir button").forEach(b=>b.classList.toggle("on",b.dataset.d===d));
     el("db_dir").dataset.cur=d;
     const isS=d==="short";
-    el("db_tpfixed_btn").textContent=isS?"돌파봉 저가":"돌파봉 고가";
-    el("db_emode_label").textContent=isS?"매도 방식":"매수 방식";
-    setEmode(EMODE);
-  }
-  function setEmode(e){
-    EMODE=e;
-    $$("#db_emode button").forEach(b=>b.classList.toggle("on",b.dataset.e===e));
-    el("db_emode").dataset.cur=e;
-    el("db_nrow").style.display  = e==="n"?"":"none";
-    el("db_trrow").style.display = e==="tr"?"":"none";
-    const isS=DIRECTION==="short";
-    if(e==="tr"){
-      el("db_emode_hint").textContent=isS
-        ?"1차=저가, 2차=저가+TR, 3차=저가+2TR … 손절은 마지막 매도가 위"
-        :"1차=고가, 2차=고가−TR, 3차=고가−2TR … 손절은 마지막 매수가 아래";
-      el("db_trrow_hint").textContent=isS
-        ?"1TR→저가만, 2TR→저가·저가+TR … 손절은 마지막 매도가 위"
-        :"1TR→고가만, 2TR→고가·고가−TR, 3TR→고가·고가−TR·고가−2TR … 손절은 마지막 매수가 아래";
-    } else {
-      el("db_emode_hint").textContent=isS
-        ?"저가~고가를 N등분해 각 가격에 지정가 매도"
-        :"고가~저가를 N등분해 각 가격에 지정가 매수";
-    }
+    if(el("db_trrow_hint"))el("db_trrow_hint").textContent=isS
+      ?"1TR→저가만, 2TR→저가·저가+TR … 손절은 마지막 매도가 위"
+      :"1TR→고가만, 2TR→고가·고가−TR, 3TR→고가·고가−TR·고가−2TR … 손절은 마지막 매수가 아래";
   }
 
   function parseList(str,intOnly,minV){
@@ -2424,8 +2395,6 @@ function drawRSI(rCurve,holdCurve,log){
     err(""); RESULTS=[];
     const btn=el("db_run"); btn.disabled=true;
     try{
-      const emode=EMODE;
-      const tpMode=el("db_tpmode").dataset.cur;
       const expiryM=Math.max(1,+el("db_expiry").value||20);
       const minTr=Math.max(0,+el("db_min").value||0);
       const useBase=el("db_use_base").checked;
@@ -2437,14 +2406,19 @@ function drawRSI(rCurve,holdCurve,log){
       if(useConfirm)strategies.push({label:"더블비컨펌",confirm:true});
       const slKs=parseList(el("db_sl").value,false,0);
       const tpKs=parseList(el("db_tp").value,false,0);
-      const gridDim = emode==="tr"
-        ? parseList(el("db_trN").value,true,1)
-        : parseList(el("db_N").value,true,1);
-      if(!gridDim.length||!slKs.length||!tpKs.length)throw new Error("매수 파라미터·손절·익절 값을 1개 이상 입력하세요");
+      const nList=parseList(el("db_N").value,true,1);
+      const trList=parseList(el("db_trN").value,true,1);
+      const entryModes=[];
+      if(nList.length)entryModes.push({mode:"n",dims:nList});
+      if(trList.length)entryModes.push({mode:"tr",dims:trList});
+      if(!entryModes.length)throw new Error("등분 N 또는 TR 분할수를 1개 이상 입력하세요");
+      if(!slKs.length||!tpKs.length)throw new Error("손절·익절 값을 1개 이상 입력하세요");
+      const tpModes=["fixed","avg"];   // 돌파봉·평단 둘 다
       const dir=DIRECTION;
       const months=+el("db_months").value||0;
       const sources=await loadDataSources();
-      const perTotal=gridDim.length*slKs.length*tpKs.length*strategies.length;
+      const dimCount=entryModes.reduce((a,em)=>a+em.dims.length,0);
+      const perTotal=dimCount*slKs.length*tpKs.length*strategies.length*tpModes.length;
       let total=0;
       const res=[];
       for(let si=0; si<sources.length; si++){
@@ -2454,10 +2428,10 @@ function drawRSI(rCurve,holdCurve,log){
         status(`엔진 실행 (${si+1}/${sources.length}) ${src.label} · ${bars.length.toLocaleString()}봉 · ${perTotal}조합…`);
         const upper=doubleUpper(bars), lower=doubleLower(bars);
         const span=bars[0].day+" ~ "+bars[bars.length-1].day;
-        for(const st of strategies)for(const d of gridDim)for(const s of slKs)for(const t of tpKs){
-          const r = emode==="tr"
-            ? backtest(bars,upper,lower,dir,"tr",1,d,s,t,tpMode,expiryM,st.confirm,confW)
-            : backtest(bars,upper,lower,dir,"n",d,1,s,t,tpMode,expiryM,st.confirm,confW);
+        for(const st of strategies)for(const em of entryModes)for(const d of em.dims)for(const s of slKs)for(const t of tpKs)for(const tpm of tpModes){
+          const r = em.mode==="tr"
+            ? backtest(bars,upper,lower,dir,"tr",1,d,s,t,tpm,expiryM,st.confirm,confW)
+            : backtest(bars,upper,lower,dir,"n",d,1,s,t,tpm,expiryM,st.confirm,confW);
           r.strategy=st.label; r.dataLabel=src.label; r.file=src.file; r.bars=bars.length; r.span=span;
           if(r.trades>=minTr)res.push(r);
         }
@@ -2488,14 +2462,19 @@ function drawRSI(rCurve,holdCurve,log){
   function render(){
     const wrap=el("db_results");
     if(!RESULTS.length){ wrap.innerHTML=`<div class="placeholder"><div class="big">조건에 맞는 조합이 없어요</div><div class="mono" style="font-size:12px">최소 거래수를 낮추거나 파라미터 범위를 넓혀보세요</div></div>`; return; }
-    const isT=EMODE==="tr";
-    const dimLabel=isT?"TR수":"등분";
+    const entOf=r=>r.entryMode==="tr"?`TR${r.key}`:(r.key===1?"단일":`${r.key}등분`);
+    const tpOf=r=>r.tpMode==="avg"?"평단":"돌파봉";
+    const entOrd=r=>(r.entryMode==="tr"?1e6:0)+(+r.key);
     const bank=Math.max(0,+el("db_bank").value||10000);
     const rs=RESULTS.slice().sort((a,b)=>{
       const v=SORT.key==="dataLabel"
         ? String(a.dataLabel||"").localeCompare(String(b.dataLabel||""),"ko")
         : SORT.key==="strategy"
           ? String(a.strategy||"").localeCompare(String(b.strategy||""),"ko")
+        : SORT.key==="tpMode"
+          ? String(a.tpMode||"").localeCompare(String(b.tpMode||""),"ko")
+        : SORT.key==="entry"
+          ? entOrd(a)-entOrd(b)
           : (SORT.key==="mar"?a.mar-b.mar:SORT.key==="totalRet"||SORT.key==="profit"?a.totalRet-b.totalRet:SORT.key==="payoff"?a.payoff-b.payoff:SORT.key==="winrate"?a.winrate-b.winrate:SORT.key==="mdd"?a.mdd-b.mdd:SORT.key==="trades"?a.trades-b.trades:SORT.key==="confSkip"?(a.confSkip||0)-(b.confSkip||0):SORT.key==="key"?a.key-b.key:SORT.key==="slK"?a.slK-b.slK:a.tpK-b.tpK);
       return SORT.dir*v;
     });
@@ -2510,7 +2489,8 @@ function drawRSI(rCurve,holdCurve,log){
       return `<tr class="${hot?'db-hot':''}">
         <td class="mono dimv">${r.dataLabel||""}</td>
         <td class="mono">${r.strategy||""}</td>
-        <td class="num">${r.key}</td>
+        <td class="mono">${entOf(r)}</td>
+        <td class="dimv">${tpOf(r)}</td>
         <td class="num">${r.slK}</td>
         <td class="num">${r.tpK}</td>
         <td class="num">${r.trades}</td>
@@ -2523,28 +2503,27 @@ function drawRSI(rCurve,holdCurve,log){
         <td class="num dimv">${r.tpC}/${r.slC}${r.eodC?'/'+r.eodC:''}</td>
         <td class="num"><button class="db-save" data-i="${ri}" title="이 전략을 저장된 전략 목록에 추가">저장</button></td></tr>`;
     }).join("");
-    const bestLabel=isT?`TR${best.key}분할`:`${best.key}등분`;
+    const bestLabel=best.entryMode==="tr"?`TR${best.key}분할`:(best.key===1?"단일":`${best.key}등분`);
     const bestProfit=best.totalRet*bank;
     wrap.innerHTML=`
-      <div class="db-best">최적 조합(MAR) · <b class="amb">${best.dataLabel||"데이터"} · ${best.strategy||"전략"} · ${bestLabel} · 손절 ${best.slK}TR · 익절 ${best.tpK}TR</b>
+      <div class="db-best">최적 조합(MAR) · <b class="amb">${best.dataLabel||"데이터"} · ${best.strategy||"전략"} · ${bestLabel} · ${tpOf(best)}익절 · 손절 ${best.slK}TR · 익절 ${best.tpK}TR</b>
         → 총수익 <b class="${best.totalRet>=0?'pos':'neg'}">${pct(best.totalRet)}</b> · 총 수익금 <b class="${bestProfit>=0?'pos':'neg'}">${money(bestProfit)}</b> <span class="dimv">($${bank.toLocaleString("en-US")} 기준)</span> · MDD <b class="neg">${(best.mdd*100).toFixed(1)}%</b> · MAR <b class="cy">${marStr(best.mar)}</b> · 거래 ${best.trades} · 승률 ${(best.winrate*100).toFixed(0)}%</div>
       <div class="ctable-wrap"><table class="ctable"><thead><tr>
         ${head("dataLabel","데이터","CSV")}
         ${head("strategy","전략","TYPE")}
-        ${head("key",dimLabel,isT?"TR":"N")}${head("slK","손절","×TR")}${head("tpK","익절","×TR")}
+        ${head("entry","진입","ENTRY")}${head("tpMode","익절기준","TP")}${head("slK","손절","×TR")}${head("tpK","익절","×TR")}
         ${head("trades","거래","TRADES")}${head("winrate","승률","WIN")}${head("payoff","손익비","PAYOFF")}
         ${head("totalRet","총수익","RETURN")}${head("profit","총 수익금","$")}
         ${head("mdd","최대낙폭","MDD")}${head("mar","위험대비","MAR")}
         <th><span class="th-main">청산</span><span class="th-sub">TP/SL</span></th>
         <th><span class="th-main">저장</span><span class="th-sub">SAVE</span></th>
       </tr></thead><tbody>${rows}</tbody></table></div>
-      <div class="note" style="margin-top:14px"><b class="hl-good">초록</b>=최고 총수익/MAR · <b class="hl-bad">빨강</b>=최대 낙폭 · 호박색 줄=MAR 최적 · 더블비/더블비컨펌을 같은 표에 합쳐 비교 · 총 수익금은 기준자금×총수익률 단순 환산 · 청산열=익절/손절(+미청산) 횟수. 손익비=평균이익÷평균손실, MAR=총수익÷|MDD|.</div>`;
+      <div class="note" style="margin-top:14px"><b class="hl-good">초록</b>=최고 총수익/MAR · <b class="hl-bad">빨강</b>=최대 낙폭 · 호박색 줄=MAR 최적 · 더블비/더블비컨펌·등분/TR분할·돌파봉/평단 익절을 모두 한 표에 합쳐 비교 · 총 수익금은 기준자금×총수익률 단순 환산 · 청산열=익절/손절(+미청산) 횟수. 손익비=평균이익÷평균손실, MAR=총수익÷|MDD|.</div>`;
     wrap.querySelectorAll(".db-sort").forEach(th=>th.onclick=()=>{
       const k=th.dataset.k;
-      if(SORT.key===k)SORT.dir*=-1; else{ SORT.key=k; SORT.dir=(k==="mdd"||k==="dataLabel"||k==="strategy"||k==="confSkip"?1:-1); }
+      if(SORT.key===k)SORT.dir*=-1; else{ SORT.key=k; SORT.dir=(k==="mdd"||k==="dataLabel"||k==="strategy"||k==="entry"||k==="tpMode"||k==="confSkip"?1:-1); }
       render();
     });
-    const tpModeNow=el("db_tpmode").dataset.cur;
     const confWNow=Math.max(1,Math.round(+el("db_confw").value||5));
     const monthsNow=+el("db_months").value||0;
     wrap.querySelectorAll(".db-save").forEach(btn=>btn.onclick=()=>{
@@ -2552,7 +2531,7 @@ function drawRSI(rCurve,holdCurve,log){
       const entry=r.entryMode==="tr"?`TR${r.key}분할`:(r.key===1?"단일":`${r.key}등분`);
       const ok=StrategyStore.add({
         data:r.dataLabel||"", strategy:r.strategy||"", direction:r.direction==="short"?"숏":"롱",
-        entry, slK:r.slK, tpK:r.tpK, tpMode:tpModeNow==="avg"?"평단":"돌파봉",
+        entry, slK:r.slK, tpK:r.tpK, tpMode:r.tpMode==="avg"?"평단":"돌파봉",
         confW:r.useConfirm?confWNow:null, months:monthsNow,
         trades:r.trades, winrate:r.winrate, payoff:r.payoff, totalRet:r.totalRet, mdd:r.mdd, mar:r.mar,
       });
@@ -2568,8 +2547,6 @@ function drawRSI(rCurve,holdCurve,log){
       Array.from({length:24},(_,i)=>`<option value="${i+1}">최근 ${i+1}개월</option>`).join("");
     renderCsvChecks("db", Math.max(0, CSV_FILES.findIndex(cf=>cf.sym==="US100"&&cf.tf==="M5")));
     $$("#db_src button").forEach(b=>b.onclick=()=>setSrc(b.dataset.s));
-    $$("#db_tpmode button").forEach(b=>b.onclick=()=>setTpMode(b.dataset.m));
-    $$("#db_emode button").forEach(b=>b.onclick=()=>setEmode(b.dataset.e));
     el("db_file").onchange=async e=>{
       const f=e.target.files[0]; if(!f)return;
       try{ RAWCACHE.__upload__=parseMT5(await f.text()); RAWCACHE.__uploadName__=f.name; status(`업로드됨: ${f.name} · ${RAWCACHE.__upload__.length.toLocaleString()}행`); err(""); }
@@ -2580,7 +2557,7 @@ function drawRSI(rCurve,holdCurve,log){
     el("db_bank").oninput=()=>{ if(RESULTS.length)render(); };
     el("db_run").onclick=run;
     el("db_from").value=daysAgo(730); el("db_to").value=today();
-    setSrc("stored"); setTpMode("fixed"); setDir("long"); setEmode("n");
+    setSrc("stored"); setDir("long");
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init); else init();
 })();

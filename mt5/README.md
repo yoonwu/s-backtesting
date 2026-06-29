@@ -23,10 +23,14 @@ LEVERAGE LAB 더블비 백테스트를 MT5에서 그대로 돌리는 Expert Advi
 
 > 공통: `InpLotPerEntry`=차수당 랏(자금에 맞게), `InpExpiryBars`=50, `InpMaxSpreadPts`=0(또는 브로커 스프레드 기준 상한).
 > 분할 차수당 랏 × 분할수 = 한 셋업 최대 노출. 예) 등분4 × 0.01랏 = 최대 0.04랏.
+>
+> ⚠️ **2026-06-29 Hantec 종목 변경**: 지수 소형심볼 `.b`(US100.b 등)가 **청산전용(Close Only)**으로 전환됨 → 신규진입 불가.
+> 나스닥은 **`US100.x`**(계약단위 10, 최소랏 0.01)로 거래. `US100.x` 0.01랏 = 옛 `US100.b` 0.1랏과 동일 노출.
+> 커미션 6 USD/랏. 골드(XAUUSD)는 변경 대상 아님(거래 전 명세서에서 "거래: 전체 가능" 재확인 권장).
 
 | 입력 | ① 나스닥 단기롱 | ④ 골드 단기숏 | ⑤ 나스닥 장기롱 | ⑥ 골드 스윙롱 | ⑦ 골드 단기롱 |
 |------|----------------|--------------|----------------|--------------|--------------|
-| **차트 종목** | US100 | XAUUSD | US100 | XAUUSD | XAUUSD |
+| **차트 종목** | **US100.x** | XAUUSD | **US100.x** | XAUUSD | XAUUSD |
 | **차트 TF** | **M5** | **M5** | **H1** | **H2** | **M5** |
 | InpDir | LONG | SHORT | LONG | LONG | LONG |
 | InpEntryMode | TR분할 | 등분N | 등분N | 등분N | TR분할 |
@@ -37,6 +41,7 @@ LEVERAGE LAB 더블비 백테스트를 MT5에서 그대로 돌리는 Expert Advi
 | InpMAPeriod | 120 | 200 | 0 | 0 | 120 |
 | InpUseConfirm | false | false | **true** | false | **true** |
 | InpConfirmWin | — | — | 3 | — | 5 |
+| **InpLotPerEntry** | 0.01 | 0.01 | 0.01 | 0.01 | 0.01 |
 | **InpMagic** | 990001 | 990004 | 990005 | 990006 | 990007 |
 
 ### 백테스트 성과(무비용, 참고)

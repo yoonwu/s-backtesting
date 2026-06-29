@@ -541,7 +541,7 @@
           </div>
           <div class="hint" id="db_emode_hint">고가~저가를 N등분해 각 가격에 지정가 매수</div>
         </div>
-        <div id="db_nrow" class="field"><label>등분 N (정수, 콤마 구분)</label><input id="db_N" class="mono" value="2,3,4,5,6"></div>
+        <div id="db_nrow" class="field"><label>등분 N (정수, 콤마 구분 · 1=단일진입)</label><input id="db_N" class="mono" value="1,2,3,4,5,6"></div>
         <div id="db_trrow" class="field" style="display:none"><label>TR 분할수 (정수, 콤마 구분)</label><input id="db_trN" class="mono" value="3,5,8,10"><div class="hint" id="db_trrow_hint">1TR→고가만, 2TR→고가·고가−TR, 3TR→고가·고가−TR·고가−2TR … (SL 아래까지 뻗을 수 있음)</div></div>
 
         <div class="row2">
@@ -606,7 +606,7 @@
           </div>
           <div class="hint" id="dc_emode_hint">고가~저가를 N등분해 각 가격에 지정가 매수</div>
         </div>
-        <div id="dc_nrow" class="field"><label>등분 N (정수, 콤마 구분)</label><input id="dc_N" class="mono" value="2,3,4,5,6"></div>
+        <div id="dc_nrow" class="field"><label>등분 N (정수, 콤마 구분 · 1=단일진입)</label><input id="dc_N" class="mono" value="1,2,3,4,5,6"></div>
         <div id="dc_trrow" class="field" style="display:none"><label>TR 분할수 (정수, 콤마 구분)</label><input id="dc_trN" class="mono" value="3,5,8,10"><div class="hint" id="dc_trrow_hint">1TR→고가만, 2TR→고가·고가−TR, … (SL 아래까지 뻗을 수 있음)</div></div>
         <div class="row2">
           <div class="field"><label>손절폭 ×TR</label><input id="dc_sl" class="mono" value="0.25,0.33,0.5,0.75,1,1.25,1.5"></div>
@@ -2181,7 +2181,7 @@ function drawRSI(rCurve,holdCurve,log){
       const tpKs=parseList(el("db_tp").value,false,0);
       const gridDim = emode==="tr"
         ? parseList(el("db_trN").value,true,1)
-        : parseList(el("db_N").value,true,2);
+        : parseList(el("db_N").value,true,1);
       if(!gridDim.length||!slKs.length||!tpKs.length)throw new Error("매수 파라미터·손절·익절 값을 1개 이상 입력하세요");
       const dir=DIRECTION;
       const bars=await loadData();
@@ -2494,7 +2494,7 @@ function drawRSI(rCurve,holdCurve,log){
       const tpKs=parseList(el("dc_tp").value,false,0);
       const gridDim = emode==="tr"
         ? parseList(el("dc_trN").value,true,1)
-        : parseList(el("dc_N").value,true,2);
+        : parseList(el("dc_N").value,true,1);
       if(!gridDim.length||!slKs.length||!tpKs.length)throw new Error("매수 파라미터·손절·익절 값을 1개 이상 입력하세요");
       const bars=await loadData();
       if(bars.length<60)throw new Error(`봉 수가 너무 적음(${bars.length}).`);

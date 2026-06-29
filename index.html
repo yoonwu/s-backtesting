@@ -524,19 +524,25 @@
           <div class="field"><label>타임프레임</label><select id="db_tf"><option value="5m">5분봉</option><option value="10m">10분봉 (5분 합성)</option><option value="1h">1시간봉</option><option value="1d">일봉</option></select></div>
         </div>
 
+        <div class="field"><label>방향</label>
+          <div class="subtabs" id="db_dir" data-cur="long">
+            <button data-d="long" class="on">롱 (매수)</button><button data-d="short">숏 (매도)</button>
+          </div>
+        </div>
+
         <div class="field"><label>익절 기준</label>
           <div class="subtabs" id="db_tpmode" data-cur="fixed" style="margin-bottom:0">
-            <button data-m="fixed" class="on">돌파봉 고가</button><button data-m="avg">평단</button>
+            <button data-m="fixed" class="on" id="db_tpfixed_btn">돌파봉 고가</button><button data-m="avg">평단</button>
           </div></div>
 
-        <div class="field"><label>매수 방식</label>
+        <div class="field"><label id="db_emode_label">매수 방식</label>
           <div class="subtabs" id="db_emode" data-cur="n" style="margin-bottom:4px">
             <button data-e="n" class="on">등분 N</button><button data-e="tr">TR 분할</button>
           </div>
           <div class="hint" id="db_emode_hint">고가~저가를 N등분해 각 가격에 지정가 매수</div>
         </div>
         <div id="db_nrow" class="field"><label>등분 N (정수, 콤마 구분)</label><input id="db_N" class="mono" value="2,3,4,5,6"></div>
-        <div id="db_trrow" class="field" style="display:none"><label>TR 분할수 (정수, 콤마 구분)</label><input id="db_trN" class="mono" value="3,5,8,10"><div class="hint">1TR→고가만, 2TR→고가·고가−TR, 3TR→고가·고가−TR·고가−2TR … (SL 아래까지 뻗을 수 있음)</div></div>
+        <div id="db_trrow" class="field" style="display:none"><label>TR 분할수 (정수, 콤마 구분)</label><input id="db_trN" class="mono" value="3,5,8,10"><div class="hint" id="db_trrow_hint">1TR→고가만, 2TR→고가·고가−TR, 3TR→고가·고가−TR·고가−2TR … (SL 아래까지 뻗을 수 있음)</div></div>
 
         <div class="row2">
           <div class="field"><label>손절폭 ×TR</label><input id="db_sl" class="mono" value="0.25,0.33,0.5,0.75,1,1.25,1.5"></div>
@@ -583,19 +589,25 @@
           <div class="field"><label>타임프레임</label><select id="dc_tf"><option value="5m">5분봉</option><option value="10m">10분봉 (5분 합성)</option><option value="1h">1시간봉</option><option value="1d">일봉</option></select></div>
         </div>
 
+        <div class="field"><label>방향</label>
+          <div class="subtabs" id="dc_dir" data-cur="long">
+            <button data-d="long" class="on">롱 (매수)</button><button data-d="short">숏 (매도)</button>
+          </div>
+        </div>
+
         <div class="field"><label>익절 기준</label>
           <div class="subtabs" id="dc_tpmode" data-cur="fixed" style="margin-bottom:0">
-            <button data-m="fixed" class="on">돌파봉 고가</button><button data-m="avg">평단</button>
+            <button data-m="fixed" class="on" id="dc_tpfixed_btn">돌파봉 고가</button><button data-m="avg">평단</button>
           </div></div>
 
-        <div class="field"><label>매수 방식</label>
+        <div class="field"><label id="dc_emode_label">매수 방식</label>
           <div class="subtabs" id="dc_emode" data-cur="n" style="margin-bottom:4px">
             <button data-e="n" class="on">등분 N</button><button data-e="tr">TR 분할</button>
           </div>
           <div class="hint" id="dc_emode_hint">고가~저가를 N등분해 각 가격에 지정가 매수</div>
         </div>
         <div id="dc_nrow" class="field"><label>등분 N (정수, 콤마 구분)</label><input id="dc_N" class="mono" value="2,3,4,5,6"></div>
-        <div id="dc_trrow" class="field" style="display:none"><label>TR 분할수 (정수, 콤마 구분)</label><input id="dc_trN" class="mono" value="3,5,8,10"><div class="hint">1TR→고가만, 2TR→고가·고가−TR, … (SL 아래까지 뻗을 수 있음)</div></div>
+        <div id="dc_trrow" class="field" style="display:none"><label>TR 분할수 (정수, 콤마 구분)</label><input id="dc_trN" class="mono" value="3,5,8,10"><div class="hint" id="dc_trrow_hint">1TR→고가만, 2TR→고가·고가−TR, … (SL 아래까지 뻗을 수 있음)</div></div>
         <div class="row2">
           <div class="field"><label>손절폭 ×TR</label><input id="dc_sl" class="mono" value="0.25,0.33,0.5,0.75,1,1.25,1.5"></div>
           <div class="field"><label>익절폭 ×TR</label><input id="dc_tp" class="mono" value="0.5,1,1.5,2,3,4,5"></div>
@@ -654,7 +666,13 @@
           <div class="field" id="pt_confwRow" style="display:none"><label>컨펌 윈도우 (봉)</label><input id="pt_confw" class="mono" type="number" value="5" min="1" step="1"></div>
         </div>
 
-        <div class="field"><label>매수 방식</label>
+        <div class="field"><label>방향</label>
+          <div class="subtabs" id="pt_dir" data-cur="long">
+            <button data-d="long" class="on">롱 (매수)</button><button data-d="short">숏 (매도)</button>
+          </div>
+        </div>
+
+        <div class="field"><label id="pt_emode_label">매수 방식</label>
           <div class="subtabs" id="pt_emode" data-cur="n" style="margin-bottom:4px">
             <button data-e="n" class="on">등분 N</button><button data-e="tr">TR 분할</button>
           </div>
@@ -1960,53 +1978,73 @@ function drawRSI(rCurve,holdCurve,log){
    엔진은 손계산 10단언 + 실데이터 파리티(+37.1% 재현) 통과본.
    ============================================================ */
 (function(){
-  function bandUpper(series,period,mult){
-    const n=series.length, up=new Array(n).fill(null);
+  function bandBand(series,period,mult,up){
+    const n=series.length, out=new Array(n).fill(null);
     for(let i=period-1;i<n;i++){
       let s=0; for(let k=i-period+1;k<=i;k++)s+=series[k];
       const m=s/period; let v=0;
       for(let k=i-period+1;k<=i;k++){const d=series[k]-m; v+=d*d;}
-      up[i]=m+mult*Math.sqrt(v/period);
+      out[i]=m+(up?1:-1)*mult*Math.sqrt(v/period);
     }
-    return up;
+    return out;
   }
   function doubleUpper(bars){
-    const u1=bandUpper(bars.map(b=>b.o),4,4);
-    const u2=bandUpper(bars.map(b=>b.c),20,2);
-    return bars.map((_,i)=> (u1[i]==null||u2[i]==null)?null:Math.max(u1[i],u2[i]));
+    const u1=bandBand(bars.map(b=>b.o),4,4,true);
+    const u2=bandBand(bars.map(b=>b.c),20,2,true);
+    return bars.map((_,i)=>(u1[i]==null||u2[i]==null)?null:Math.max(u1[i],u2[i]));
   }
-  function backtest(bars,upper,entryMode,N,numTR,slK,tpK,tpMode,expiryM){
-    const n=bars.length;
+  function doubleLower(bars){
+    const l1=bandBand(bars.map(b=>b.o),4,4,false);
+    const l2=bandBand(bars.map(b=>b.c),20,2,false);
+    return bars.map((_,i)=>(l1[i]==null||l2[i]==null)?null:Math.min(l1[i],l2[i]));
+  }
+  function backtest(bars,upper,lower,direction,entryMode,N,numTR,slK,tpK,tpMode,expiryM){
+    const n=bars.length, isShort=direction==="short";
     let equity=1, peak=1, maxDD=0;
     let trades=0, wins=0, losses=0, sumWin=0, sumLoss=0, tpC=0, slC=0, eodC=0;
     let i=1;
     while(i<n){
-      const u=upper[i], up1=upper[i-1];
+      const band=isShort?lower:upper;
+      const u=band[i], up1=band[i-1];
       if(u==null||up1==null){ i++; continue; }
-      if(!(bars[i].c>u && bars[i-1].c<=up1)){ i++; continue; }
+      // 돌파: 롱=상단 상향돌파, 숏=하단 하향이탈
+      if(isShort){ if(!(bars[i].c<u && bars[i-1].c>=up1)){ i++; continue; } }
+      else        { if(!(bars[i].c>u && bars[i-1].c<=up1)){ i++; continue; } }
       const H=bars[i].h, L=bars[i].l, TR=H-L;
       if(TR<=0){ i++; continue; }
       const orders=[];
-      if(entryMode==="tr"){
-        for(let k=0;k<numTR;k++) orders.push({p:H-k*TR,filled:false});
+      if(isShort){
+        // 숏: 저가~고가 구간 매도 (저가부터 위로)
+        if(entryMode==="tr"){ for(let k=0;k<numTR;k++) orders.push({p:L+k*TR,filled:false}); }
+        else { for(let k=0;k<N;k++) orders.push({p:N===1?L:L+(H-L)*k/(N-1),filled:false}); }
       } else {
-        for(let k=0;k<N;k++) orders.push({p:N===1?H:H-(H-L)*k/(N-1),filled:false});
+        // 롱: 고가~저가 구간 매수 (고가부터 아래로)
+        if(entryMode==="tr"){ for(let k=0;k<numTR;k++) orders.push({p:H-k*TR,filled:false}); }
+        else { for(let k=0;k<N;k++) orders.push({p:N===1?H:H-(H-L)*k/(N-1),filled:false}); }
       }
       const ordCount=orders.length;
-      const SL=L-slK*TR;
+      const SL=isShort ? H+slK*TR : L-slK*TR;
       let filled=0,sumFill=0,exited=false,exitPx=0,reason="",exitIdx=-1;
       for(let j=i+1;j<n;j++){
         const b=bars[j];
-        for(const o of orders){ if(!o.filled && b.l<=o.p){ o.filled=true; filled++; sumFill+=o.p; } }
+        if(isShort){ for(const o of orders){ if(!o.filled && b.h>=o.p){ o.filled=true; filled++; sumFill+=o.p; } } }
+        else        { for(const o of orders){ if(!o.filled && b.l<=o.p){ o.filled=true; filled++; sumFill+=o.p; } } }
         if(filled===0){ if(j-i>=expiryM)break; else continue; }
         const avg=sumFill/filled;
-        const TP=tpMode==="avg"?avg+tpK*TR:H+tpK*TR;
-        if(b.l<=SL){ exited=true; exitPx=SL; reason="SL"; exitIdx=j; break; }
-        if(b.h>=TP){ exited=true; exitPx=TP; reason="TP"; exitIdx=j; break; }
+        if(isShort){
+          const TP=tpMode==="avg"?avg-tpK*TR:L-tpK*TR;
+          if(b.h>=SL){ exited=true; exitPx=SL; reason="SL"; exitIdx=j; break; }
+          if(b.l<=TP){ exited=true; exitPx=TP; reason="TP"; exitIdx=j; break; }
+        } else {
+          const TP=tpMode==="avg"?avg+tpK*TR:H+tpK*TR;
+          if(b.l<=SL){ exited=true; exitPx=SL; reason="SL"; exitIdx=j; break; }
+          if(b.h>=TP){ exited=true; exitPx=TP; reason="TP"; exitIdx=j; break; }
+        }
       }
       if(filled===0){ i++; continue; }
       if(!exited){ exitPx=bars[n-1].c; reason="EOD"; exitIdx=n-1; }
-      const avg=sumFill/filled, frac=filled/ordCount, ret=frac*(exitPx-avg)/avg;
+      const avg=sumFill/filled, frac=filled/ordCount;
+      const ret=isShort ? frac*(avg-exitPx)/avg : frac*(exitPx-avg)/avg;
       equity*=(1+ret); if(equity>peak)peak=equity;
       const dd=equity/peak-1; if(dd<maxDD)maxDD=dd;
       trades++;
@@ -2020,7 +2058,7 @@ function drawRSI(rCurve,holdCurve,log){
     const totalRet=equity-1;
     const mar=maxDD<0?totalRet/Math.abs(maxDD):(totalRet>0?Infinity:0);
     const key=entryMode==="tr"?numTR:N;
-    return {entryMode,key,slK,tpK,trades,winrate,payoff,totalRet,mdd:maxDD,mar,tpC,slC,eodC};
+    return {entryMode,direction,key,slK,tpK,trades,winrate,payoff,totalRet,mdd:maxDD,mar,tpC,slC,eodC};
   }
   function parseMT5(text){
     const lines=text.split(/\r?\n/), out=[];
@@ -2056,7 +2094,7 @@ function drawRSI(rCurve,holdCurve,log){
   function daysAgo(n){ const d=new Date(); d.setDate(d.getDate()-n); return d.toISOString().slice(0,10); }
 
   /* ====================== UI ====================== */
-  let RAWCACHE={}, RAWLABEL="", RESULTS=[], SORT={key:"mar",dir:-1}, EMODE="n";
+  let RAWCACHE={}, RAWLABEL="", RESULTS=[], SORT={key:"mar",dir:-1}, EMODE="n", DIRECTION="long";
   const el=id=>document.getElementById(id);
 
   function setSrc(s){
@@ -2068,15 +2106,34 @@ function drawRSI(rCurve,holdCurve,log){
     el("db_tfrow").style.display     = s==="stored"?"none":"";
   }
   function setTpMode(m){ $$("#db_tpmode button").forEach(b=>b.classList.toggle("on",b.dataset.m===m)); el("db_tpmode").dataset.cur=m; }
+  function setDir(d){
+    DIRECTION=d;
+    $$("#db_dir button").forEach(b=>b.classList.toggle("on",b.dataset.d===d));
+    el("db_dir").dataset.cur=d;
+    const isS=d==="short";
+    el("db_tpfixed_btn").textContent=isS?"돌파봉 저가":"돌파봉 고가";
+    el("db_emode_label").textContent=isS?"매도 방식":"매수 방식";
+    setEmode(EMODE);
+  }
   function setEmode(e){
     EMODE=e;
     $$("#db_emode button").forEach(b=>b.classList.toggle("on",b.dataset.e===e));
     el("db_emode").dataset.cur=e;
     el("db_nrow").style.display  = e==="n"?"":"none";
     el("db_trrow").style.display = e==="tr"?"":"none";
-    el("db_emode_hint").textContent = e==="tr"
-      ?"1차=고가, 2차=고가−TR, 3차=고가−2TR … (SL 아래까지 뻗을 수 있음)"
-      :"고가~저가를 N등분해 각 가격에 지정가 매수";
+    const isS=DIRECTION==="short";
+    if(e==="tr"){
+      el("db_emode_hint").textContent=isS
+        ?"1차=저가, 2차=저가+TR, 3차=저가+2TR … (SL 위까지 뻗을 수 있음)"
+        :"1차=고가, 2차=고가−TR, 3차=고가−2TR … (SL 아래까지 뻗을 수 있음)";
+      el("db_trrow_hint").textContent=isS
+        ?"1TR→저가만, 2TR→저가·저가+TR … (SL 위까지 뻗을 수 있음)"
+        :"1TR→고가만, 2TR→고가·고가−TR, 3TR→고가·고가−TR·고가−2TR … (SL 아래까지 뻗을 수 있음)";
+    } else {
+      el("db_emode_hint").textContent=isS
+        ?"저가~고가를 N등분해 각 가격에 지정가 매도"
+        :"고가~저가를 N등분해 각 가격에 지정가 매수";
+    }
   }
 
   function parseList(str,intOnly,minV){
@@ -2126,23 +2183,24 @@ function drawRSI(rCurve,holdCurve,log){
         ? parseList(el("db_trN").value,true,1)
         : parseList(el("db_N").value,true,2);
       if(!gridDim.length||!slKs.length||!tpKs.length)throw new Error("매수 파라미터·손절·익절 값을 1개 이상 입력하세요");
+      const dir=DIRECTION;
       const bars=await loadData();
       if(bars.length<60)throw new Error(`봉 수가 너무 적음(${bars.length}).`);
       const total=gridDim.length*slKs.length*tpKs.length;
       status(`엔진 실행: ${bars.length.toLocaleString()}봉 · ${total}조합…`);
-      const upper=doubleUpper(bars);
+      const upper=doubleUpper(bars), lower=doubleLower(bars);
       const res=[];
       for(const d of gridDim)for(const s of slKs)for(const t of tpKs){
         const r = emode==="tr"
-          ? backtest(bars,upper,"tr",1,d,s,t,tpMode,expiryM)
-          : backtest(bars,upper,"n",d,1,s,t,tpMode,expiryM);
+          ? backtest(bars,upper,lower,dir,"tr",1,d,s,t,tpMode,expiryM)
+          : backtest(bars,upper,lower,dir,"n",d,1,s,t,tpMode,expiryM);
         if(r.trades>=minTr)res.push(r);
       }
       RESULTS=res;
       const src=el("db_src").dataset.cur;
       const lbl=src==="stored"?RAWLABEL:(src==="upload"?(RAWCACHE.__uploadName__||"업로드"):el("db_sym").value)||"데이터";
       const span=bars[0].day+" ~ "+bars[bars.length-1].day;
-      status(`${lbl} · ${bars.length.toLocaleString()}봉 · ${span} · 표시 ${res.length}/${total}조합(최소거래 ${minTr})`);
+      status(`${lbl} · ${bars.length.toLocaleString()}봉 · ${span} · [${dir==="short"?"숏":"롱"}] 표시 ${res.length}/${total}조합(최소거래 ${minTr})`);
       render();
     }catch(e){ err("⚠ "+e.message); status(""); }
     finally{ btn.disabled=false; }
@@ -2215,9 +2273,10 @@ function drawRSI(rCurve,holdCurve,log){
       catch(ex){ err("⚠ "+ex.message); }
     };
     el("db_reload").onclick=()=>{ RAWCACHE={}; RAWLABEL=""; status("캐시 비움 — 다시 돌리면 새로 불러옵니다"); };
+    $$("#db_dir button").forEach(b=>b.onclick=()=>setDir(b.dataset.d));
     el("db_run").onclick=run;
     el("db_from").value=daysAgo(730); el("db_to").value=today();
-    setSrc("stored"); setTpMode("fixed"); setEmode("n");
+    setSrc("stored"); setTpMode("fixed"); setDir("long"); setEmode("n");
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init); else init();
 })();
@@ -2228,56 +2287,76 @@ function drawRSI(rCurve,holdCurve,log){
    매매 기준은 전부 돌파봉, 체결은 컨펌봉 다음 봉부터. 엔진 손계산 9단언 통과본.
    ============================================================ */
 (function(){
-  function bandUpper(series,period,mult){
-    const n=series.length, up=new Array(n).fill(null);
+  function bandBand(series,period,mult,up){
+    const n=series.length, out=new Array(n).fill(null);
     for(let i=period-1;i<n;i++){
       let s=0; for(let k=i-period+1;k<=i;k++)s+=series[k];
       const m=s/period; let v=0;
       for(let k=i-period+1;k<=i;k++){const d=series[k]-m; v+=d*d;}
-      up[i]=m+mult*Math.sqrt(v/period);
+      out[i]=m+(up?1:-1)*mult*Math.sqrt(v/period);
     }
-    return up;
+    return out;
   }
   function doubleUpper(bars){
-    const u1=bandUpper(bars.map(b=>b.o),4,4);
-    const u2=bandUpper(bars.map(b=>b.c),20,2);
-    return bars.map((_,i)=> (u1[i]==null||u2[i]==null)?null:Math.max(u1[i],u2[i]));
+    const u1=bandBand(bars.map(b=>b.o),4,4,true);
+    const u2=bandBand(bars.map(b=>b.c),20,2,true);
+    return bars.map((_,i)=>(u1[i]==null||u2[i]==null)?null:Math.max(u1[i],u2[i]));
   }
-  function backtest(bars,upper,entryMode,N,numTR,slK,tpK,tpMode,expiryM,confW){
-    const n=bars.length;
+  function doubleLower(bars){
+    const l1=bandBand(bars.map(b=>b.o),4,4,false);
+    const l2=bandBand(bars.map(b=>b.c),20,2,false);
+    return bars.map((_,i)=>(l1[i]==null||l2[i]==null)?null:Math.min(l1[i],l2[i]));
+  }
+  function backtest(bars,upper,lower,direction,entryMode,N,numTR,slK,tpK,tpMode,expiryM,confW){
+    const n=bars.length, isShort=direction==="short";
     let equity=1, peak=1, maxDD=0;
     let trades=0, wins=0, losses=0, sumWin=0, sumLoss=0, tpC=0, slC=0, eodC=0, confSkip=0;
     let i=1;
     while(i<n){
-      const u=upper[i], up1=upper[i-1];
+      const band=isShort?lower:upper;
+      const u=band[i], up1=band[i-1];
       if(u==null||up1==null){ i++; continue; }
-      if(!(bars[i].c>u && bars[i-1].c<=up1)){ i++; continue; }
+      if(isShort){ if(!(bars[i].c<u && bars[i-1].c>=up1)){ i++; continue; } }
+      else        { if(!(bars[i].c>u && bars[i-1].c<=up1)){ i++; continue; } }
       const H=bars[i].h, L=bars[i].l, TR=H-L;
       if(TR<=0){ i++; continue; }
+      // 컨펌: 롱=종가>돌파봉 종가, 숏=종가<돌파봉 종가
       let conf=-1;
-      for(let j=i+1;j<n && j<=i+confW;j++){ if(bars[j].c>bars[i].c){ conf=j; break; } }
+      for(let j=i+1;j<n && j<=i+confW;j++){
+        if(isShort?bars[j].c<bars[i].c:bars[j].c>bars[i].c){ conf=j; break; }
+      }
       if(conf<0){ confSkip++; i++; continue; }
       const orders=[];
-      if(entryMode==="tr"){
-        for(let k=0;k<numTR;k++) orders.push({p:H-k*TR,filled:false});
+      if(isShort){
+        if(entryMode==="tr"){ for(let k=0;k<numTR;k++) orders.push({p:L+k*TR,filled:false}); }
+        else { for(let k=0;k<N;k++) orders.push({p:N===1?L:L+(H-L)*k/(N-1),filled:false}); }
       } else {
-        for(let k=0;k<N;k++) orders.push({p:N===1?H:H-(H-L)*k/(N-1),filled:false});
+        if(entryMode==="tr"){ for(let k=0;k<numTR;k++) orders.push({p:H-k*TR,filled:false}); }
+        else { for(let k=0;k<N;k++) orders.push({p:N===1?H:H-(H-L)*k/(N-1),filled:false}); }
       }
       const ordCount=orders.length;
-      const SL=L-slK*TR;
+      const SL=isShort ? H+slK*TR : L-slK*TR;
       let filled=0,sumFill=0,exited=false,exitPx=0,reason="",exitIdx=-1;
       for(let j=conf+1;j<n;j++){
         const b=bars[j];
-        for(const o of orders){ if(!o.filled && b.l<=o.p){ o.filled=true; filled++; sumFill+=o.p; } }
+        if(isShort){ for(const o of orders){ if(!o.filled && b.h>=o.p){ o.filled=true; filled++; sumFill+=o.p; } } }
+        else        { for(const o of orders){ if(!o.filled && b.l<=o.p){ o.filled=true; filled++; sumFill+=o.p; } } }
         if(filled===0){ if(j-conf>=expiryM)break; else continue; }
         const avg=sumFill/filled;
-        const TP=tpMode==="avg"?avg+tpK*TR:H+tpK*TR;
-        if(b.l<=SL){ exited=true; exitPx=SL; reason="SL"; exitIdx=j; break; }
-        if(b.h>=TP){ exited=true; exitPx=TP; reason="TP"; exitIdx=j; break; }
+        if(isShort){
+          const TP=tpMode==="avg"?avg-tpK*TR:L-tpK*TR;
+          if(b.h>=SL){ exited=true; exitPx=SL; reason="SL"; exitIdx=j; break; }
+          if(b.l<=TP){ exited=true; exitPx=TP; reason="TP"; exitIdx=j; break; }
+        } else {
+          const TP=tpMode==="avg"?avg+tpK*TR:H+tpK*TR;
+          if(b.l<=SL){ exited=true; exitPx=SL; reason="SL"; exitIdx=j; break; }
+          if(b.h>=TP){ exited=true; exitPx=TP; reason="TP"; exitIdx=j; break; }
+        }
       }
       if(filled===0){ i++; continue; }
       if(!exited){ exitPx=bars[n-1].c; reason="EOD"; exitIdx=n-1; }
-      const avg=sumFill/filled, frac=filled/ordCount, ret=frac*(exitPx-avg)/avg;
+      const avg=sumFill/filled, frac=filled/ordCount;
+      const ret=isShort ? frac*(avg-exitPx)/avg : frac*(exitPx-avg)/avg;
       equity*=(1+ret); if(equity>peak)peak=equity;
       const dd=equity/peak-1; if(dd<maxDD)maxDD=dd;
       trades++;
@@ -2291,7 +2370,7 @@ function drawRSI(rCurve,holdCurve,log){
     const totalRet=equity-1;
     const mar=maxDD<0?totalRet/Math.abs(maxDD):(totalRet>0?Infinity:0);
     const key=entryMode==="tr"?numTR:N;
-    return {entryMode,key,slK,tpK,trades,winrate,payoff,totalRet,mdd:maxDD,mar,tpC,slC,eodC,confSkip};
+    return {entryMode,direction,key,slK,tpK,trades,winrate,payoff,totalRet,mdd:maxDD,mar,tpC,slC,eodC,confSkip};
   }
   function parseMT5(text){
     const lines=text.split(/\r?\n/), out=[];
@@ -2327,7 +2406,7 @@ function drawRSI(rCurve,holdCurve,log){
   function daysAgo(n){ const d=new Date(); d.setDate(d.getDate()-n); return d.toISOString().slice(0,10); }
 
   /* ====================== UI ====================== */
-  let RAWCACHE={}, RAWLABEL="", RESULTS=[], SORT={key:"mar",dir:-1}, SKIPTOT=0, EMODE="n";
+  let RAWCACHE={}, RAWLABEL="", RESULTS=[], SORT={key:"mar",dir:-1}, SKIPTOT=0, EMODE="n", DIRECTION="long";
   const el=id=>document.getElementById(id);
 
   function setSrc(s){
@@ -2339,15 +2418,34 @@ function drawRSI(rCurve,holdCurve,log){
     el("dc_tfrow").style.display     = s==="stored"?"none":"";
   }
   function setTpMode(m){ $$("#dc_tpmode button").forEach(b=>b.classList.toggle("on",b.dataset.m===m)); el("dc_tpmode").dataset.cur=m; }
+  function setDir(d){
+    DIRECTION=d;
+    $$("#dc_dir button").forEach(b=>b.classList.toggle("on",b.dataset.d===d));
+    el("dc_dir").dataset.cur=d;
+    const isS=d==="short";
+    el("dc_tpfixed_btn").textContent=isS?"돌파봉 저가":"돌파봉 고가";
+    el("dc_emode_label").textContent=isS?"매도 방식":"매수 방식";
+    setEmode(EMODE);
+  }
   function setEmode(e){
     EMODE=e;
     $$("#dc_emode button").forEach(b=>b.classList.toggle("on",b.dataset.e===e));
     el("dc_emode").dataset.cur=e;
     el("dc_nrow").style.display  = e==="n"?"":"none";
     el("dc_trrow").style.display = e==="tr"?"":"none";
-    el("dc_emode_hint").textContent = e==="tr"
-      ?"1차=고가, 2차=고가−TR, 3차=고가−2TR … (SL 아래까지 뻗을 수 있음)"
-      :"고가~저가를 N등분해 각 가격에 지정가 매수";
+    const isS=DIRECTION==="short";
+    if(e==="tr"){
+      el("dc_emode_hint").textContent=isS
+        ?"1차=저가, 2차=저가+TR, 3차=저가+2TR … (SL 위까지 뻗을 수 있음)"
+        :"1차=고가, 2차=고가−TR, 3차=고가−2TR … (SL 아래까지 뻗을 수 있음)";
+      el("dc_trrow_hint").textContent=isS
+        ?"1TR→저가만, 2TR→저가·저가+TR … (SL 위까지 뻗을 수 있음)"
+        :"1TR→고가만, 2TR→고가·고가−TR, … (SL 아래까지 뻗을 수 있음)";
+    } else {
+      el("dc_emode_hint").textContent=isS
+        ?"저가~고가를 N등분해 각 가격에 지정가 매도"
+        :"고가~저가를 N등분해 각 가격에 지정가 매수";
+    }
   }
 
   function parseList(str,intOnly,minV){
@@ -2401,13 +2499,14 @@ function drawRSI(rCurve,holdCurve,log){
       const bars=await loadData();
       if(bars.length<60)throw new Error(`봉 수가 너무 적음(${bars.length}).`);
       const total=gridDim.length*slKs.length*tpKs.length;
+      const dir=DIRECTION;
       status(`엔진 실행: ${bars.length.toLocaleString()}봉 · ${total}조합 · 컨펌 윈도우 ${confW}봉…`);
-      const upper=doubleUpper(bars);
+      const upper=doubleUpper(bars), lower=doubleLower(bars);
       const res=[];
       for(const d of gridDim)for(const s of slKs)for(const t of tpKs){
         const r = emode==="tr"
-          ? backtest(bars,upper,"tr",1,d,s,t,tpMode,expiryM,confW)
-          : backtest(bars,upper,"n",d,1,s,t,tpMode,expiryM,confW);
+          ? backtest(bars,upper,lower,dir,"tr",1,d,s,t,tpMode,expiryM,confW)
+          : backtest(bars,upper,lower,dir,"n",d,1,s,t,tpMode,expiryM,confW);
         SKIPTOT=r.confSkip;
         if(r.trades>=minTr)res.push(r);
       }
@@ -2415,7 +2514,7 @@ function drawRSI(rCurve,holdCurve,log){
       const src=el("dc_src").dataset.cur;
       const lbl=src==="stored"?RAWLABEL:(src==="upload"?(RAWCACHE.__uploadName__||"업로드"):el("dc_sym").value)||"데이터";
       const span=bars[0].day+" ~ "+bars[bars.length-1].day;
-      status(`${lbl} · ${bars.length.toLocaleString()}봉 · ${span} · 컨펌 윈도우 ${confW}봉(컨펌없어 폐기 ${SKIPTOT}건) · 표시 ${res.length}/${total}조합(최소거래 ${minTr})`);
+      status(`${lbl} · ${bars.length.toLocaleString()}봉 · ${span} · [${dir==="short"?"숏":"롱"}] 컨펌 윈도우 ${confW}봉(폐기 ${SKIPTOT}건) · 표시 ${res.length}/${total}조합(최소거래 ${minTr})`);
       render();
     }catch(e){ err("⚠ "+e.message); status(""); }
     finally{ btn.disabled=false; }
@@ -2488,9 +2587,10 @@ function drawRSI(rCurve,holdCurve,log){
       catch(ex){ err("⚠ "+ex.message); }
     };
     el("dc_reload").onclick=()=>{ RAWCACHE={}; RAWLABEL=""; status("캐시 비움 — 다시 돌리면 새로 불러옵니다"); };
+    $$("#dc_dir button").forEach(b=>b.onclick=()=>setDir(b.dataset.d));
     el("dc_run").onclick=run;
     el("dc_from").value=daysAgo(730); el("dc_to").value=today();
-    setSrc("stored"); setTpMode("fixed"); setEmode("n");
+    setSrc("stored"); setTpMode("fixed"); setDir("long"); setEmode("n");
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init); else init();
 })();
@@ -2501,61 +2601,81 @@ function drawRSI(rCurve,holdCurve,log){
    엔진 손계산 12단언 + 골드 5분 sanity 통과본.
    ============================================================ */
 (function(){
-  function bandUpper(series,period,mult){
-    const n=series.length, up=new Array(n).fill(null);
+  function bandBand(series,period,mult,up){
+    const n=series.length, out=new Array(n).fill(null);
     for(let i=period-1;i<n;i++){
       let s=0; for(let k=i-period+1;k<=i;k++)s+=series[k];
       const m=s/period; let v=0;
       for(let k=i-period+1;k<=i;k++){const d=series[k]-m; v+=d*d;}
-      up[i]=m+mult*Math.sqrt(v/period);
+      out[i]=m+(up?1:-1)*mult*Math.sqrt(v/period);
     }
-    return up;
+    return out;
   }
   function doubleUpper(bars){
-    const u1=bandUpper(bars.map(b=>b.o),4,4);
-    const u2=bandUpper(bars.map(b=>b.c),20,2);
-    return bars.map((_,i)=> (u1[i]==null||u2[i]==null)?null:Math.max(u1[i],u2[i]));
+    const u1=bandBand(bars.map(b=>b.o),4,4,true);
+    const u2=bandBand(bars.map(b=>b.c),20,2,true);
+    return bars.map((_,i)=>(u1[i]==null||u2[i]==null)?null:Math.max(u1[i],u2[i]));
+  }
+  function doubleLower(bars){
+    const l1=bandBand(bars.map(b=>b.o),4,4,false);
+    const l2=bandBand(bars.map(b=>b.c),20,2,false);
+    return bars.map((_,i)=>(l1[i]==null||l2[i]==null)?null:Math.min(l1[i],l2[i]));
   }
   /* ---------- 가상매매 시뮬레이션 ---------- */
-  function ptSim(bars,upper,o){
-    const {entryMode,N,numTR,lots,slK,tpK,tpMode,expiryM,useConfirm,confW,contract,startBal}=o;
+  function ptSim(bars,upper,lower,o){
+    const {direction,entryMode,N,numTR,lots,slK,tpK,tpMode,expiryM,useConfirm,confW,contract,startBal}=o;
+    const isShort=direction==="short";
     const n=bars.length, ledger=[];
     let bal=startBal,peak=startBal,maxDD=0,maxDDpct=0;
     let wins=0,losses=0,tpC=0,slC=0,eodC=0,confSkip=0,grossWin=0,grossLoss=0,totLots=0,maxPos=0;
     let i=1;
     while(i<n){
-      const u=upper[i],up1=upper[i-1];
+      const band=isShort?lower:upper;
+      const u=band[i],up1=band[i-1];
       if(u==null||up1==null){i++;continue;}
-      if(!(bars[i].c>u && bars[i-1].c<=up1)){i++;continue;}
+      if(isShort){ if(!(bars[i].c<u && bars[i-1].c>=up1)){i++;continue;} }
+      else        { if(!(bars[i].c>u && bars[i-1].c<=up1)){i++;continue;} }
       const H=bars[i].h,L=bars[i].l,TR=H-L;
       if(TR<=0){i++;continue;}
       let start=i;
       if(useConfirm){
         let conf=-1;
-        for(let j=i+1;j<n && j<=i+confW;j++){ if(bars[j].c>bars[i].c){conf=j;break;} }
+        for(let j=i+1;j<n && j<=i+confW;j++){
+          if(isShort?bars[j].c<bars[i].c:bars[j].c>bars[i].c){conf=j;break;}
+        }
         if(conf<0){ confSkip++; i++; continue; }
         start=conf;
       }
       const orders=[];
-      if(entryMode==="tr"){
-        for(let k=0;k<numTR;k++) orders.push({p:H-k*TR,lot:lots[k]||0,filled:false});
+      if(isShort){
+        if(entryMode==="tr"){ for(let k=0;k<numTR;k++) orders.push({p:L+k*TR,lot:lots[k]||0,filled:false}); }
+        else { for(let k=0;k<N;k++) orders.push({p:N===1?L:L+(H-L)*k/(N-1),lot:lots[k]||0,filled:false}); }
       } else {
-        for(let k=0;k<N;k++) orders.push({p:N===1?H:H-(H-L)*k/(N-1),lot:lots[k]||0,filled:false});
+        if(entryMode==="tr"){ for(let k=0;k<numTR;k++) orders.push({p:H-k*TR,lot:lots[k]||0,filled:false}); }
+        else { for(let k=0;k<N;k++) orders.push({p:N===1?H:H-(H-L)*k/(N-1),lot:lots[k]||0,filled:false}); }
       }
-      const SL=L-slK*TR;
+      const SL=isShort ? H+slK*TR : L-slK*TR;
       let fLots=0,fCnt=0,wsum=0,exited=false,exitPx=0,reason="",exitIdx=-1;
       for(let j=start+1;j<n;j++){
         const b=bars[j];
-        for(const ord of orders){ if(!ord.filled && b.l<=ord.p){ord.filled=true;fCnt++;fLots+=ord.lot;wsum+=ord.p*ord.lot;} }
+        if(isShort){ for(const ord of orders){ if(!ord.filled && b.h>=ord.p){ord.filled=true;fCnt++;fLots+=ord.lot;wsum+=ord.p*ord.lot;} } }
+        else        { for(const ord of orders){ if(!ord.filled && b.l<=ord.p){ord.filled=true;fCnt++;fLots+=ord.lot;wsum+=ord.p*ord.lot;} } }
         if(fLots<=0){ if(j-start>=expiryM)break; else continue; }
         const avg=wsum/fLots;
-        const TP=tpMode==="avg"?avg+tpK*TR:H+tpK*TR;
-        if(b.l<=SL){exited=true;exitPx=SL;reason="SL";exitIdx=j;break;}
-        if(b.h>=TP){exited=true;exitPx=TP;reason="TP";exitIdx=j;break;}
+        if(isShort){
+          const TP=tpMode==="avg"?avg-tpK*TR:L-tpK*TR;
+          if(b.h>=SL){exited=true;exitPx=SL;reason="SL";exitIdx=j;break;}
+          if(b.l<=TP){exited=true;exitPx=TP;reason="TP";exitIdx=j;break;}
+        } else {
+          const TP=tpMode==="avg"?avg+tpK*TR:H+tpK*TR;
+          if(b.l<=SL){exited=true;exitPx=SL;reason="SL";exitIdx=j;break;}
+          if(b.h>=TP){exited=true;exitPx=TP;reason="TP";exitIdx=j;break;}
+        }
       }
       if(fLots<=0){i++;continue;}
       if(!exited){exitPx=bars[n-1].c;reason="EOD";exitIdx=n-1;}
-      const avg=wsum/fLots, pnl=fLots*contract*(exitPx-avg);
+      const avg=wsum/fLots;
+      const pnl=isShort ? fLots*contract*(avg-exitPx) : fLots*contract*(exitPx-avg);
       bal+=pnl; totLots+=fLots; if(fLots>maxPos)maxPos=fLots;
       if(bal>peak)peak=bal;
       const dd=bal-peak; if(dd<maxDD)maxDD=dd;
@@ -2606,7 +2726,7 @@ function drawRSI(rCurve,holdCurve,log){
   function daysAgo(n){ const d=new Date(); d.setDate(d.getDate()-n); return d.toISOString().slice(0,10); }
 
   /* ====================== UI ====================== */
-  let RAWCACHE={}, RAWLABEL="", LAST=null, EMODE="n";
+  let RAWCACHE={}, RAWLABEL="", LAST=null, EMODE="n", DIRECTION="long";
   const el=id=>document.getElementById(id);
 
   function setSrc(s){
@@ -2619,15 +2739,25 @@ function drawRSI(rCurve,holdCurve,log){
   }
   function setTpMode(m){ $$("#pt_tpmode button").forEach(b=>b.classList.toggle("on",b.dataset.m===m)); el("pt_tpmode").dataset.cur=m; }
   function setStrat(x){ $$("#pt_strat button").forEach(b=>b.classList.toggle("on",b.dataset.x===x)); el("pt_strat").dataset.cur=x; el("pt_confwRow").style.display = x==="confirm"?"":"none"; }
+  function setDir(d){
+    DIRECTION=d;
+    $$("#pt_dir button").forEach(b=>b.classList.toggle("on",b.dataset.d===d));
+    el("pt_dir").dataset.cur=d;
+    el("pt_emode_label").textContent=d==="short"?"매도 방식":"매수 방식";
+    setEmode(EMODE);
+  }
   function setEmode(e){
     EMODE=e;
     $$("#pt_emode button").forEach(b=>b.classList.toggle("on",b.dataset.e===e));
     el("pt_emode").dataset.cur=e;
     el("pt_nrow").style.display = e==="n"?"":"none";
     el("pt_trrow").style.display= e==="tr"?"":"none";
+    const isS=DIRECTION==="short";
     el("pt_emode_hint").textContent = e==="tr"
-      ?"1차=고가, 2차=고가−TR, 3차=고가−2TR … (SL 아래까지 뻗을 수 있음)"
-      :"고가~저가를 N등분해 각 가격에 지정가 매수";
+      ?(isS?"1차=저가, 2차=저가+TR, 3차=저가+2TR … (SL 위까지 뻗을 수 있음)"
+           :"1차=고가, 2차=고가−TR, 3차=고가−2TR … (SL 아래까지 뻗을 수 있음)")
+      :(isS?"저가~고가를 N등분해 각 가격에 지정가 매도"
+           :"고가~저가를 N등분해 각 가격에 지정가 매수");
     buildLots();
   }
 
@@ -2694,7 +2824,7 @@ function drawRSI(rCurve,holdCurve,log){
       const lots=readLots();
       if(lots.reduce((a,b)=>a+b,0)<=0)throw new Error("랏을 1개 이상(>0) 입력하세요");
       const o={
-        entryMode:emode, N, numTR, lots,
+        direction:DIRECTION, entryMode:emode, N, numTR, lots,
         slK:Math.max(0,+el("pt_sl").value||0),
         tpK:Math.max(0,+el("pt_tp").value||0),
         tpMode:el("pt_tpmode").dataset.cur,
@@ -2707,8 +2837,8 @@ function drawRSI(rCurve,holdCurve,log){
       const bars=await loadData();
       if(bars.length<60)throw new Error(`봉 수가 너무 적음(${bars.length}).`);
       status(`엔진 실행: ${bars.length.toLocaleString()}봉…`);
-      const upper=doubleUpper(bars);
-      const r=ptSim(bars,upper,o);
+      const upper=doubleUpper(bars), lower=doubleLower(bars);
+      const r=ptSim(bars,upper,lower,o);
       const src=el("pt_src").dataset.cur;
       const label=src==="stored"?RAWLABEL:(src==="upload"?(RAWCACHE.__uploadName__||"업로드"):el("pt_sym").value)||"데이터";
       const tf=src==="stored"?"":el("pt_tf").value;
@@ -2767,10 +2897,11 @@ function drawRSI(rCurve,holdCurve,log){
         <td class="num">${money(l.bal)}</td></tr>`;
     }).join("");
     const stratName=o.useConfirm?`더블비컨펌(컨펌 ${o.confW}봉)`:"더블비";
+    const dirName=o.direction==="short"?"숏(매도)":"롱(매수)";
     const lotStr=o.lots.map(x=>x.toFixed(2)).join("/");
     const entryDesc=o.entryMode==="tr"?`TR${o.numTR}분할 랏 ${lotStr}`:`${o.N}등분 랏 ${lotStr}`;
     wrap.innerHTML=`
-      <div class="db-best">${label}${tf?" · "+tf:""} · <b class="amb">${stratName}</b> · ${entryDesc} · 손절 ${o.slK}TR · 익절 ${o.tpK}TR
+      <div class="db-best">${label}${tf?" · "+tf:""} · <b class="amb">${stratName}</b> · ${dirName} · ${entryDesc} · 손절 ${o.slK}TR · 익절 ${o.tpK}TR
         <span class="dimv">· 1랏=${o.contract}온스 · 시작 ${money(o.startBal)} · ${span}</span></div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0 14px">${tiles}</div>
       <div style="font-size:11px;color:var(--ink-faint);margin-bottom:4px">잔고 곡선 (점선=시작 잔고)</div>
@@ -2795,6 +2926,7 @@ function drawRSI(rCurve,holdCurve,log){
     $$("#pt_src button").forEach(b=>b.onclick=()=>setSrc(b.dataset.s));
     $$("#pt_tpmode button").forEach(b=>b.onclick=()=>setTpMode(b.dataset.m));
     $$("#pt_strat button").forEach(b=>b.onclick=()=>setStrat(b.dataset.x));
+    $$("#pt_dir button").forEach(b=>b.onclick=()=>setDir(b.dataset.d));
     $$("#pt_emode button").forEach(b=>b.onclick=()=>setEmode(b.dataset.e));
     el("pt_N").oninput=buildLots;
     el("pt_trN").oninput=buildLots;
@@ -2807,7 +2939,7 @@ function drawRSI(rCurve,holdCurve,log){
     el("pt_reload").onclick=()=>{ RAWCACHE={}; RAWLABEL=""; status("캐시 비움 — 다시 돌리면 새로 불러옵니다"); };
     el("pt_run").onclick=run;
     el("pt_from").value=daysAgo(730); el("pt_to").value=today();
-    setSrc("stored"); setTpMode("fixed"); setStrat("base"); setEmode("n");
+    setSrc("stored"); setTpMode("fixed"); setStrat("base"); setDir("long"); setEmode("n");
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init); else init();
 })();

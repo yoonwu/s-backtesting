@@ -559,6 +559,11 @@
           <div class="field"><label>가상 기준자금 ($)</label><input id="db_bank" class="mono" type="number" value="10000" min="0" step="100"></div>
         </div>
 
+        <div class="field"><label>기간 (최근 N개월)</label>
+          <select id="db_months"></select>
+          <div class="hint">데이터 마지막 시점 기준 최근 N개월만 백테스트. 전체=전 구간.</div>
+        </div>
+
         <div class="field"><label>방향</label>
           <div class="subtabs" id="db_dir" data-cur="long">
             <button data-d="long" class="on">롱 (매수)</button><button data-d="short">숏 (매도)</button>
@@ -2346,6 +2351,13 @@ function drawRSI(rCurve,holdCurve,log){
   function parseList(str,intOnly,minV){
     return String(str).split(/[,\s]+/).map(x=>+x).filter(x=>isFinite(x)&&x>=(minV||0)&&(!intOnly||Number.isInteger(x)));
   }
+  function sliceRecentMonths(bars,months){
+    if(!months||months<=0||!bars.length)return bars;
+    const d=new Date(bars[bars.length-1].day+"T00:00:00");
+    d.setMonth(d.getMonth()-months);
+    const cutoff=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    return bars.filter(b=>b.day>=cutoff);
+  }
   function err(msg){ el("db_err").textContent=msg||""; }
   function status(msg){ el("db_status").textContent=msg||""; }
 
@@ -2404,13 +2416,14 @@ function drawRSI(rCurve,holdCurve,log){
         : parseList(el("db_N").value,true,1);
       if(!gridDim.length||!slKs.length||!tpKs.length)throw new Error("매수 파라미터·손절·익절 값을 1개 이상 입력하세요");
       const dir=DIRECTION;
+      const months=+el("db_months").value||0;
       const sources=await loadDataSources();
       const perTotal=gridDim.length*slKs.length*tpKs.length*strategies.length;
       let total=0;
       const res=[];
       for(let si=0; si<sources.length; si++){
-        const src=sources[si], bars=src.bars;
-        if(bars.length<60){ status(`${src.label} 봉 수가 너무 적어 건너뜀(${bars.length})`); await pauseUI(); continue; }
+        const src=sources[si], bars=sliceRecentMonths(src.bars, months);
+        if(bars.length<60){ status(`${src.label} 봉 수가 너무 적어 건너뜀(${bars.length}${months?` · 최근 ${months}개월`:""})`); await pauseUI(); continue; }
         total+=perTotal;
         status(`엔진 실행 (${si+1}/${sources.length}) ${src.label} · ${bars.length.toLocaleString()}봉 · ${perTotal}조합…`);
         const upper=doubleUpper(bars), lower=doubleLower(bars);
@@ -2427,7 +2440,7 @@ function drawRSI(rCurve,holdCurve,log){
       RESULTS=res;
       const src=el("db_src").dataset.cur;
       const lbl=src==="stored"?RAWLABEL:(src==="upload"?(RAWCACHE.__uploadName__||"업로드"):el("db_sym").value)||"데이터";
-      status(`${lbl} · [${dir==="short"?"숏":"롱"}] · ${strategies.map(s=>s.label).join("+")} 표시 ${res.length}/${total}조합(최소거래 ${minTr})`);
+      status(`${lbl} · [${dir==="short"?"숏":"롱"}] · ${strategies.map(s=>s.label).join("+")} · ${months?`최근 ${months}개월`:"전체기간"} 표시 ${res.length}/${total}조합(최소거래 ${minTr})`);
       render();
     }catch(e){ err("⚠ "+e.message); status(""); }
     finally{ btn.disabled=false; }
@@ -2520,6 +2533,8 @@ function drawRSI(rCurve,holdCurve,log){
 
   function init(){
     if(!el("db_run"))return;
+    el("db_months").innerHTML=`<option value="0">전체</option>`+
+      Array.from({length:24},(_,i)=>`<option value="${i+1}">최근 ${i+1}개월</option>`).join("");
     renderCsvChecks("db", Math.max(0, CSV_FILES.findIndex(cf=>cf.sym==="US100"&&cf.tf==="M5")));
     $$("#db_src button").forEach(b=>b.onclick=()=>setSrc(b.dataset.s));
     $$("#db_tpmode button").forEach(b=>b.onclick=()=>setTpMode(b.dataset.m));

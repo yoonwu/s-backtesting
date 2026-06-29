@@ -144,6 +144,11 @@
   .namecell .cdot{width:10px;height:10px;border-radius:50%;flex-shrink:0;box-shadow:0 0 8px 0 currentColor}
   .hl-good{color:var(--green);font-weight:700} .hl-bad{color:var(--red);font-weight:700}
   th.db-sort{cursor:pointer;user-select:none} th.db-sort:hover .th-main{color:var(--amber)}
+  button.db-save{padding:4px 11px;border:1px solid var(--amber);background:rgba(255,176,0,.1);color:var(--amber);border-radius:6px;font-size:11px;font-weight:700;cursor:pointer}
+  button.db-save:hover:not(:disabled){background:var(--amber);color:#0c0f0e}
+  button.db-save:disabled{border-color:var(--border);background:transparent;color:var(--ink-faint);cursor:default}
+  button.saved-del{padding:3px 9px;border:1px solid var(--border);background:#0c0f0e;color:var(--ink-faint);border-radius:6px;font-size:12px;cursor:pointer}
+  button.saved-del:hover{border-color:#e5484d;color:#e5484d}
   tr.db-hot td{background:rgba(255,176,0,.10)!important;border-bottom-color:rgba(255,176,0,.3)}
   .db-best{font-size:12.5px;color:var(--ink-dim);line-height:1.7;margin:2px 0 16px;padding:12px 14px;background:rgba(255,176,0,.06);border:1px solid rgba(255,176,0,.22);border-radius:10px}
 
@@ -234,6 +239,7 @@
       <button data-tab="doubleb">더블비<span class="sub">Double-BB</span></button>
       <button data-tab="break120">돌파 후 120선<span class="sub">Break-120</span></button>
       <button data-tab="paper">가상매매<span class="sub">Paper Lot</span></button>
+      <button data-tab="saved">⭐ 저장된 전략 <span class="badge" id="tab_saved_badge"></span><span class="sub">Saved</span></button>
       <button data-tab="board">비교 보드 <span class="badge" id="tab_board_badge"></span><span class="sub">Board</span></button>
     </div>
   </div>
@@ -787,6 +793,15 @@
   </div>
 
   <!-- =================== TAB: BOARD =================== -->
+  <!-- =================== TAB: SAVED STRATEGIES =================== -->
+  <div class="tabpane" id="pane-saved" hidden>
+    <section class="card" style="margin-top:26px">
+      <h2>⭐ 저장된 전략</h2>
+      <div class="intro">더블비 결과표에서 <b>저장</b> 버튼을 누른 좋은 전략들을 한곳에 모아둡니다. 자동매매 후보 리스트로 쓰세요. 이 브라우저에 저장돼요(localStorage).</div>
+      <div id="saved_results" style="margin-top:16px"></div>
+    </section>
+  </div>
+
   <div class="tabpane" id="pane-board" hidden>
     <section class="card" style="margin-top:26px">
       <h2>비교 보드</h2>
@@ -849,6 +864,74 @@ const CSV_FILES = [
 const $ = s=>document.querySelector(s);
 const $$ = s=>document.querySelectorAll(s);
 const today = ()=>new Date().toISOString().slice(0,10);
+
+/* ===== 저장된 전략 (localStorage) — 좋은 전략만 클릭해서 모아보기 ===== */
+const StrategyStore = {
+  KEY: "leverageLab_savedStrategies_v1",
+  _sig(s){ return [s.data,s.strategy,s.direction,s.entry,s.slK,s.tpK,s.tpMode,s.confW].join("|"); },
+  getAll(){ try{ return JSON.parse(localStorage.getItem(this.KEY)||"[]"); }catch(e){ return []; } },
+  _save(arr){ try{ localStorage.setItem(this.KEY, JSON.stringify(arr)); }catch(e){} },
+  add(s){
+    const arr=this.getAll();
+    if(arr.some(x=>this._sig(x)===this._sig(s)))return false;   // 중복 방지
+    arr.push({...s, savedAt:Date.now()});
+    this._save(arr);
+    return true;
+  },
+  remove(i){ const arr=this.getAll(); arr.splice(i,1); this._save(arr); },
+  clear(){ this._save([]); },
+};
+function savedBadge(){
+  const b=$("#tab_saved_badge"); if(!b)return;
+  const n=StrategyStore.getAll().length;
+  b.textContent=n?String(n):""; b.style.display=n?"":"none";
+}
+function renderSavedStrategies(){
+  const wrap=$("#saved_results"); if(!wrap)return;
+  const arr=StrategyStore.getAll();
+  savedBadge();
+  if(!arr.length){ wrap.innerHTML=`<div class="placeholder"><div class="big">아직 저장된 전략이 없어요</div><div class="mono" style="font-size:12px">더블비 결과표에서 <span class="amb">저장</span> 버튼을 눌러 좋은 전략을 모아보세요</div></div>`; return; }
+  const pf=x=>(x>=0?"+":"")+(x*100).toFixed(1)+"%";
+  const mar=x=>x===Infinity||x>=99?"∞":(+x).toFixed(2);
+  const rows=arr.map((s,i)=>`<tr>
+    <td class="mono dimv">${s.data||""}</td>
+    <td class="mono">${s.strategy||""}</td>
+    <td>${s.direction||""}</td>
+    <td>${s.entry||""}</td>
+    <td class="num">${s.slK}</td>
+    <td class="num">${s.tpK}</td>
+    <td class="dimv">${s.tpMode||""}</td>
+    <td class="num">${s.trades}</td>
+    <td class="num">${(s.winrate*100).toFixed(0)}%</td>
+    <td class="num ${s.payoff>=1?'pos':'neg'}">${(+s.payoff).toFixed(2)}</td>
+    <td class="num ${s.totalRet>=0?'pos':'neg'}">${pf(s.totalRet)}</td>
+    <td class="num neg">${(s.mdd*100).toFixed(1)}%</td>
+    <td class="num cy">${mar(s.mar)}</td>
+    <td class="num"><button class="saved-del" data-i="${i}" title="삭제">✕</button></td>
+  </tr>`).join("");
+  wrap.innerHTML=`
+    <div class="db-best">저장된 전략 <b class="amb">${arr.length}개</b> · 자동매매 후보로 모아둔 목록 (브라우저에 저장됨)
+      <button id="saved_clear" style="float:right;padding:4px 10px;border:1px solid var(--border);background:#0c0f0e;color:var(--ink-dim);border-radius:6px;font-size:11px;cursor:pointer">전체 비우기</button></div>
+    <div class="ctable-wrap"><table class="ctable"><thead><tr>
+      <th><span class="th-main">데이터</span><span class="th-sub">CSV</span></th>
+      <th><span class="th-main">전략</span><span class="th-sub">TYPE</span></th>
+      <th><span class="th-main">방향</span><span class="th-sub">DIR</span></th>
+      <th><span class="th-main">진입</span><span class="th-sub">ENTRY</span></th>
+      <th><span class="th-main">손절</span><span class="th-sub">×TR</span></th>
+      <th><span class="th-main">익절</span><span class="th-sub">×TR</span></th>
+      <th><span class="th-main">익절기준</span><span class="th-sub">TP</span></th>
+      <th><span class="th-main">거래</span><span class="th-sub">TRADES</span></th>
+      <th><span class="th-main">승률</span><span class="th-sub">WIN</span></th>
+      <th><span class="th-main">손익비</span><span class="th-sub">PAYOFF</span></th>
+      <th><span class="th-main">총수익</span><span class="th-sub">RETURN</span></th>
+      <th><span class="th-main">최대낙폭</span><span class="th-sub">MDD</span></th>
+      <th><span class="th-main">위험대비</span><span class="th-sub">MAR</span></th>
+      <th><span class="th-main">삭제</span><span class="th-sub">DEL</span></th>
+    </tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="note" style="margin-top:14px">이 목록은 이 브라우저에 저장돼요(localStorage). "자동매매 후보 리스트"로 활용하세요. ✕로 개별 삭제, 전체 비우기로 초기화.</div>`;
+  wrap.querySelectorAll(".saved-del").forEach(btn=>btn.onclick=()=>{ StrategyStore.remove(+btn.dataset.i); renderSavedStrategies(); });
+  const clr=$("#saved_clear"); if(clr)clr.onclick=()=>{ if(confirm("저장된 전략을 모두 지울까요?")){ StrategyStore.clear(); renderSavedStrategies(); } };
+}
 const csvLabel = cf => `${cf.sym} · ${cf.tf} (${cf.file})`;
 function renderCsvChecks(prefix, defaultIdx){
   const list=$("#"+prefix+"_csv_list"), all=$("#"+prefix+"_csv_all"), clear=$("#"+prefix+"_csv_clear");
@@ -884,7 +967,9 @@ $$("#tabbar button").forEach(b=>b.onclick=()=>{
   const t=b.dataset.tab;
   $$(".tabpane").forEach(p=>p.hidden = p.id!=="pane-"+t);
   $$("#tabbar button").forEach(x=>x.classList.toggle("on", x===b));
+  if(t==="saved")renderSavedStrategies();
 });
+savedBadge();
 
 /* ---- 빠른 기간 (data-qr 접두사로 _start/_end 조작) ---- */
 $$(".quickrange").forEach(qr=>{
@@ -2376,7 +2461,7 @@ function drawRSI(rCurve,holdCurve,log){
     const worstMdd=Math.min(...RESULTS.map(r=>r.mdd));
     const best=RESULTS.slice().sort((a,b)=>(b.mar===Infinity?1e9:b.mar)-(a.mar===Infinity?1e9:a.mar))[0];
     const head=(k,main,sub)=>`<th class="db-sort" data-k="${k}"><span class="th-main">${main}${arrow(k)}</span><span class="th-sub">${sub}</span></th>`;
-    const rows=rs.map(r=>{
+    const rows=rs.map((r,ri)=>{
       const hot=r===best;
       const profit=r.totalRet*bank;
       return `<tr class="${hot?'db-hot':''}">
@@ -2393,7 +2478,7 @@ function drawRSI(rCurve,holdCurve,log){
         <td class="num ${r.mdd===worstMdd?'hl-bad':'neg'}">${(r.mdd*100).toFixed(1)}%</td>
         <td class="num ${r.mar===bestMar&&r.mar!==Infinity?'hl-good':'cy'}">${marStr(r.mar)}</td>
         <td class="num dimv">${r.tpC}/${r.slC}${r.eodC?'/'+r.eodC:''}</td>
-        <td class="num dimv">${r.useConfirm?(r.confSkip||0):"-"}</td></tr>`;
+        <td class="num"><button class="db-save" data-i="${ri}" title="이 전략을 저장된 전략 목록에 추가">저장</button></td></tr>`;
     }).join("");
     const bestLabel=isT?`TR${best.key}분할`:`${best.key}등분`;
     const bestProfit=best.totalRet*bank;
@@ -2408,13 +2493,28 @@ function drawRSI(rCurve,holdCurve,log){
         ${head("totalRet","총수익","RETURN")}${head("profit","총 수익금","$")}
         ${head("mdd","최대낙폭","MDD")}${head("mar","위험대비","MAR")}
         <th><span class="th-main">청산</span><span class="th-sub">TP/SL</span></th>
-        ${head("confSkip","폐기","CONF")}
+        <th><span class="th-main">저장</span><span class="th-sub">SAVE</span></th>
       </tr></thead><tbody>${rows}</tbody></table></div>
       <div class="note" style="margin-top:14px"><b class="hl-good">초록</b>=최고 총수익/MAR · <b class="hl-bad">빨강</b>=최대 낙폭 · 호박색 줄=MAR 최적 · 더블비/더블비컨펌을 같은 표에 합쳐 비교 · 총 수익금은 기준자금×총수익률 단순 환산 · 청산열=익절/손절(+미청산) 횟수. 손익비=평균이익÷평균손실, MAR=총수익÷|MDD|.</div>`;
     wrap.querySelectorAll(".db-sort").forEach(th=>th.onclick=()=>{
       const k=th.dataset.k;
       if(SORT.key===k)SORT.dir*=-1; else{ SORT.key=k; SORT.dir=(k==="mdd"||k==="dataLabel"||k==="strategy"||k==="confSkip"?1:-1); }
       render();
+    });
+    const tpModeNow=el("db_tpmode").dataset.cur;
+    const confWNow=Math.max(1,Math.round(+el("db_confw").value||5));
+    wrap.querySelectorAll(".db-save").forEach(btn=>btn.onclick=()=>{
+      const r=rs[+btn.dataset.i]; if(!r)return;
+      const entry=r.entryMode==="tr"?`TR${r.key}분할`:(r.key===1?"단일":`${r.key}등분`);
+      const ok=StrategyStore.add({
+        data:r.dataLabel||"", strategy:r.strategy||"", direction:r.direction==="short"?"숏":"롱",
+        entry, slK:r.slK, tpK:r.tpK, tpMode:tpModeNow==="avg"?"평단":"돌파봉",
+        confW:r.useConfirm?confWNow:null,
+        trades:r.trades, winrate:r.winrate, payoff:r.payoff, totalRet:r.totalRet, mdd:r.mdd, mar:r.mar,
+      });
+      btn.textContent=ok?"✓ 저장됨":"이미 있음";
+      btn.disabled=true; btn.style.opacity=.6;
+      savedBadge();
     });
   }
 

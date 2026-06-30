@@ -1,0 +1,27 @@
+; ============================================================
+; MA_Pullback_EA 프리셋 — ★골드단기 XAUUSD M10 숏 (확정 ④)
+; 차트: XAUUSD · M10 · 헤징계좌 · 알고리즘 트레이딩 ON
+; 무비용 성과: ~+43% PF~2.0 (1년차 골드+42% 폭등에도 +10.4%, 올웨더 숏)
+; 로드: EA 속성 → 입력 탭 → [로드] → 이 파일 선택
+; ⚠ 단일(N=1)이 핵심 — InpSplitCount=1, InpLot1만 사용. 위로 물타기 금지.
+;    MA200이 곧 약세필터 → 골드 H2 롱과 방향 반대 = 자연 헤지.
+;    고빈도(M10)라 비용 민감 → 왕복 스프레드 작은 브로커·소액 필수.
+; ============================================================
+InpDir=1
+InpMAPeriod=200
+InpGapPct=1.0
+InpSplitCount=1
+InpSL_x=1.5
+InpTP_x=3.0
+InpTRHours=12
+InpNewsHours=24
+InpNewsMult=3.0
+InpTouchWaitH=168
+InpExpiryBars=240
+InpLot1=0.01
+InpLot2=0.01
+InpLot3=0.01
+InpLot4=0.01
+InpMagic=880005
+InpMaxSpreadPts=0
+InpComment=MAPB-XAU-M10S

@@ -2769,6 +2769,8 @@ function drawRSI(rCurve,holdCurve,log){
     const l2=bbSide(bars.map(b=>b.c),20,2,false);
     return l1.map((v,i)=>v!==null&&l2[i]!==null?Math.min(v,l2[i]):null);
   }
+  // 원비 = BB(4,4) 하단 (시가 기준 4기간·4σ). 차트의 teal 스파이크 라인.
+  function calcBB44Lower(bars){ return bbSide(bars.map(b=>b.o),4,4,false); }
   // 더블비 상단 = max(BB(시가,4,4σ), BB(종가,20,2σ)) — 기존 더블비 전략과 동일.
   // (종가 기준 4,4σ는 종가가 자기 밴드를 못 넘어 신호가 절대 안 나오므로 시가 기준 사용)
   function calcDoubleUpper(bars){
@@ -2806,34 +2808,29 @@ function drawRSI(rCurve,holdCurve,log){
     }
     return out;
   }
-  function detectSignals(bars,lower,upper,tr,rsi,pivotLookahead,lowBreakK,boxMinBars,maxWaitBars,entryMode,maArr){
+  // 변곡더블비: 하락 중 캔들 저가(꼬리)가 BB(4,4) 하단(원비)에 닿으면 반전 롱.
+  //  rejectClose=true 면 종가는 밴드 위로 닫혀야(하락 멈춤/거부) 채택.
+  //  RSI 다이버전스 = 직전 터치 대비 저가는 낮은데 RSI는 높음(약세 둔화).
+  function detectSignals(bars,bb44Low,rsi,cooldown,rejectClose,entryMode,maArr){
     const sigs=[];
-    for(let dbIdx=1;dbIdx<bars.length;dbIdx++){
-      if(lower[dbIdx]===null||lower[dbIdx-1]===null)continue;
-      if(!(bars[dbIdx].c<lower[dbIdx]&&bars[dbIdx-1].c>=lower[dbIdx-1]))continue;
-      if(maArr&&(maArr[dbIdx]===null||bars[dbIdx].c>=maArr[dbIdx]))continue;
-      const searchEnd=Math.min(bars.length-1,dbIdx+pivotLookahead);
-      let pivotIdx=dbIdx, pivotLow=bars[dbIdx].l;
-      for(let j=dbIdx+1;j<=searchEnd;j++){
-        if(bars[j].l<pivotLow){pivotLow=bars[j].l;pivotIdx=j;}
-      }
-      const allowedBreak=tr[pivotIdx]*lowBreakK;
-      const breakLevel=pivotLow-allowedBreak;
-      const waitEnd=Math.min(bars.length-2,pivotIdx+maxWaitBars);
-      let minLow=Infinity;
-      for(let i=pivotIdx+1;i<=waitEnd;i++){
-        minLow=Math.min(minLow,bars[i].l);
-        if(minLow<breakLevel)break;
-        if(i<pivotIdx+boxMinBars)continue;
-        if(upper[i]===null)continue;
-        if(bars[i].c<=upper[i])continue;
-        const entryIdx=entryMode==="nextOpen"?i+1:i;
-        if(entryIdx>=bars.length)continue;
-        const entryPrice=entryMode==="nextOpen"?bars[entryIdx].o:bars[i].c;
-        const rsiDiv=(rsi[pivotIdx]!==null&&rsi[dbIdx]!==null)?rsi[pivotIdx]>rsi[dbIdx]:null;
-        sigs.push({dbIdx,pivotIdx,signalIdx:i,entryIdx,entryPrice,pivotLow,rsiDiv});
-        break;
-      }
+    let lastSig=-1e9, prevTouchLow=null, prevTouchRsi=null;
+    for(let i=1;i<bars.length;i++){
+      const band=bb44Low[i];
+      if(band===null)continue;
+      if(bars[i].l>band)continue;                       // 하단 4/4 미터치
+      if(rejectClose&&bars[i].c<band)continue;          // 거부모드: 종가 밴드 위
+      if(maArr&&(maArr[i]===null||bars[i].c>=maArr[i]))continue; // 하락 맥락(종가<MA)
+      // RSI 다이버전스(직전 터치 대비)
+      let rsiDiv=null;
+      if(prevTouchLow!==null&&rsi[i]!==null&&prevTouchRsi!==null)
+        rsiDiv=(bars[i].l<prevTouchLow&&rsi[i]>prevTouchRsi);
+      prevTouchLow=bars[i].l; prevTouchRsi=rsi[i];
+      if(i-lastSig<cooldown)continue;                   // 쿨다운(군집 방지)
+      lastSig=i;
+      const entryIdx=entryMode==="nextOpen"?i+1:i;
+      if(entryIdx>=bars.length)continue;
+      const entryPrice=entryMode==="nextOpen"?bars[entryIdx].o:bars[i].c;
+      sigs.push({dbIdx:i,pivotIdx:i,signalIdx:i,entryIdx,entryPrice,pivotLow:bars[i].l,touchBand:band,rsiDiv});
     }
     return sigs;
   }
@@ -2841,7 +2838,7 @@ function drawRSI(rCurve,holdCurve,log){
     const trades=[];
     let equity=1,peak=1,maxDD=0,wins=0,sumWin=0,sumLoss=0;
     for(const sig of sigs){
-      const {entryIdx,entryPrice,pivotLow,signalIdx,dbIdx,pivotIdx}=sig;
+      const {entryIdx,entryPrice,pivotLow,signalIdx,touchBand}=sig;
       const sigTR=tr[signalIdx];
       const sl=pivotLow-slK*sigTR;
       const tp=entryPrice+tpK*sigTR;
@@ -2858,8 +2855,7 @@ function drawRSI(rCurve,holdCurve,log){
       if(equity>peak)peak=equity;
       const dd=equity/peak-1; if(dd<maxDD)maxDD=dd;
       if(ret>0){wins++;sumWin+=ret;}else{sumLoss+=Math.abs(ret);}
-      const bd=i=>bars[i].date||bars[i].day;
-      trades.push({dbDate:bd(dbIdx),pivotDate:bd(pivotIdx),date:bd(signalIdx),pivotLow,dbClose:bars[dbIdx].c,entryPrice,exitPrice:exitPx,sl,tp,ret,won:exitReason==="TP",exitReason,rsiDiv:sig.rsiDiv});
+      trades.push({date:bars[signalIdx].date||bars[signalIdx].day,pivotLow,touchBand,entryPrice,exitPrice:exitPx,sl,tp,ret,won:exitReason==="TP",exitReason,rsiDiv:sig.rsiDiv});
     }
     const cnt=trades.length;
     if(!cnt)return{trades,cnt,winRate:0,pf:0,totalRet:0,mdd:0,mar:0};
@@ -2938,41 +2934,36 @@ function drawRSI(rCurve,holdCurve,log){
     const btn=el("revdb_run"); btn.disabled=true;
     try{
       const maFilter=Math.max(0,+el("revdb_ma").value||0);
-      const pivotLookaheads=parseList(el("revdb_pivot").value,true,1);
-      const lowBreakKs=parseList(el("revdb_lbk").value,false,0);
-      const boxMinBarsList=parseList(el("revdb_bmb").value,true,1);
-      const maxWait=Math.max(5,+el("revdb_wait").value||50);
+      const cooldowns=parseList(el("revdb_cool").value,true,0);
+      const trWin=Math.max(1,+el("revdb_trwin").value||1);
+      const rejectClose=(el("revdb_close").dataset.cur||"touch")==="reject";
       const slKs=parseList(el("revdb_sl").value,false,0);
       const tpKs=parseList(el("revdb_tp").value,false,0);
       const expiryBars=Math.max(1,+el("revdb_expiry").value||50);
       const minTr=Math.max(0,+el("revdb_min").value||0);
       const entryMode=el("revdb_entry").dataset.cur||"close";
-      if(!pivotLookaheads.length||!lowBreakKs.length||!boxMinBarsList.length||!slKs.length||!tpKs.length)
-        throw new Error("파라미터 값을 하나 이상 입력하세요");
+      if(!cooldowns.length||!slKs.length||!tpKs.length)
+        throw new Error("쿨다운·손절·익절 값을 하나 이상 입력하세요");
       const sources=await loadSources();
       const rows=[];
-      const total=sources.length*pivotLookaheads.length*lowBreakKs.length*boxMinBarsList.length*slKs.length*tpKs.length;
+      const total=sources.length*cooldowns.length*slKs.length*tpKs.length;
       let combo=0;
       for(const src of sources){
         const bars=src.bars;
-        const lower=calcDoubleLower(bars);
-        const upper=calcDoubleUpper(bars);
-        const tr=calcTR(bars);
+        const bb44Low=calcBB44Lower(bars);
+        const tr0=calcTR(bars);
+        const tr=trWin>1?tr0.map((_,i)=>{let m=0;for(let k=0;k<trWin&&i-k>=0;k++)m=Math.max(m,tr0[i-k]);return m;}):tr0;
         const rsi14=calcRSI(bars,14);
         const maArr=maFilter>0?calcSMA(bars.map(b=>b.c),maFilter):null;
-        for(const pLook of pivotLookaheads){
-          for(const lbK of lowBreakKs){
-            for(const bmb of boxMinBarsList){
-              const sigs=detectSignals(bars,lower,upper,tr,rsi14,pLook,lbK,bmb,maxWait,entryMode,maArr);
-              for(const slK of slKs){
-                for(const tpK of tpKs){
-                  combo++;
-                  if(combo%100===0){statusMsg(`${combo}/${total} 조합…`);await new Promise(r=>setTimeout(r,0));}
-                  const res=backtest(bars,sigs,tr,slK,tpK,expiryBars);
-                  if(res.cnt<minTr)continue;
-                  rows.push({label:src.label,pLook,lbK,bmb,slK,tpK,...res});
-                }
-              }
+        for(const cool of cooldowns){
+          const sigs=detectSignals(bars,bb44Low,rsi14,cool,rejectClose,entryMode,maArr);
+          for(const slK of slKs){
+            for(const tpK of tpKs){
+              combo++;
+              if(combo%100===0){statusMsg(`${combo}/${total} 조합…`);await new Promise(r=>setTimeout(r,0));}
+              const res=backtest(bars,sigs,tr,slK,tpK,expiryBars);
+              if(res.cnt<minTr)continue;
+              rows.push({label:src.label,cool,closeMode:rejectClose?"거부":"닿기만",slK,tpK,...res});
             }
           }
         }
@@ -3004,17 +2995,17 @@ function drawRSI(rCurve,holdCurve,log){
     const view=sorted.slice(0,CAP);
     const capNote=sorted.length>CAP?` <span class="dimv">· 상위 ${CAP}개만 표시 (전체 ${sorted.length.toLocaleString()}개)</span>`:"";
     function hdr(k,main,sub=""){return`<th class="db-sort revdb-s" data-k="${k}" style="cursor:pointer"><div class="th-main">${main}${arw(k)}</div>${sub?`<div class="th-sub">${sub}</div>`:""}</th>`;}
-    let html=`<div class="db-best">최상위: <b>${best.label}</b> · pivot=${best.pLook} · lbK=${best.lbK} · box=${best.bmb} · SL=${best.slK} · TP=${best.tpK} → <span class="pos">${pctStr(best.totalRet)}</span> · MDD ${pctStr(best.mdd)} · MAR ${pf2(best.mar)}${capNote}</div>`;
+    let html=`<div class="db-best">최상위: <b>${best.label}</b> · 쿨다운=${best.cool} · ${best.closeMode} · SL=${best.slK} · TP=${best.tpK} → <span class="pos">${pctStr(best.totalRet)}</span> · MDD ${pctStr(best.mdd)} · MAR ${pf2(best.mar)}${capNote}</div>`;
     html+=`<div class="ctable-wrap"><table class="ctable"><thead><tr>
       <th><div class="th-main">데이터</div></th>
-      ${hdr("pLook","Pivot봉")}${hdr("lbK","저점K")}${hdr("bmb","박스봉")}${hdr("slK","SL×TR")}${hdr("tpK","TP×TR")}
+      ${hdr("cool","쿨다운")}<th><div class="th-main">마감</div></th>${hdr("slK","SL×TR")}${hdr("tpK","TP×TR")}
       ${hdr("cnt","거래수")}${hdr("winRate","승률")}${hdr("pf","손익비")}${hdr("totalRet","총수익률")}${hdr("mdd","MDD")}${hdr("mar","MAR")}
       <th><div class="th-main">내역</div></th>
     </tr></thead><tbody>`;
     view.forEach((r,i)=>{
       html+=`<tr class="${i===0?"db-hot":""}">
         <td class="name mono" style="font-size:12px">${r.label}</td>
-        <td class="num">${r.pLook}</td><td class="num">${r.lbK}</td><td class="num">${r.bmb}</td>
+        <td class="num">${r.cool}</td><td class="num" style="font-size:11px">${r.closeMode}</td>
         <td class="num">${r.slK}</td><td class="num">${r.tpK}</td>
         <td class="num">${r.cnt}</td>
         <td class="num ${numCls(r.winRate,0.55,0)}">${(r.winRate*100).toFixed(0)}%</td>
@@ -3062,13 +3053,12 @@ function drawRSI(rCurve,holdCurve,log){
     const extra=+el("revdb_tzoff").value||0;  // 추가 미세보정(기본 0)
     const rsiO=r.trades.filter(t=>t.rsiDiv===true).length;
     const rsiAll=r.trades.filter(t=>t.rsiDiv!==null).length;
-    let html=`<div class="sectitle">거래 내역 · ${r.label} · pivot=${r.pLook} lbK=${r.lbK} box=${r.bmb} SL=${r.slK} TP=${r.tpK} · RSI다이버전스 ${rsiO}/${rsiAll}건</div>
-    <div class="note" style="margin:6px 0 12px">자리 확인: <b>①DB발생봉</b>(하단 최초 하향돌파) → <b>②저점봉</b>(pivotLow 바닥) → <b>③신호봉</b>(더블비 상단 반전 돌파, 여기서 진입). 세 시점이 가까울수록 깔끔한 V자 반전. · 시각=한국시간(서머타임 자동 +7/+6${extra?`, 추가 ${extra>=0?"+":""}${extra}h`:""})</div>
+    let html=`<div class="sectitle">거래 내역 · ${r.label} · 쿨다운=${r.cool} ${r.closeMode} SL=${r.slK} TP=${r.tpK} · RSI다이버전스 ${rsiO}/${rsiAll}건</div>
+    <div class="note" style="margin:6px 0 12px">자리 확인: <b>터치봉</b>의 저가(꼬리)가 <b>BB(4,4) 하단</b>에 닿은 바닥. 진입은 그 봉 종가(또는 다음봉 시가). · 시각=한국시간(서머타임 자동 +7/+6${extra?`, 추가 ${extra>=0?"+":""}${extra}h`:""})</div>
     <div class="ctable-wrap"><table class="ctable"><thead><tr>
-      <th><div class="th-main">①DB발생봉</div><div class="th-sub">하향돌파</div></th>
-      <th><div class="th-main">②저점봉</div><div class="th-sub">pivotLow</div></th>
-      <th><div class="th-main">저점가</div></th>
-      <th><div class="th-main">③신호봉</div><div class="th-sub">반전돌파</div></th>
+      <th><div class="th-main">터치봉</div><div class="th-sub">BB4,4 하단</div></th>
+      <th><div class="th-main">하단밴드</div></th>
+      <th><div class="th-main">터치저가</div></th>
       <th><div class="th-main">진입가</div></th><th><div class="th-main">청산가</div></th>
       <th><div class="th-main">SL</div></th><th><div class="th-main">TP</div></th>
       <th><div class="th-main">수익률</div></th><th><div class="th-main">결과</div></th>
@@ -3079,10 +3069,9 @@ function drawRSI(rCurve,holdCurve,log){
       const rdiv=t.rsiDiv===true?'<span class="pos">O</span>':t.rsiDiv===false?'<span class="neg">X</span>':'<span class="dimv">-</span>';
       const dt=s=>shiftTime(s,autoKSTbase(s)+extra);
       html+=`<tr>
-        <td class="name mono" style="font-size:11px">${dt(t.dbDate)}</td>
-        <td class="name mono" style="font-size:11px">${dt(t.pivotDate)}</td>
-        <td class="num mono">${t.pivotLow!=null?t.pivotLow.toFixed(2):"-"}</td>
         <td class="name mono" style="font-size:11px">${dt(t.date)}</td>
+        <td class="num mono">${t.touchBand!=null?t.touchBand.toFixed(2):"-"}</td>
+        <td class="num mono">${t.pivotLow!=null?t.pivotLow.toFixed(2):"-"}</td>
         <td class="num mono">${t.entryPrice.toFixed(2)}</td><td class="num mono">${t.exitPrice.toFixed(2)}</td>
         <td class="num mono">${t.sl.toFixed(2)}</td><td class="num mono">${t.tp.toFixed(2)}</td>
         <td class="num ${t.ret>0?"pos":"neg"}">${pctStr(t.ret)}</td>
@@ -3108,6 +3097,10 @@ function drawRSI(rCurve,holdCurve,log){
     el("revdb_entry").querySelectorAll("button").forEach(b=>b.onclick=()=>{
       el("revdb_entry").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
       el("revdb_entry").dataset.cur=b.dataset.m;
+    });
+    el("revdb_close").querySelectorAll("button").forEach(b=>b.onclick=()=>{
+      el("revdb_close").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+      el("revdb_close").dataset.cur=b.dataset.c;
     });
     el("revdb_file").onchange=async e=>{
       const f=e.target.files[0]; if(!f)return;

@@ -702,7 +702,7 @@
     <div class="grid">
       <section class="card">
         <h2>변곡더블비 백테스트</h2>
-        <div class="intro"><b>변곡더블비</b> · 하락 더블비(DoubleBB 하단 최초 하향돌파) 이후 <b>저점(pivotLow)</b>을 크게 훼손하지 않고 박스 유지 → <b>BB(4,4) 상단을 종가로 돌파</b>하면 반전 롱 신호. RSI(14) 다이버전스는 필수조건이 아니며 결과 내역에 <b>O/X</b>로 표시됩니다.</div>
+        <div class="intro"><b>변곡더블비</b> · 하락 중 캔들의 <b>저가(꼬리 포함)가 BB(4,4) 하단(원비)에 닿고</b> 봉마감하면 그 바닥 자리에서 반전 롱. 마감조건(닿기만/거부)·쿨다운 조절 가능. RSI(14) 다이버전스(직전 터치 대비 저가↓·RSI↑)는 가점이며 내역에 <b>O/X</b>로 표시됩니다.</div>
 
         <div class="field"><label>데이터 소스</label>
           <div class="subtabs" id="revdb_src" data-cur="stored">
@@ -740,28 +740,25 @@
 
         <div class="field"><label>장기이평 필터 (봉, 0=없음)</label>
           <input id="revdb_ma" class="mono" type="number" value="0" min="0" step="1">
-          <div class="hint">0이면 필터 없음. 예) 120 → 하락DB 발생 시 가격이 120SMA 아래일 때만 후보 등록.</div>
+          <div class="hint">0이면 필터 없음. 예) 120 → 종가가 120SMA 아래(하락 맥락)일 때만 터치 후보 등록.</div>
         </div>
 
-        <div class="field"><label>PivotLow 탐색 범위 (봉, 콤마)</label>
-          <input id="revdb_pivot" class="mono" value="5,10,20">
-          <div class="hint">DB 이후 이 봉 수 안에서 최저점(pivotLow)을 찾습니다.</div>
+        <div class="field"><label>마감 조건 (BB4,4 하단 터치)</label>
+          <div class="subtabs" id="revdb_close" data-cur="touch">
+            <button data-c="touch" class="on">닿기만 (꼬리 OK)</button><button data-c="reject">밴드 위 종가(거부)</button>
+          </div>
+          <div class="hint">닿기만 = 저가≤하단밴드. 거부 = 저가≤하단밴드 + 종가>하단밴드(하락 멈춤 확인).</div>
         </div>
 
         <div class="row2">
-          <div class="field"><label>저점 허용훼손 ×TR (콤마)</label>
-            <input id="revdb_lbk" class="mono" value="0.1,0.2,0.33,0.5">
-            <div class="hint">pivotLow − TR×K 이하면 셋업 취소 (기본 0.33)</div>
+          <div class="field"><label>재진입 쿨다운 (봉, 콤마)</label>
+            <input id="revdb_cool" class="mono" value="5,10,20">
+            <div class="hint">직전 신호 후 이 봉 수 안엔 새 신호 무시(군집 방지).</div>
           </div>
-          <div class="field"><label>박스 최소 봉 수 (콤마)</label>
-            <input id="revdb_bmb" class="mono" value="3,5,7">
-            <div class="hint">pivotLow 이후 이 봉 이상 횡보해야 유효</div>
+          <div class="field"><label>TR 윈도우 (봉)</label>
+            <input id="revdb_trwin" class="mono" type="number" value="1" min="1" step="1">
+            <div class="hint">SL/TP용 TR. 1=신호봉 단일 TR, N=최근 N봉 최대 TR.</div>
           </div>
-        </div>
-
-        <div class="field"><label>최대 대기 봉 수</label>
-          <input id="revdb_wait" class="mono" type="number" value="50" min="5" step="5">
-          <div class="hint">pivotLow 이후 이 봉 안에 BB(4,4) 돌파가 없으면 폐기.</div>
         </div>
 
         <div class="field"><label>진입 방식</label>
@@ -773,11 +770,11 @@
         <div class="row2">
           <div class="field"><label>손절폭 ×TR (콤마)</label>
             <input id="revdb_sl" class="mono" value="0.5,1.0,1.5">
-            <div class="hint">SL = pivotLow − 손절×TR(신호봉)</div>
+            <div class="hint">SL = 터치봉 저가 − 손절×TR</div>
           </div>
           <div class="field"><label>익절폭 ×TR (콤마)</label>
             <input id="revdb_tp" class="mono" value="1.5,2.0,3.0">
-            <div class="hint">TP = 진입가 + 익절×TR(신호봉)</div>
+            <div class="hint">TP = 진입가 + 익절×TR</div>
           </div>
         </div>
         <div class="row2">
@@ -984,6 +981,6 @@
 
 </div>
 
-<script src="leverage-lab.js?v=20260630e"></script>
+<script src="leverage-lab.js?v=20260630f"></script>
 </body>
 </html>

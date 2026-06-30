@@ -2769,7 +2769,13 @@ function drawRSI(rCurve,holdCurve,log){
     const l2=bbSide(bars.map(b=>b.c),20,2,false);
     return l1.map((v,i)=>v!==null&&l2[i]!==null?Math.min(v,l2[i]):null);
   }
-  function calcBB44Upper(bars){ return bbSide(bars.map(b=>b.c),4,4,true); }
+  // 더블비 상단 = max(BB(시가,4,4σ), BB(종가,20,2σ)) — 기존 더블비 전략과 동일.
+  // (종가 기준 4,4σ는 종가가 자기 밴드를 못 넘어 신호가 절대 안 나오므로 시가 기준 사용)
+  function calcDoubleUpper(bars){
+    const u1=bbSide(bars.map(b=>b.o),4,4,true);
+    const u2=bbSide(bars.map(b=>b.c),20,2,true);
+    return u1.map((v,i)=>v!==null&&u2[i]!==null?Math.max(v,u2[i]):null);
+  }
   function calcTR(bars){
     return bars.map((b,i)=>{
       if(i===0)return b.h-b.l;
@@ -2800,7 +2806,7 @@ function drawRSI(rCurve,holdCurve,log){
     }
     return out;
   }
-  function detectSignals(bars,lower,bb44U,tr,rsi,pivotLookahead,lowBreakK,boxMinBars,maxWaitBars,entryMode,maArr){
+  function detectSignals(bars,lower,upper,tr,rsi,pivotLookahead,lowBreakK,boxMinBars,maxWaitBars,entryMode,maArr){
     const sigs=[];
     for(let dbIdx=1;dbIdx<bars.length;dbIdx++){
       if(lower[dbIdx]===null||lower[dbIdx-1]===null)continue;
@@ -2819,8 +2825,8 @@ function drawRSI(rCurve,holdCurve,log){
         minLow=Math.min(minLow,bars[i].l);
         if(minLow<breakLevel)break;
         if(i<pivotIdx+boxMinBars)continue;
-        if(bb44U[i]===null)continue;
-        if(bars[i].c<=bb44U[i])continue;
+        if(upper[i]===null)continue;
+        if(bars[i].c<=upper[i])continue;
         const entryIdx=entryMode==="nextOpen"?i+1:i;
         if(entryIdx>=bars.length)continue;
         const entryPrice=entryMode==="nextOpen"?bars[entryIdx].o:bars[i].c;
@@ -2949,14 +2955,14 @@ function drawRSI(rCurve,holdCurve,log){
       for(const src of sources){
         const bars=src.bars;
         const lower=calcDoubleLower(bars);
-        const bb44U=calcBB44Upper(bars);
+        const upper=calcDoubleUpper(bars);
         const tr=calcTR(bars);
         const rsi14=calcRSI(bars,14);
         const maArr=maFilter>0?calcSMA(bars.map(b=>b.c),maFilter):null;
         for(const pLook of pivotLookaheads){
           for(const lbK of lowBreakKs){
             for(const bmb of boxMinBarsList){
-              const sigs=detectSignals(bars,lower,bb44U,tr,rsi14,pLook,lbK,bmb,maxWait,entryMode,maArr);
+              const sigs=detectSignals(bars,lower,upper,tr,rsi14,pLook,lbK,bmb,maxWait,entryMode,maArr);
               for(const slK of slKs){
                 for(const tpK of tpKs){
                   combo++;

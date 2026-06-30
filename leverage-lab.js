@@ -2841,7 +2841,7 @@ function drawRSI(rCurve,holdCurve,log){
     const trades=[];
     let equity=1,peak=1,maxDD=0,wins=0,sumWin=0,sumLoss=0;
     for(const sig of sigs){
-      const {entryIdx,entryPrice,pivotLow,signalIdx}=sig;
+      const {entryIdx,entryPrice,pivotLow,signalIdx,dbIdx,pivotIdx}=sig;
       const sigTR=tr[signalIdx];
       const sl=pivotLow-slK*sigTR;
       const tp=entryPrice+tpK*sigTR;
@@ -2858,7 +2858,8 @@ function drawRSI(rCurve,holdCurve,log){
       if(equity>peak)peak=equity;
       const dd=equity/peak-1; if(dd<maxDD)maxDD=dd;
       if(ret>0){wins++;sumWin+=ret;}else{sumLoss+=Math.abs(ret);}
-      trades.push({date:bars[signalIdx].date||bars[signalIdx].day,entryPrice,exitPrice:exitPx,sl,tp,ret,won:exitReason==="TP",exitReason,rsiDiv:sig.rsiDiv});
+      const bd=i=>bars[i].date||bars[i].day;
+      trades.push({dbDate:bd(dbIdx),pivotDate:bd(pivotIdx),date:bd(signalIdx),pivotLow,dbClose:bars[dbIdx].c,entryPrice,exitPrice:exitPx,sl,tp,ret,won:exitReason==="TP",exitReason,rsiDiv:sig.rsiDiv});
     }
     const cnt=trades.length;
     if(!cnt)return{trades,cnt,winRate:0,pf:0,totalRet:0,mdd:0,mar:0};
@@ -3038,8 +3039,12 @@ function drawRSI(rCurve,holdCurve,log){
     const rsiO=r.trades.filter(t=>t.rsiDiv===true).length;
     const rsiAll=r.trades.filter(t=>t.rsiDiv!==null).length;
     let html=`<div class="sectitle">거래 내역 · ${r.label} · pivot=${r.pLook} lbK=${r.lbK} box=${r.bmb} SL=${r.slK} TP=${r.tpK} · RSI다이버전스 ${rsiO}/${rsiAll}건</div>
+    <div class="note" style="margin:6px 0 12px">자리 확인: <b>①DB발생봉</b>(하단 최초 하향돌파) → <b>②저점봉</b>(pivotLow 바닥) → <b>③신호봉</b>(더블비 상단 반전 돌파, 여기서 진입). 세 시점이 가까울수록 깔끔한 V자 반전.</div>
     <div class="ctable-wrap"><table class="ctable"><thead><tr>
-      <th><div class="th-main">날짜(신호봉)</div></th>
+      <th><div class="th-main">①DB발생봉</div><div class="th-sub">하향돌파</div></th>
+      <th><div class="th-main">②저점봉</div><div class="th-sub">pivotLow</div></th>
+      <th><div class="th-main">저점가</div></th>
+      <th><div class="th-main">③신호봉</div><div class="th-sub">반전돌파</div></th>
       <th><div class="th-main">진입가</div></th><th><div class="th-main">청산가</div></th>
       <th><div class="th-main">SL</div></th><th><div class="th-main">TP</div></th>
       <th><div class="th-main">수익률</div></th><th><div class="th-main">결과</div></th>
@@ -3048,8 +3053,12 @@ function drawRSI(rCurve,holdCurve,log){
     for(const t of r.trades){
       const res=t.exitReason==="TP"?'<span class="pos">익절</span>':t.exitReason==="SL"?'<span class="neg">손절</span>':'<span class="dimv">만료</span>';
       const rdiv=t.rsiDiv===true?'<span class="pos">O</span>':t.rsiDiv===false?'<span class="neg">X</span>':'<span class="dimv">-</span>';
+      const dt=s=>String(s||"").slice(0,16);
       html+=`<tr>
-        <td class="name mono" style="font-size:11px">${String(t.date).slice(0,16)}</td>
+        <td class="name mono" style="font-size:11px">${dt(t.dbDate)}</td>
+        <td class="name mono" style="font-size:11px">${dt(t.pivotDate)}</td>
+        <td class="num mono">${t.pivotLow!=null?t.pivotLow.toFixed(2):"-"}</td>
+        <td class="name mono" style="font-size:11px">${dt(t.date)}</td>
         <td class="num mono">${t.entryPrice.toFixed(2)}</td><td class="num mono">${t.exitPrice.toFixed(2)}</td>
         <td class="num mono">${t.sl.toFixed(2)}</td><td class="num mono">${t.tp.toFixed(2)}</td>
         <td class="num ${t.ret>0?"pos":"neg"}">${pctStr(t.ret)}</td>

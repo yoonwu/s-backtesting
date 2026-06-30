@@ -238,7 +238,7 @@
       <button data-tab="shannon">도깨비<span class="sub">Shannon</span></button>
       <button data-tab="rsirev">RSI 매수<span class="sub">Mean Rev</span></button>
       <button data-tab="doubleb">더블비<span class="sub">Double-BB</span></button>
-      <button data-tab="break120">돌파 후 120선<span class="sub">Break-120</span></button>
+      <button data-tab="break120">120선 눌림목<span class="sub">MA120-Pullback</span></button>
       <button data-tab="paper">가상매매<span class="sub">Paper Lot</span></button>
       <button data-tab="saved">⭐ 저장된 전략 <span class="badge" id="tab_saved_badge"></span><span class="sub">Saved</span></button>
       <button data-tab="board">비교 보드 <span class="badge" id="tab_board_badge"></span><span class="sub">Board</span></button>
@@ -686,14 +686,14 @@
   <div class="tabpane" id="pane-break120" hidden>
     <div class="grid">
       <section class="card">
-        <h2>돌파 후 120선 백테스트</h2>
-        <div class="intro"><b>1시간봉 더블비 돌파</b> 이후 가격이 돌파봉 TR의 배수만큼 진행하면 추세로 인정하고, 선택한 분봉에서 <b>120이평선 첫 터치</b>를 기다려 분할매수합니다. 분할 간격(KR)은 돌파 1시간봉 안의 <b>10분봉 최대 TR</b>입니다.</div>
+        <h2>120선 눌림목 백테스트</h2>
+        <div class="intro"><b>이격 후 눌림</b> · 종가가 120선보다 설정% 이상 위로 벌어진 뒤, 되돌림으로 120선을 <b>처음 터치</b>하는 자리에서 TR 분할매수합니다. TR(KR)은 최근 N시간 또는 최근 2세션의 <b>최대 봉(고가−저가)</b>. 이평·이격·TR기준·익절방식 전부 조정 가능.</div>
 
         <div class="field"><label>심볼</label>
           <div class="subtabs" id="br_syms" style="margin-bottom:0">
             <button data-sym="XAUUSD" class="on">XAUUSD</button><button data-sym="US100" class="on">US100</button>
           </div>
-          <div class="hint">선택된 심볼의 H1, M10, 진입분봉 CSV를 자동으로 조합합니다.</div>
+          <div class="hint">선택 심볼의 진입분봉 CSV로 단독 계산합니다(이평·TR 모두 같은 분봉 기준).</div>
         </div>
 
         <div class="field"><label>진입 분봉</label>
@@ -709,27 +709,42 @@
         </div>
 
         <div class="row2">
-          <div class="field"><label>추세 확인 ×돌파TR</label><input id="br_trendK" class="mono" type="number" value="2" min="0.1" step="0.1"></div>
-          <div class="field"><label>추세 확인 대기 (H1봉)</label><input id="br_trendWait" class="mono" type="number" value="24" min="1" step="1"></div>
+          <div class="field"><label>이평 기간 (봉)</label><input id="br_maLen" class="mono" type="number" value="120" min="2" step="1"></div>
+          <div class="field"><label>이격 조건 (%)</label><input id="br_gap" class="mono" type="number" value="1.5" min="0" step="0.1"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>TR(KR) 기준</label>
+            <select id="br_trMode" class="mono">
+              <option value="hours">최근 N시간 최대봉</option>
+              <option value="session">최근 2세션 최대봉</option>
+            </select>
+          </div>
+          <div class="field"><label>TR 윈도우 (시간)</label><input id="br_trHours" class="mono" type="number" value="12" min="1" step="1"></div>
         </div>
         <div class="row2">
           <div class="field"><label>120선 대기 (시간)</label><input id="br_touchWaitH" class="mono" type="number" value="168" min="1" step="1"></div>
           <div class="field"><label>진입 후 만료 (봉)</label><input id="br_expiry" class="mono" type="number" value="240" min="1" step="1"></div>
         </div>
+        <div class="field"><label>익절 방식</label>
+          <select id="br_tpMode" class="mono">
+            <option value="avg">평단 + 익절×KR</option>
+            <option value="ma">120선 복귀 터치</option>
+          </select>
+        </div>
 
-        <div class="field"><label>분할매수 횟수 (콤마 구분)</label><input id="br_n" class="mono" value="1,2,3,4,5"></div>
+        <div class="field"><label>분할매수 횟수 (콤마 구분)</label><input id="br_n" class="mono" value="3,4,5,6"></div>
         <div class="row2">
-          <div class="field"><label>손절폭 ×KR</label><input id="br_sl" class="mono" value="0.5,0.75,1,1.25,1.5,2"></div>
-          <div class="field"><label>익절폭 ×KR</label><input id="br_tp" class="mono" value="1,1.5,2,3"></div>
+          <div class="field"><label>손절폭 ×KR (최하단 매수가 아래)</label><input id="br_sl" class="mono" value="0.5,0.75,1,1.5"></div>
+          <div class="field"><label>익절폭 ×KR (평단 방식만)</label><input id="br_tp" class="mono" value="1,1.5,2,3"></div>
         </div>
         <div class="field"><label>최소 거래수 필터</label><input id="br_min" class="mono" type="number" value="20" min="0" step="1"></div>
 
-        <button class="runbtn" id="br_run">▶ 120선 전략 돌리기</button>
+        <button class="runbtn" id="br_run">▶ 120선 눌림목 돌리기</button>
         <div class="err" id="br_err"></div>
         <div class="mono" id="br_status" style="font-size:11px;color:var(--ink-faint);margin-top:8px;line-height:1.5"></div>
-        <div class="note"><b>로직</b> · H1 더블비 상단 돌파 후 H1 고가가 돌파봉 고가+추세확인×돌파TR에 닿으면 추세 인정. 이후 선택 분봉의 120SMA 첫 터치에서 1차 매수. 분할 간격 KR=돌파 H1봉 안의 10분봉 중 최대(고가−저가). 추가 매수=120SMA−KR, −2KR… 손절=최하단 매수가−손절×KR, 익절=평단+익절×KR. 손절·익절 동시 터치 시 손절 우선. 수수료·스프레드 미반영.</div>
+        <div class="note"><b>로직</b> · 종가가 120SMA×(1+이격%) 이상으로 벌어지면 무장(arm). 이후 저가가 120SMA에 <b>처음</b> 닿는 봉에서 1차 매수(=120선). 추가매수=120선−KR, −2KR…(N분할). KR=최근 N시간(또는 최근 2세션) 최대 봉(고가−저가). 손절=최하단 매수가−손절×KR. 익절=평단+익절×KR 또는 가격이 120선 복귀 터치. 무장은 120선 대기시간 초과 시 해제, 터치 1회당 1셋업(재무장하려면 다시 이격% 위로 벌어져야 함). 손절·익절 동시 터치 시 손절 우선. 수수료·스프레드 미반영.</div>
       </section>
-      <section id="br_results"><div class="placeholder"><div class="big">조건을 고르고 <span class="amb">120선 전략 돌리기</span></div><div class="mono" style="font-size:12px">H1 돌파 · 추세확인 · 분봉 120SMA 첫 터치 · KR 분할매수</div></div></section>
+      <section id="br_results"><div class="placeholder"><div class="big">조건을 고르고 <span class="amb">120선 눌림목 돌리기</span></div><div class="mono" style="font-size:12px">이격 무장 · 120선 첫 터치 · KR 분할매수 · 평단/120복귀 익절</div></div></section>
     </div>
   </div>
 
@@ -3028,69 +3043,56 @@ function drawRSI(rCurve,holdCurve,log){
     return bars.map((_,i)=>(u1[i]==null||u2[i]==null)?null:Math.max(u1[i],u2[i]));
   }
 
-  function maxM10TR(m10,startT,endT){
-    let kr=0, n=0;
-    for(const b of m10){
-      if(b.t<startT)continue;
-      if(b.t>=endT)break;
-      const tr=b.h-b.l;
-      if(tr>kr)kr=tr;
-      n++;
+  // TR(KR) = 최근 N시간 또는 최근 2세션의 최대 봉(고가−저가)
+  function computeTR(bars, idx, opt){
+    const hour=60*60*1000;
+    const endT=bars[idx].t;
+    let kr=0;
+    if(opt.trMode==="session"){
+      const sess=t=>Math.floor(t/(8*hour));   // 8시간 세션(아시아/유럽/미국 근사, 서버시간 기준)
+      const cur=sess(endT);
+      for(let j=idx-1;j>=0;j--){
+        if(sess(bars[j].t) < cur-1) break;     // 현재+직전 세션 = 최근 ~2세션
+        const tr=bars[j].h-bars[j].l; if(tr>kr)kr=tr;
+      }
+    } else {
+      const startT=endT-opt.trHours*hour;
+      for(let j=idx-1;j>=0;j--){
+        if(bars[j].t<startT) break;
+        const tr=bars[j].h-bars[j].l; if(tr>kr)kr=tr;
+      }
     }
-    return n&&kr>0?kr:null;
+    return kr>0?kr:null;
   }
 
-  function makeSetups(h1,m10,entryBars,opt){
-    const upper=doubleUpper(h1);
-    const ma=sma(entryBars.map(b=>b.c),120);
+  // 이격 무장 → 120선 첫 터치 셋업 추출
+  function makeSetups(entryBars,ma,opt){
     const setups=[];
-    const stats={breakouts:0,trend:0,noKr:0,noTouch:0};
+    const stats={armed:0,touch:0,noKr:0};
     const hour=60*60*1000;
     const tfMin=TF_MIN[opt.tf]||1;
-    for(let i=1;i<h1.length;i++){
-      const b=h1[i], prev=h1[i-1];
-      const u=upper[i], up1=upper[i-1];
-      if(u==null||up1==null)continue;
-      if(!(b.c>u && prev.c<=up1))continue;
-      stats.breakouts++;
-      const H=b.h,L=b.l,TR=H-L;
-      if(TR<=0)continue;
-      let trendIdx=-1;
-      const target=H+opt.trendK*TR;
-      for(let k=i+1;k<h1.length && k<=i+opt.trendWait;k++){
-        if(h1[k].h>=target){ trendIdx=k; break; }
+    let armed=false, armT=0;
+    for(let i=0;i<entryBars.length;i++){
+      const b=entryBars[i], m=ma[i];
+      if(m==null)continue;
+      // 무장: 종가가 이평보다 이격% 이상 위 (벌어졌다가…)
+      if(b.c >= m*(1+opt.gapPct)){ if(!armed)stats.armed++; armed=true; armT=b.t; continue; }
+      if(!armed)continue;
+      // 무장 만료(대기 초과)
+      if(b.t-armT > opt.touchWaitH*hour){ armed=false; continue; }
+      // 첫 터치: 저가가 이평선에 닿음 (…되돌림 눌림)
+      if(b.l<=m){
+        const kr=computeTR(entryBars,i,opt);
+        armed=false;                          // 터치 1회당 1셋업, 재무장 필요
+        if(!kr){ stats.noKr++; continue; }
+        setups.push({ touchIdx:i, touchT:b.t, touchPx:m, kr, touchDate:b.date, tfMin });
+        stats.touch++;
       }
-      if(trendIdx<0)continue;
-      stats.trend++;
-      const kr=maxM10TR(m10,b.t,b.t+hour);
-      if(!kr){ stats.noKr++; continue; }
-      const startT=h1[trendIdx].t+hour;
-      const endT=startT+opt.touchWaitH*hour;
-      let touchIdx=-1, touchPx=0;
-      for(let j=0;j<entryBars.length;j++){
-        const x=entryBars[j];
-        if(x.t<startT)continue;
-        if(x.t>endT)break;
-        if(ma[j]!=null && x.l<=ma[j] && x.h>=ma[j]){ touchIdx=j; touchPx=ma[j]; break; }
-      }
-      if(touchIdx<0){ stats.noTouch++; continue; }
-      setups.push({
-        signalT:b.t,
-        trendT:h1[trendIdx].t,
-        touchT:entryBars[touchIdx].t,
-        touchIdx,
-        touchPx,
-        kr,
-        breakoutTR:TR,
-        signalDate:b.date,
-        touchDate:entryBars[touchIdx].date,
-        tfMin
-      });
     }
     return {setups,stats};
   }
 
-  function backtest(entryBars,setups,N,slK,tpK,expiryBars){
+  function backtest(entryBars,ma,setups,N,slK,tpK,expiryBars,tpMode){
     let equity=1, peak=1, maxDD=0, busyUntil=-Infinity;
     let trades=0,wins=0,losses=0,sumWin=0,sumLoss=0,tpC=0,slC=0,eodC=0,usedSetups=0,filledSteps=0;
     for(const st of setups){
@@ -3107,9 +3109,15 @@ function drawRSI(rCurve,holdCurve,log){
         }
         if(filled>0){
           const avg=sumFill/filled;
-          const TP=avg+tpK*st.kr;
-          if(x.l<=SL){ exited=true; exitPx=SL; reason="SL"; exitIdx=j; break; }
-          if(x.h>=TP){ exited=true; exitPx=TP; reason="TP"; exitIdx=j; break; }
+          if(x.l<=SL){ exited=true; exitPx=SL; reason="SL"; exitIdx=j; break; }  // 손절 우선
+          if(tpMode==="ma"){
+            // 120선 복귀 터치 (진입봉 다음 봉부터, 가격이 이평선까지 회복)
+            const tpLine=ma[j];
+            if(tpLine!=null && j>st.touchIdx && x.h>=tpLine){ exited=true; exitPx=tpLine; reason="TP"; exitIdx=j; break; }
+          } else {
+            const TP=avg+tpK*st.kr;
+            if(x.h>=TP){ exited=true; exitPx=TP; reason="TP"; exitIdx=j; break; }
+          }
           if(j-st.touchIdx>=expiryBars){ exited=true; exitPx=x.c; reason="EOD"; exitIdx=j; break; }
         }
       }
@@ -3145,35 +3153,36 @@ function drawRSI(rCurve,holdCurve,log){
       const syms=selectedSyms(), tfs=selectedTfs();
       if(!syms.length)throw new Error("심볼을 1개 이상 선택하세요");
       if(!tfs.length)throw new Error("진입 분봉을 1개 이상 선택하세요");
-      const trendK=Math.max(0.1,+el("br_trendK").value||2);
-      const trendWait=Math.max(1,Math.round(+el("br_trendWait").value||24));
+      const maLen=Math.max(2,Math.round(+el("br_maLen").value||120));
+      const gapPct=Math.max(0,(+el("br_gap").value||1.5)/100);
+      const trMode=el("br_trMode").value||"hours";
+      const trHours=Math.max(1,+el("br_trHours").value||12);
+      const tpMode=el("br_tpMode").value||"avg";
       const touchWaitH=Math.max(1,+el("br_touchWaitH").value||168);
       const expiryBars=Math.max(1,Math.round(+el("br_expiry").value||240));
       const minTr=Math.max(0,+el("br_min").value||0);
       const Ns=parseList(el("br_n").value,true,1);
       const slKs=parseList(el("br_sl").value,false,0);
-      const tpKs=parseList(el("br_tp").value,false,0);
+      let tpKs=parseList(el("br_tp").value,false,0);
+      if(tpMode==="ma")tpKs=[0];               // 120선 복귀 익절은 익절폭 무관
       if(!Ns.length||!slKs.length||!tpKs.length)throw new Error("분할횟수·손절·익절 값을 1개 이상 입력하세요");
       const totalPer=Ns.length*slKs.length*tpKs.length;
       let total=0, skipped=[];
       const rows=[];
       for(const sym of syms){
-        const h1cf=findCsv(sym,"H1"), m10cf=findCsv(sym,"M10");
-        if(!h1cf||!m10cf){ skipped.push(`${sym}: H1/M10 없음`); continue; }
-        const h1=await loadCsv(h1cf);
-        const m10=await loadCsv(m10cf);
         for(const tf of tfs){
           const ecf=findCsv(sym,tf);
           if(!ecf){ skipped.push(`${sym} ${tf}: CSV 없음`); continue; }
           const entryBars=await loadCsv(ecf);
-          if(h1.length<60||m10.length<10||entryBars.length<140){ skipped.push(`${sym} ${tf}: 봉 수 부족`); continue; }
+          if(entryBars.length<maLen+20){ skipped.push(`${sym} ${tf}: 봉 수 부족`); continue; }
           status(`${sym} ${tf} 셋업 추출 중…`);
-          const {setups,stats}=makeSetups(h1,m10,entryBars,{tf,trendK,trendWait,touchWaitH});
+          const ma=sma(entryBars.map(b=>b.c),maLen);
+          const {setups,stats}=makeSetups(entryBars,ma,{tf,maLen,gapPct,trMode,trHours,touchWaitH});
           total+=totalPer;
           status(`${sym} ${tf} 엔진 실행 · 셋업 ${setups.length}개 · ${totalPer}조합…`);
           for(const N of Ns)for(const slK of slKs)for(const tpK of tpKs){
-            const r=backtest(entryBars,setups,N,slK,tpK,expiryBars);
-            r.sym=sym; r.tf=tf; r.label=`${sym} · ${tf}`; r.setups=setups.length; r.breakouts=stats.breakouts; r.trend=stats.trend; r.noTouch=stats.noTouch;
+            const r=backtest(entryBars,ma,setups,N,slK,tpK,expiryBars,tpMode);
+            r.sym=sym; r.tf=tf; r.label=`${sym} · ${tf}`; r.setups=setups.length; r.armed=stats.armed; r.touch=stats.touch; r.tpMode=tpMode;
             if(r.trades>=minTr)rows.push(r);
           }
           await pause();
@@ -3204,7 +3213,7 @@ function drawRSI(rCurve,holdCurve,log){
       <td class="mono dimv">${r.label}</td>
       <td class="num">${r.N}</td>
       <td class="num">${r.slK}</td>
-      <td class="num">${r.tpK}</td>
+      <td class="num">${r.tpMode==="ma"?"120선":r.tpK}</td>
       <td class="num">${r.trades}</td>
       <td class="num">${(r.winrate*100).toFixed(0)}%</td>
       <td class="num ${r.payoff>=1?'pos':'neg'}">${payoffStr(r.payoff)}</td>
@@ -3215,7 +3224,7 @@ function drawRSI(rCurve,holdCurve,log){
       <td class="num dimv">${r.setups}</td>
     </tr>`).join("");
     wrap.innerHTML=`
-      <div class="db-best">최적 조합(MAR) · <b class="amb">${best.label} · ${best.N}분할 · 손절 ${best.slK}KR · 익절 ${best.tpK}KR</b>
+      <div class="db-best">최적 조합(MAR) · <b class="amb">${best.label} · ${best.N}분할 · 손절 ${best.slK}KR · 익절 ${best.tpMode==="ma"?"120선복귀":best.tpK+"KR"}</b>
         → 총수익 <b class="${best.totalRet>=0?'pos':'neg'}">${pct(best.totalRet)}</b> · MDD <b class="neg">${(best.mdd*100).toFixed(1)}%</b> · MAR <b class="cy">${marStr(best.mar)}</b> · 거래 ${best.trades} · 승률 ${(best.winrate*100).toFixed(0)}%</div>
       <div class="ctable-wrap"><table class="ctable"><thead><tr>
         ${head("label","데이터","TF")}${head("N","분할","N")}${head("slK","손절","×KR")}${head("tpK","익절","×KR")}
@@ -3223,7 +3232,7 @@ function drawRSI(rCurve,holdCurve,log){
         ${head("totalRet","총수익","RETURN")}${head("mdd","최대낙폭","MDD")}${head("mar","위험대비","MAR")}
         <th><span class="th-main">청산</span><span class="th-sub">TP/SL/E</span></th>${head("setups","셋업","120 touch")}
       </tr></thead><tbody>${rows}</tbody></table></div>
-      <div class="note" style="margin-top:14px"><b class="hl-good">초록</b>=최고 총수익/MAR · <b class="hl-bad">빨강</b>=최대 낙폭 · 호박색 줄=MAR 최적 · KR=돌파 H1 내부 10분봉 최대 TR · 셋업=추세확인 뒤 120SMA 첫 터치 발생 수.</div>`;
+      <div class="note" style="margin-top:14px"><b class="hl-good">초록</b>=최고 총수익/MAR · <b class="hl-bad">빨강</b>=최대 낙폭 · 호박색 줄=MAR 최적 · KR=최근 N시간(또는 2세션) 최대 봉(고가−저가) · 셋업=이격 무장 뒤 120선 첫 터치 발생 수.</div>`;
     wrap.querySelectorAll(".br-sort").forEach(th=>th.onclick=()=>{
       const k=th.dataset.k;
       if(SORT.key===k)SORT.dir*=-1; else{ SORT.key=k; SORT.dir=(k==="mdd"||k==="label"?1:-1); }

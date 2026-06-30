@@ -1,0 +1,25 @@
+; ============================================================
+; MA_Pullback_EA 프리셋 — ★단기 US100 M30 (확정 ①)
+; 차트: US100.x · M30 · 헤징계좌 · 알고리즘 트레이딩 ON
+; 무비용 성과: +27.7% PF0.80 (전후반 0.79/0.79)
+; 로드: EA 속성 → 입력 탭 → [로드] → 이 파일 선택
+; ⚠ InpLot1~4는 자금에 맞게 조정. 매직넘버는 변경 금지(슬롯 식별).
+; ============================================================
+InpDir=0
+InpMAPeriod=120
+InpGapPct=1.0
+InpSplitCount=4
+InpSL_x=1.0
+InpTP_x=3.0
+InpTRHours=12
+InpNewsHours=24
+InpNewsMult=3.0
+InpTouchWaitH=168
+InpExpiryBars=240
+InpLot1=0.01
+InpLot2=0.01
+InpLot3=0.01
+InpLot4=0.01
+InpMagic=880001
+InpMaxSpreadPts=0
+InpComment=MAPB-US100-M30

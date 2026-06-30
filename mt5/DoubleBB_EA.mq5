@@ -19,7 +19,7 @@
 //|   · 손절·익절 동시 = 손절 우선. 동시 1포지션.                      |
 //+------------------------------------------------------------------+
 #property copyright "LEVERAGE LAB"
-#property version   "1.02"
+#property version   "1.03"
 #property strict
 
 #include <Trade/Trade.mqh>
@@ -45,7 +45,10 @@ input int          InpConfirmWin  = 5;             // 컨펌 윈도우(봉)
 input int          InpExpiryBars  = 50;            // 미체결 만료(봉) — 체결 전까지만 적용
 
 input group "=== 자금 / 실행 ==="
-input double       InpLotPerEntry = 0.01;          // 분할 1차수당 랏 (고정랏)
+input double       InpLot1        = 0.01;          // 1차수 랏
+input double       InpLot2        = 0.01;          // 2차수 랏
+input double       InpLot3        = 0.01;          // 3차수 랏
+input double       InpLot4        = 0.01;          // 4차수 랏
 input long         InpMagic       = 990001;        // 매직넘버 (전략마다 고유값!)
 input int          InpMaxSpreadPts= 0;             // 최대 스프레드(포인트, 0=무시)
 input string       InpComment     = "DBB";         // 주문 코멘트
@@ -200,6 +203,7 @@ void PlaceEntryOrders()
    for(int k=1;k<N;k++) extreme = isShort ? MathMax(extreme,prices[k]) : MathMin(extreme,prices[k]);
    g_SL = isShort ? extreme + InpSL_x*g_brkTR : extreme - InpSL_x*g_brkTR;
 
+   double lotsArr[4]; lotsArr[0]=InpLot1; lotsArr[1]=InpLot2; lotsArr[2]=InpLot3; lotsArr[3]=InpLot4;
    int    dig = (int)SymbolInfoInteger(_Symbol,SYMBOL_DIGITS);
    double ask = SymbolInfoDouble(_Symbol,SYMBOL_ASK);
    double bid = SymbolInfoDouble(_Symbol,SYMBOL_BID);
@@ -208,18 +212,19 @@ void PlaceEntryOrders()
      {
       double p=NormalizeDouble(prices[k],dig);
       g_orderPrices[k]=p;
+      double lot=(k<4)?lotsArr[k]:lotsArr[3];
       bool ok;
       if(isShort)
         {
          // 숏: 현재가보다 위면 SellLimit, 아래면 SellStop
-         if(p >= bid) ok=g_trade.SellLimit(InpLotPerEntry,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
-         else         ok=g_trade.SellStop (InpLotPerEntry,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
+         if(p >= bid) ok=g_trade.SellLimit(lot,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
+         else         ok=g_trade.SellStop (lot,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
         }
       else
         {
          // 롱: 현재가보다 아래면 BuyLimit, 위면 BuyStop
-         if(p <= ask) ok=g_trade.BuyLimit(InpLotPerEntry,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
-         else         ok=g_trade.BuyStop (InpLotPerEntry,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
+         if(p <= ask) ok=g_trade.BuyLimit(lot,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
+         else         ok=g_trade.BuyStop (lot,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
         }
       if(!ok) PrintFormat("주문 실패 차수%d @%.*f (%s)",k,dig,p,g_trade.ResultRetcodeDescription());
      }

@@ -182,11 +182,24 @@ function pauseUI(){ return new Promise(resolve=>setTimeout(resolve,0)); }
 ["c_end","r_end","s_end","u_end","t_end","p_end","sh_end","a_end","rs_end"].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=today(); });
 setInterval(()=>{ $("#clock").textContent = new Date().toLocaleTimeString("ko-KR",{hour12:false}); },1000);
 
+const LAB_TABS=["compare","allstrat","projection","rolling","signal","underwater","tranche","shannon","rsirev"];
+let activeLabTab="compare";
 $$("#tabbar button").forEach(b=>b.onclick=()=>{
   const t=b.dataset.tab;
-  $$(".tabpane").forEach(p=>p.hidden = p.id!=="pane-"+t);
   $$("#tabbar button").forEach(x=>x.classList.toggle("on", x===b));
-  if(t==="saved")renderSavedStrategies();
+  if(t==="lab"){
+    $$(".tabpane").forEach(p=>p.hidden=true);
+    const lab=document.getElementById("pane-lab"); if(lab)lab.hidden=false;
+    const sub=document.getElementById("pane-"+activeLabTab); if(sub)sub.hidden=false;
+  }else{
+    $$(".tabpane").forEach(p=>p.hidden = p.id!=="pane-"+t);
+    if(t==="saved")renderSavedStrategies();
+  }
+});
+$$("#lab_tabbar button").forEach(b=>b.onclick=()=>{
+  activeLabTab=b.dataset.labtab;
+  $$("#lab_tabbar button").forEach(x=>x.classList.toggle("on", x===b));
+  LAB_TABS.forEach(id=>{ const p=document.getElementById("pane-"+id); if(p)p.hidden = id!==activeLabTab; });
 });
 savedBadge();
 

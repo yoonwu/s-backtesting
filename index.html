@@ -825,7 +825,7 @@
     <div class="grid">
       <section class="card">
         <h2>변곡더블비-코덱스 백테스트</h2>
-        <div class="intro"><b>변곡더블비-코덱스</b>(Codex 버전) · 하락 더블비 이후 더 못 내려가고 횡보하는 구간에서, <b>하락 쪽 4/4 밴드</b>가 가격으로 올라와 캔들과 봉마감으로 만나는 자리를 RSI higher low와 함께 잡습니다.</div>
+        <div class="intro"><b>변곡더블비-코덱스</b>(Codex 버전) · <b>찢어진 볼밴에서 나온 하락 더블비</b>를 먼저 seed로 잡고, 이후 볼밴이 수축되면서 <b>하락 4/4 밴드</b>가 가격으로 올라와 캔들과 봉마감으로 만나는 변곡 자리를 RSI higher low와 함께 잡습니다.</div>
 
         <div class="field"><label>데이터 소스</label>
           <div class="subtabs" id="revdbc_src" data-cur="stored">
@@ -866,11 +866,22 @@
           <div class="hint">0이면 필터 없음. 예) 120 → 하락DB 발생 시 가격이 120SMA 아래일 때만 후보 등록.</div>
         </div>
 
-        <div class="note"><b>진입 기준</b> · 하락DB 이후의 변곡만 봅니다. <b>하락 4/4 밴드와 캔들의 봉마감 만남</b>이 핵심입니다.</div>
+        <div class="note"><b>진입 기준</b> · 수축 상태의 DB는 버리고, <b>확장 상태에서 터진 하락DB만</b> 시작점으로 씁니다. 진입은 그 뒤 가격이 더 못 밀고 수축될 때 <b>하락 4/4 밴드와 캔들이 봉마감으로 만나는 자리</b>입니다.</div>
 
         <div class="row2">
-          <div class="field"><label>DB 탐색 범위 (봉)</label><input id="revdbc_dblook" class="mono" type="number" value="80" min="5" step="5"></div>
-          <div class="field"><label>최소 하락DB 개수 (콤마)</label><input id="revdbc_dbmin" class="mono" value="1,2"></div>
+          <div class="field"><label>볼밴 확장 평균 기간 (봉)</label><input id="revdbc_dblook" class="mono" type="number" value="80" min="20" step="5"></div>
+          <div class="field"><label>확장DB 배수 (콤마)</label><input id="revdbc_expand" class="mono" value="1.3,1.5"></div>
+        </div>
+
+        <div class="row2">
+          <div class="field"><label>수축 배수: 신호폭 ÷ DB폭 (콤마)</label>
+            <input id="revdbc_contract" class="mono" value="0.65,0.8">
+            <div class="hint">DB 때 찢어진 폭보다 신호 시점 폭이 이 비율 이하로 줄어야 합니다.</div>
+          </div>
+          <div class="field"><label>현재 스퀴즈 상한 (콤마)</label>
+            <input id="revdbc_squeeze" class="mono" value="1.15">
+            <div class="hint">현재 볼밴폭 ÷ 평균폭. DB 대비 수축 또는 이 값 이하이면 수축으로 인정.</div>
+          </div>
         </div>
 
         <div class="row2">
@@ -888,9 +899,9 @@
             <input id="revdbc_rsi_gap" class="mono" value="3,5">
             <div class="hint">현재 RSI가 기준 저점 RSI보다 이 값 이상 높아야 합니다.</div>
           </div>
-          <div class="field"><label>하락밴드 retest 여유 ×TR (콤마)</label>
-            <input id="revdbc_bandk" class="mono" value="0.33,0.5">
-            <div class="hint">저가가 하락 더블비 밴드 근처로 다시 들어오면 retest로 인정.</div>
+          <div class="field"><label>PivotLow 재터치 여유 ×TR (콤마)</label>
+            <input id="revdbc_bandk" class="mono" value="0.5,1.0">
+            <div class="hint">신호봉 저가가 DB 이후 만들어진 저점 근처에 있어야 합니다. 너무 위에서 뜬 신호는 제외.</div>
           </div>
         </div>
 
@@ -900,15 +911,15 @@
             <div class="hint">하락 쪽 4/4 밴드가 저점 이후 가격 쪽으로 꺾여 올라오는 최소 기울기.</div>
           </div>
           <div class="field"><label>캔들-하락 4/4 만남 여유 ×TR (콤마)</label>
-            <input id="revdbc_bb44_meet" class="mono" value="0.33">
+            <input id="revdbc_bb44_meet" class="mono" value="0.33,0.5">
             <div class="hint">봉마감 기준 캔들이 하락 4/4 밴드 근처에서 끝나야 합니다.</div>
           </div>
         </div>
 
         <div class="row2">
           <div class="field"><label>하락 4/4 턴 확인 범위 (봉)</label><input id="revdbc_bb44_look" class="mono" type="number" value="4" min="1" step="1"></div>
-          <div class="field"><label>횡보 캔들 최대 몸통 ×TR (콤마)</label>
-            <input id="revdbc_bodyk" class="mono" value="1.2">
+          <div class="field"><label>신호봉 최대 몸통 ×TR (콤마)</label>
+            <input id="revdbc_bodyk" class="mono" value="1.0,1.3">
             <div class="hint">돌파 지속 장대봉은 제외하고, 옆으로 기는 봉/약상승·약하락 봉만 남깁니다.</div>
           </div>
         </div>
@@ -919,17 +930,17 @@
           </div>
         </div>
 
-        <div class="field"><label>PivotLow 탐색 범위 (봉, 콤마)</label>
-          <input id="revdbc_pivot" class="mono" value="10,20">
-          <div class="hint">DB 이후 이 봉 수 안에서 최저점(pivotLow)을 찾습니다.</div>
+        <div class="field"><label>DB 이후 최소 대기 봉 수</label>
+          <input id="revdbc_minwait" class="mono" type="number" value="2" min="1" step="1">
+          <div class="hint">하락DB 직후 바로 받지 않고, 최소 이 봉 수 이후부터 수축/4-4 만남을 확인합니다.</div>
         </div>
 
         <div class="row2">
-          <div class="field"><label>저점 허용훼손 ×TR (콤마)</label>
-            <input id="revdbc_lbk" class="mono" value="0.2,0.33">
-            <div class="hint">pivotLow − TR×K 이하면 셋업 취소 (기본 0.33)</div>
+          <div class="field"><label>DB저점 추가훼손 허용 ×TR (콤마)</label>
+            <input id="revdbc_lbk" class="mono" value="0.5,1.0">
+            <div class="hint">DB 저점보다 이 값 이상 더 밀리면 그 DB seed는 실패로 폐기합니다.</div>
           </div>
-          <div class="field"><label>박스 최소 봉 수 (콤마)</label>
+          <div class="field"><label>저점 이후 최소 횡보 봉 수 (콤마)</label>
             <input id="revdbc_bmb" class="mono" value="3,5">
             <div class="hint">pivotLow 이후 이 봉 이상 횡보해야 유효</div>
           </div>
@@ -937,7 +948,7 @@
 
         <div class="field"><label>최대 대기 봉 수</label>
           <input id="revdbc_wait" class="mono" type="number" value="50" min="5" step="5">
-          <div class="hint">마지막 하락DB 이후 이 봉 안에 저점 재확인과 하락 4/4 만남이 없으면 폐기.</div>
+          <div class="hint">확장 하락DB 이후 이 봉 안에 수축 + 하락 4/4 만남이 없으면 폐기.</div>
         </div>
 
         <div class="field"><label>진입 방식</label>
@@ -970,10 +981,10 @@
         <button class="runbtn" id="revdbc_run">▶ 변곡더블비 돌리기</button>
         <div class="err" id="revdbc_err"></div>
         <div class="mono" id="revdbc_status" style="font-size:11px;color:var(--ink-faint);margin-top:8px;line-height:1.5"></div>
-        <div class="note"><b>로직</b> · 최근 DB 탐색범위 안의 하락DB 군집 → 이전 기준저점(anchor) → 돌파처럼 더 밀지 못하고 저점 근처에서 횡보/약하락·약상승 → <b>하락 4/4 밴드가 가격 쪽으로 뾰족하게 턴</b> → 그 하락 4/4 밴드와 캔들이 봉마감으로 만남 → RSI higher low + 선택한 RSI 확인 → 반전 롱 진입. 손절=pivotLow−손절×TR, 익절=진입가+익절×TR. 동시 1포지션, 손절 우선, 수수료·스프레드 미반영.</div>
+        <div class="note"><b>로직</b> · 확장된 볼밴에서 하락 더블비 발생 → 그 DB를 seed로 저장 → 이후 가격이 DB 저점을 크게 훼손하지 못하고 옆으로 기는 동안 볼밴폭이 수축 → <b>하락 4/4 밴드가 가격 쪽으로 뾰족하게 올라와 캔들과 봉마감으로 만남</b> → RSI higher low + 선택한 RSI 확인 → 반전 롱 진입. 손절=pivotLow−손절×TR, 익절=진입가+익절×TR. 동시 1포지션, 손절 우선, 수수료·스프레드 미반영.</div>
       </section>
       <section id="revdbc_results">
-        <div class="placeholder"><div class="big">조건을 설정하고 <span class="amb">변곡더블비 돌리기</span></div><div class="mono" style="font-size:12px">하락DB → 더 못 내려감 → 하락 4/4 만남 → RSI 변곡 → 반전 롱</div></div>
+        <div class="placeholder"><div class="big">조건을 설정하고 <span class="amb">변곡더블비 돌리기</span></div><div class="mono" style="font-size:12px">확장 하락DB → 볼밴 수축 → 하락 4/4 만남 → RSI 변곡 → 반전 롱</div></div>
       </section>
     </div>
   </div>
@@ -1164,6 +1175,6 @@
 
 </div>
 
-<script src="leverage-lab.js?v=20260630l"></script>
+<script src="leverage-lab.js?v=20260630m"></script>
 </body>
 </html>

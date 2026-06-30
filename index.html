@@ -709,8 +709,21 @@
         </div>
 
         <div class="row2">
+          <div class="field"><label>방향</label>
+            <select id="br_dir" class="mono">
+              <option value="long">롱 (위로 벌어졌다 눌림 매수)</option>
+              <option value="short">숏 (아래로 벌어졌다 반등 매도)</option>
+            </select>
+          </div>
           <div class="field"><label>이평 기간 (봉)</label><input id="br_maLen" class="mono" type="number" value="120" min="2" step="1"></div>
+        </div>
+        <div class="row2">
           <div class="field"><label>이격 조건 (%)</label><input id="br_gap" class="mono" type="number" value="1.5" min="0" step="0.1"></div>
+          <div class="field"><label>최소 거래수 필터</label><input id="br_min" class="mono" type="number" value="20" min="0" step="1"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>기간 시작 (YYYY-MM-DD, 비우면 처음)</label><input id="br_from" class="mono" type="text" placeholder="2024-01-01"></div>
+          <div class="field"><label>기간 종료 (비우면 끝까지)</label><input id="br_to" class="mono" type="text" placeholder="2026-06-29"></div>
         </div>
         <div class="row2">
           <div class="field"><label>TR 윈도우 (시간)</label><input id="br_trHours" class="mono" type="number" value="12" min="1" step="1"></div>
@@ -733,9 +746,16 @@
           <div class="field"><label>손절폭 ×KR (최하단 매수가 아래)</label><input id="br_sl" class="mono" value="0.5,0.75,1,1.5"></div>
           <div class="field"><label>익절폭 ×KR (평단 방식만)</label><input id="br_tp" class="mono" value="1,1.5,2,3"></div>
         </div>
-        <div class="field"><label>최소 거래수 필터</label><input id="br_min" class="mono" type="number" value="20" min="0" step="1"></div>
 
         <button class="runbtn" id="br_run">▶ 120선 눌림목 돌리기</button>
+
+        <div class="row2" style="margin-top:10px">
+          <div class="field"><label>랜덤 윈도우 (개월)</label><input id="br_rndMonths" class="mono" type="number" value="3" min="1" step="1"></div>
+          <div class="field"><label>반복 횟수</label><input id="br_rndReps" class="mono" type="number" value="10" min="1" step="1"></div>
+        </div>
+        <button class="runbtn" id="br_rnd" style="background:linear-gradient(90deg,#7c4dff,#b388ff)">🎲 랜덤 기간 견고성 테스트</button>
+        <div class="hint">현재 입력한 격자(분할·손절·익절)·방향·이격으로, 랜덤 N개월 구간을 반복 추출해 각 구간의 최적 조합을 뽑습니다. 심볼·TF는 1개씩 권장. 우수 구간이 많을수록 견고한 전략.</div>
+
         <div class="err" id="br_err"></div>
         <div class="mono" id="br_status" style="font-size:11px;color:var(--ink-faint);margin-top:8px;line-height:1.5"></div>
         <div class="note"><b>로직</b> · 종가가 120SMA×(1+이격%) 이상으로 벌어지면 무장(arm). 이후 저가가 120SMA에 <b>처음</b> 닿는 봉에서 1차 매수(=120선). 추가매수=120선−KR, −2KR…(N분할). <b>KR</b>=최근 N시간 최대 봉(고가−저가); 단 평균봉 대비 큰봉배수를 넘는 <b>뉴스봉</b>은 큰봉지속시간(기본24h) 동안 KR로 유지(비농·FOMC 효과 지속). 손절=최하단 매수가−손절×KR. 익절=평단+익절×KR 또는 가격이 120선 복귀 터치. 무장은 120선 대기시간 초과 시 해제, 터치 1회당 1셋업(재무장하려면 다시 이격% 위로 벌어져야 함). 손절·익절 동시 터치 시 손절 우선. 수수료·스프레드 미반영.</div>
@@ -3069,26 +3089,31 @@ function drawRSI(rCurve,holdCurve,log){
     return kr>0?kr:null;
   }
 
-  // 이격 무장 → 120선 첫 터치 셋업 추출
+  // 이격 무장 → 120선 첫 터치 셋업 추출 (롱: 위로 벌어졌다 눌림 / 숏: 아래로 벌어졌다 반등)
   function makeSetups(entryBars,ma,avgRng,opt){
+    const isShort=(opt.dir==="short");
     const setups=[];
     const stats={armed:0,touch:0,noKr:0};
     const hour=60*60*1000;
     const tfMin=TF_MIN[opt.tf]||1;
+    const fromT=opt.fromT||-Infinity, toT=opt.toT||Infinity;
     let armed=false, armT=0;
     for(let i=0;i<entryBars.length;i++){
       const b=entryBars[i], m=ma[i];
       if(m==null)continue;
-      // 무장: 종가가 이평보다 이격% 이상 위 (벌어졌다가…)
-      if(b.c >= m*(1+opt.gapPct)){ if(!armed)stats.armed++; armed=true; armT=b.t; continue; }
+      // 무장: 롱=종가가 이평+이격% 이상 위 / 숏=종가가 이평−이격% 이상 아래
+      const armCond = isShort ? (b.c <= m*(1-opt.gapPct)) : (b.c >= m*(1+opt.gapPct));
+      if(armCond){ if(!armed)stats.armed++; armed=true; armT=b.t; continue; }
       if(!armed)continue;
       // 무장 만료(대기 초과)
       if(b.t-armT > opt.touchWaitH*hour){ armed=false; continue; }
-      // 첫 터치: 저가가 이평선에 닿음 (…되돌림 눌림)
-      if(b.l<=m){
+      // 첫 터치: 롱=저가가 이평에 닿음(눌림) / 숏=고가가 이평에 닿음(반등)
+      const touchCond = isShort ? (b.h>=m) : (b.l<=m);
+      if(touchCond){
         const kr=computeTR(entryBars,i,opt,avgRng);
         armed=false;                          // 터치 1회당 1셋업, 재무장 필요
         if(!kr){ stats.noKr++; continue; }
+        if(b.t<fromT || b.t>toT) continue;    // 기간 필터(진입 시점 기준)
         setups.push({ touchIdx:i, touchT:b.t, touchPx:m, kr, touchDate:b.date, tfMin });
         stats.touch++;
       }
@@ -3096,31 +3121,36 @@ function drawRSI(rCurve,holdCurve,log){
     return {setups,stats};
   }
 
-  function backtest(entryBars,ma,setups,N,slK,tpK,expiryBars,tpMode){
+  function backtest(entryBars,ma,setups,N,slK,tpK,expiryBars,tpMode,dir){
+    const isShort=(dir==="short");
     let equity=1, peak=1, maxDD=0, busyUntil=-Infinity;
     let trades=0,wins=0,losses=0,sumWin=0,sumLoss=0,tpC=0,slC=0,eodC=0,usedSetups=0,filledSteps=0;
     for(const st of setups){
       if(st.touchT<=busyUntil)continue;
       usedSetups++;
       const orders=[];
-      for(let k=0;k<N;k++)orders.push({p:st.touchPx-k*st.kr,filled:false});
-      const SL=Math.min(...orders.map(o=>o.p))-slK*st.kr;
+      // 롱: 120선 아래로 −KR,−2KR 분할 / 숏: 위로 +KR,+2KR 분할
+      for(let k=0;k<N;k++)orders.push({p: isShort ? st.touchPx+k*st.kr : st.touchPx-k*st.kr, filled:false});
+      const SL = isShort ? Math.max(...orders.map(o=>o.p))+slK*st.kr
+                         : Math.min(...orders.map(o=>o.p))-slK*st.kr;
       let filled=0,sumFill=0,exited=false,exitPx=0,reason="",exitIdx=-1;
       for(let j=st.touchIdx;j<entryBars.length;j++){
         const x=entryBars[j];
         for(const o of orders){
-          if(!o.filled && x.l<=o.p){ o.filled=true; filled++; sumFill+=o.p; }
+          // 롱=저가가 매수가 이하 체결 / 숏=고가가 매도가 이상 체결
+          if(!o.filled && (isShort ? x.h>=o.p : x.l<=o.p)){ o.filled=true; filled++; sumFill+=o.p; }
         }
         if(filled>0){
           const avg=sumFill/filled;
-          if(x.l<=SL){ exited=true; exitPx=SL; reason="SL"; exitIdx=j; break; }  // 손절 우선
+          // 손절 우선
+          if(isShort ? x.h>=SL : x.l<=SL){ exited=true; exitPx=SL; reason="SL"; exitIdx=j; break; }
           if(tpMode==="ma"){
             // 120선 복귀 터치 (진입봉 다음 봉부터, 가격이 이평선까지 회복)
             const tpLine=ma[j];
-            if(tpLine!=null && j>st.touchIdx && x.h>=tpLine){ exited=true; exitPx=tpLine; reason="TP"; exitIdx=j; break; }
+            if(tpLine!=null && j>st.touchIdx && (isShort ? x.l<=tpLine : x.h>=tpLine)){ exited=true; exitPx=tpLine; reason="TP"; exitIdx=j; break; }
           } else {
-            const TP=avg+tpK*st.kr;
-            if(x.h>=TP){ exited=true; exitPx=TP; reason="TP"; exitIdx=j; break; }
+            const TP = isShort ? avg-tpK*st.kr : avg+tpK*st.kr;
+            if(isShort ? x.l<=TP : x.h>=TP){ exited=true; exitPx=TP; reason="TP"; exitIdx=j; break; }
           }
           if(j-st.touchIdx>=expiryBars){ exited=true; exitPx=x.c; reason="EOD"; exitIdx=j; break; }
         }
@@ -3128,7 +3158,8 @@ function drawRSI(rCurve,holdCurve,log){
       if(filled===0)continue;
       if(!exited){ exitPx=entryBars[entryBars.length-1].c; reason="EOD"; exitIdx=entryBars.length-1; }
       const avg=sumFill/filled, frac=filled/N;
-      const ret=frac*(exitPx-avg)/avg;
+      // 숏은 (평단−청산가), 롱은 (청산가−평단)
+      const ret=frac*(isShort ? (avg-exitPx) : (exitPx-avg))/avg;
       equity*=(1+ret); if(equity>peak)peak=equity;
       const dd=equity/peak-1; if(dd<maxDD)maxDD=dd;
       trades++; filledSteps+=filled;
@@ -3157,8 +3188,11 @@ function drawRSI(rCurve,holdCurve,log){
       const syms=selectedSyms(), tfs=selectedTfs();
       if(!syms.length)throw new Error("심볼을 1개 이상 선택하세요");
       if(!tfs.length)throw new Error("진입 분봉을 1개 이상 선택하세요");
+      const dir=el("br_dir").value||"long";
       const maLen=Math.max(2,Math.round(+el("br_maLen").value||120));
       const gapPct=Math.max(0,(+el("br_gap").value||1.5)/100);
+      const parseDate=v=>{ v=(v||"").trim(); if(!v)return null; const t=new Date(v.replace(" ","T")).getTime(); return isFinite(t)?t:null; };
+      const fromT=parseDate(el("br_from").value), toT=parseDate(el("br_to").value);
       const trHours=Math.max(1,+el("br_trHours").value||12);
       const newsHours=Math.max(trHours,+el("br_newsHours").value||24);
       const newsMult=Math.max(1,+el("br_newsMult").value||3);
@@ -3183,12 +3217,12 @@ function drawRSI(rCurve,holdCurve,log){
           status(`${sym} ${tf} 셋업 추출 중…`);
           const ma=sma(entryBars.map(b=>b.c),maLen);
           const avgRng=rollMeanRange(entryBars,100);
-          const {setups,stats}=makeSetups(entryBars,ma,avgRng,{tf,maLen,gapPct,trHours,newsHours,newsMult,touchWaitH});
+          const {setups,stats}=makeSetups(entryBars,ma,avgRng,{tf,dir,maLen,gapPct,trHours,newsHours,newsMult,touchWaitH,fromT,toT});
           total+=totalPer;
           status(`${sym} ${tf} 엔진 실행 · 셋업 ${setups.length}개 · ${totalPer}조합…`);
           for(const N of Ns)for(const slK of slKs)for(const tpK of tpKs){
-            const r=backtest(entryBars,ma,setups,N,slK,tpK,expiryBars,tpMode);
-            r.sym=sym; r.tf=tf; r.label=`${sym} · ${tf}`; r.setups=setups.length; r.armed=stats.armed; r.touch=stats.touch; r.tpMode=tpMode;
+            const r=backtest(entryBars,ma,setups,N,slK,tpK,expiryBars,tpMode,dir);
+            r.sym=sym; r.tf=tf; r.label=`${sym} · ${tf}`; r.setups=setups.length; r.armed=stats.armed; r.touch=stats.touch; r.tpMode=tpMode; r.dir=dir;
             if(r.trades>=minTr)rows.push(r);
           }
           await pause();
@@ -3199,6 +3233,99 @@ function drawRSI(rCurve,holdCurve,log){
       render();
     }catch(e){ err("⚠ "+e.message); status(""); }
     finally{ btn.disabled=false; }
+  }
+
+  // 랜덤 N개월 구간을 reps회 추출 → 각 구간 격자 최적 조합 → 견고성 평가
+  async function runRandom(){
+    err("");
+    el("br_rnd").disabled=true; el("br_run").disabled=true;
+    try{
+      const syms=selectedSyms(), tfs=selectedTfs();
+      if(!syms.length||!tfs.length)throw new Error("심볼·진입분봉을 1개 이상 선택하세요");
+      const months=Math.max(1,Math.round(+el("br_rndMonths").value||3));
+      const reps=Math.max(1,Math.round(+el("br_rndReps").value||10));
+      const winMs=months*30.44*24*60*60*1000;
+      const dir=el("br_dir").value||"long";
+      const maLen=Math.max(2,Math.round(+el("br_maLen").value||120));
+      const gapPct=Math.max(0,(+el("br_gap").value||1.5)/100);
+      const trHours=Math.max(1,+el("br_trHours").value||12);
+      const newsHours=Math.max(trHours,+el("br_newsHours").value||24);
+      const newsMult=Math.max(1,+el("br_newsMult").value||3);
+      const tpMode=el("br_tpMode").value||"avg";
+      const touchWaitH=Math.max(1,+el("br_touchWaitH").value||168);
+      const expiryBars=Math.max(1,Math.round(+el("br_expiry").value||240));
+      const Ns=parseList(el("br_n").value,true,1);
+      const slKs=parseList(el("br_sl").value,false,0);
+      let tpKs=parseList(el("br_tp").value,false,0);
+      if(tpMode==="ma")tpKs=[0];
+      if(!Ns.length||!slKs.length||!tpKs.length)throw new Error("분할·손절·익절 값을 1개 이상 입력하세요");
+      const rows=[]; const skipped=[];
+      const fmtD=t=>new Date(t).toISOString().slice(0,10);
+      for(const sym of syms){
+        for(const tf of tfs){
+          const ecf=findCsv(sym,tf); if(!ecf){ skipped.push(`${sym} ${tf}:CSV없음`); continue; }
+          const bars=await loadCsv(ecf);
+          if(bars.length<maLen+50){ skipped.push(`${sym} ${tf}:봉부족`); continue; }
+          const ma=sma(bars.map(b=>b.c),maLen);
+          const avgRng=rollMeanRange(bars,100);
+          const t0=bars[0].t, tN=bars[bars.length-1].t;
+          if(tN-t0 < winMs*1.2){ skipped.push(`${sym} ${tf}:기간짧음`); continue; }
+          for(let rep=0;rep<reps;rep++){
+            const fromT=t0 + Math.random()*((tN-winMs)-t0);
+            const toT=fromT+winMs;
+            const {setups}=makeSetups(bars,ma,avgRng,{tf,dir,maLen,gapPct,trHours,newsHours,newsMult,touchWaitH,fromT,toT});
+            let best=null;
+            for(const N of Ns)for(const slK of slKs)for(const tpK of tpKs){
+              const r=backtest(bars,ma,setups,N,slK,tpK,expiryBars,tpMode,dir);
+              if(r.trades>=5 && r.mdd<0 && (!best || r.mar>best.mar)) best={...r};
+            }
+            rows.push({sym,tf,dir,tpMode,fromS:fmtD(fromT),toS:fmtD(toT),setups:setups.length,best});
+            status(`${sym} ${tf} 랜덤 ${rep+1}/${reps} 구간…`);
+            await pause();
+          }
+        }
+      }
+      renderRandom(rows,{months,reps,dir,skipped});
+    }catch(e){ err("⚠ "+e.message); status(""); }
+    finally{ el("br_rnd").disabled=false; el("br_run").disabled=false; }
+  }
+
+  function renderRandom(rows,meta){
+    const wrap=el("br_results");
+    if(!rows.length){ wrap.innerHTML=`<div class="placeholder"><div class="big">결과 없음</div><div class="mono" style="font-size:12px">기간이 너무 짧거나 심볼 미선택</div></div>`; return; }
+    const valid=rows.filter(r=>r.best);
+    const sorted=rows.slice().sort((a,b)=>((b.best?b.best.mar:-99))-((a.best?a.best.mar:-99)));
+    const pos=valid.filter(r=>r.best.totalRet>0).length;
+    const mars=valid.map(r=>r.best.mar).sort((a,b)=>a-b);
+    const med=mars.length?mars[Math.floor(mars.length/2)]:0;
+    const avg=mars.length?mars.reduce((s,x)=>s+x,0)/mars.length:0;
+    const tpLab=r=>r.tpMode==="ma"?"120복귀":r.best.tpK+"KR";
+    const trRows=sorted.map(r=>{
+      if(!r.best) return `<tr><td class="mono dimv">${r.fromS}~${r.toS}</td><td class="mono dimv">${r.sym}·${r.tf}</td><td class="num dimv" colspan="6">거래부족(셋업 ${r.setups})</td></tr>`;
+      const b=r.best;
+      return `<tr class="${b.totalRet>0?'':'db-dim'}">
+        <td class="mono dimv">${r.fromS}~${r.toS}</td>
+        <td class="mono dimv">${r.sym}·${r.tf}</td>
+        <td class="num">${b.N}/${b.slK}/${tpLab(r)}</td>
+        <td class="num ${b.totalRet>=0?'pos':'neg'}">${(b.totalRet>=0?'+':'')+(b.totalRet*100).toFixed(1)}%</td>
+        <td class="num neg">${(b.mdd*100).toFixed(1)}%</td>
+        <td class="num cy">${b.mar===Infinity?'∞':b.mar.toFixed(2)}</td>
+        <td class="num">${(b.winrate*100).toFixed(0)}%</td>
+        <td class="num dimv">${b.trades}</td>
+      </tr>`;
+    }).join("");
+    wrap.innerHTML=`
+      <div class="db-best">🎲 랜덤 ${meta.months}개월 × ${rows.length}구간 (${meta.dir==="short"?"숏":"롱"}) ·
+        <b class="${pos>valid.length/2?'pos':'neg'}">수익 구간 ${pos}/${valid.length}</b> · 평균 MAR <b class="cy">${avg.toFixed(2)}</b> · 중앙 MAR <b class="cy">${med.toFixed(2)}</b>
+        ${meta.skipped.length?` · 건너뜀: ${meta.skipped.join(", ")}`:""}</div>
+      <div class="ctable-wrap"><table class="ctable"><thead><tr>
+        <th><span class="th-main">기간</span><span class="th-sub">${meta.months}M WINDOW</span></th>
+        <th><span class="th-main">데이터</span></th>
+        <th><span class="th-main">최적 조합</span><span class="th-sub">N/SL/TP</span></th>
+        <th><span class="th-main">수익</span></th><th><span class="th-main">MDD</span></th>
+        <th><span class="th-main">MAR</span></th><th><span class="th-main">승률</span></th><th><span class="th-main">거래</span></th>
+      </tr></thead><tbody>${trRows}</tbody></table></div>
+      <div class="note" style="margin-top:14px">각 구간마다 입력한 격자에서 <b>구간 내 최적(MAR)</b> 조합을 뽑은 결과. <b class="pos">수익 구간 비율</b>이 높고 평균·중앙 MAR이 안정적이면 견고한 전략. 흐린 줄=손실 구간. <b>구간별 최적이라 실제 운용(고정 파라미터)보다 낙관적</b>인 점 감안.</div>`;
   }
 
   function render(){
@@ -3230,7 +3357,7 @@ function drawRSI(rCurve,holdCurve,log){
       <td class="num dimv">${r.setups}</td>
     </tr>`).join("");
     wrap.innerHTML=`
-      <div class="db-best">최적 조합(MAR) · <b class="amb">${best.label} · ${best.N}분할 · 손절 ${best.slK}KR · 익절 ${best.tpMode==="ma"?"120선복귀":best.tpK+"KR"}</b>
+      <div class="db-best">최적 조합(MAR) · <b class="amb">${best.label} · ${best.dir==="short"?"숏":"롱"} · ${best.N}분할 · 손절 ${best.slK}KR · 익절 ${best.tpMode==="ma"?"120선복귀":best.tpK+"KR"}</b>
         → 총수익 <b class="${best.totalRet>=0?'pos':'neg'}">${pct(best.totalRet)}</b> · MDD <b class="neg">${(best.mdd*100).toFixed(1)}%</b> · MAR <b class="cy">${marStr(best.mar)}</b> · 거래 ${best.trades} · 승률 ${(best.winrate*100).toFixed(0)}%</div>
       <div class="ctable-wrap"><table class="ctable"><thead><tr>
         ${head("label","데이터","TF")}${head("N","분할","N")}${head("slK","손절","×KR")}${head("tpK","익절","×KR")}
@@ -3248,6 +3375,7 @@ function drawRSI(rCurve,holdCurve,log){
 
   $$("#br_syms button").forEach(b=>b.onclick=()=>b.classList.toggle("on"));
   el("br_run").onclick=run;
+  el("br_rnd").onclick=runRandom;
 })();
 
 /* ============================================================

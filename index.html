@@ -784,6 +784,10 @@
           <div class="field"><label>미체결 만료 (봉)</label><input id="revdb_expiry" class="mono" type="number" value="50" min="1" step="1"></div>
           <div class="field"><label>최소 거래수 필터</label><input id="revdb_min" class="mono" type="number" value="5" min="0" step="1"></div>
         </div>
+        <div class="field"><label>내역 시각 보정 (서버→KST, 시간)</label>
+          <input id="revdb_tzoff" class="mono" type="number" value="7" step="1">
+          <div class="hint">CSV는 브로커 서버시간. KST(GMT+9)로 +7 기본(서머타임 땐 +6). 내역 시각이 1시간 어긋나면 ±1 조정 후 ▸내역 다시 클릭.</div>
+        </div>
 
         <button class="runbtn" id="revdb_run">▶ 변곡더블비 돌리기</button>
         <div class="err" id="revdb_err"></div>
@@ -980,6 +984,6 @@
 
 </div>
 
-<script src="leverage-lab.js?v=20260630b"></script>
+<script src="leverage-lab.js?v=20260630c"></script>
 </body>
 </html>

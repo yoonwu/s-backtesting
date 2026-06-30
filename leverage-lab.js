@@ -2827,6 +2827,7 @@ function drawRSI(rCurve,holdCurve,log){
         if(bP===null||bPP===null)continue;
         if(!(bP<=bPP && band>bP))continue;              // i-1이 밴드 V-팁(꺾여 올라옴)
         if(bars[i-1].l>bP)continue;                     // 팁 저가가 밴드를 찌름
+        if(bars[i].l<=bars[i-1].l)continue;             // 저점 유지: 진입봉이 팁 저가를 안 깸(계속 하락=추세하락 제외)
         if(rejectClose&&bars[i-1].c<bP)continue;        // 거부: 팁 봉 종가 밴드 위
         anchor=i-1;
       }else{

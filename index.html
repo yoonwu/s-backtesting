@@ -238,6 +238,7 @@
       <button data-tab="shannon">도깨비<span class="sub">Shannon</span></button>
       <button data-tab="rsirev">RSI 매수<span class="sub">Mean Rev</span></button>
       <button data-tab="doubleb">더블비<span class="sub">Double-BB</span></button>
+      <button data-tab="revdb">변곡더블비<span class="sub">Reversal-DB</span></button>
       <button data-tab="break120">120선 눌림목<span class="sub">MA120-Pullback</span></button>
       <button data-tab="paper">가상매매<span class="sub">Paper Lot</span></button>
       <button data-tab="saved">⭐ 저장된 전략 <span class="badge" id="tab_saved_badge"></span><span class="sub">Saved</span></button>
@@ -679,6 +680,105 @@
         <div class="note"><b>로직</b> · 더블비 상단=max(4,4 시가밴드, 20,2 종가밴드)(모집단σ). 종가가 상단을 <b>처음</b> 넘긴 봉=돌파봉. <b>컨펌 조건</b>: 돌파봉 이후 컨펌 윈도우 봉 안에 종가가 돌파봉 종가보다 높은 봉이 나와야만 진입(없으면 폐기). 진입=고가~저가 끝점포함 N등분, <b>체결은 컨펌봉 다음 봉부터</b> 저가≤주문가면 1/N씩. 손절=최하단 매수가−손절×TR(숏은 최상단 매도가+손절×TR), 익절=(고정)돌파봉 고가+익절×TR 또는 평단+익절×TR. 한 봉에 손절·익절 동시 터치 시 <b>손절 우선</b>. 동시 1포지션, 부분체결분만 평단 계산. 미체결 만료는 컨펌봉 이후 봉 수로 셈. 수수료·스프레드 미반영.</div>
       </section>
       <section id="dc_results"><div class="placeholder"><div class="big">데이터 소스를 고르고 <span class="amb">그리드 돌리기</span></div><div class="mono" style="font-size:12px">컨펌봉 필터 적용 · 조합별 거래수·승률·손익비·총수익·MDD·MAR · 헤더 클릭 정렬</div></div></section>
+    </div>
+  </div>
+
+  <!-- =================== TAB: REVERSAL DOUBLE-BB (변곡더블비) =================== -->
+  <div class="tabpane" id="pane-revdb" hidden>
+    <div class="grid">
+      <section class="card">
+        <h2>변곡더블비 백테스트</h2>
+        <div class="intro"><b>변곡더블비</b> · 하락 더블비(DoubleBB 하단 최초 하향돌파) 이후 <b>저점(pivotLow)</b>을 크게 훼손하지 않고 박스 유지 → <b>BB(4,4) 상단을 종가로 돌파</b>하면 반전 롱 신호. RSI(14) 다이버전스는 필수조건이 아니며 결과 내역에 <b>O/X</b>로 표시됩니다.</div>
+
+        <div class="field"><label>데이터 소스</label>
+          <div class="subtabs" id="revdb_src" data-cur="stored">
+            <button data-s="stored" class="on">저장된 CSV</button><button data-s="upload">CSV 업로드</button><button data-s="yahoo">야후 티커</button>
+          </div>
+          <div id="revdb_storedRow" style="margin-top:6px">
+            <div class="csv-checkbar">
+              <label><input id="revdb_csv_all" type="checkbox"> 전체선택</label>
+              <div class="csv-actions">
+                <button type="button" id="revdb_csv_gold">골드 선택</button>
+                <button type="button" id="revdb_csv_us100">나스닥 선택</button>
+                <button type="button" id="revdb_csv_clear">선택해제</button>
+              </div>
+            </div>
+            <div id="revdb_csv_list" class="csv-checklist"></div>
+            <button id="revdb_reload" style="padding:3px 8px;border:1px solid var(--border);background:var(--input-bg);color:var(--ink-dim);border-radius:6px;font-size:11px;cursor:pointer">↻ 캐시 비우기</button>
+          </div>
+          <div id="revdb_uploadRow" style="display:none;margin-top:6px">
+            <input id="revdb_file" type="file" accept=".csv,text/csv">
+            <div class="hint">MT4/MT5 export(.csv) — 콤마/탭/세미콜론, 헤더 유무 무관.</div>
+          </div>
+          <div id="revdb_yahooRow" style="display:none;margin-top:6px">
+            <input id="revdb_sym" placeholder="예: GC=F, QQQ" autocomplete="off" style="margin-bottom:8px">
+            <div class="row2">
+              <div class="field" style="margin-bottom:0"><label>시작일</label><input id="revdb_from" type="date"></div>
+              <div class="field" style="margin-bottom:0"><label>종료일</label><input id="revdb_to" type="date"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="revdb_tfrow" class="field" style="display:none">
+          <label>타임프레임</label>
+          <select id="revdb_tf"><option value="5m">5분봉</option><option value="10m">10분봉 (5분 합성)</option><option value="1h">1시간봉</option><option value="1d">일봉</option></select>
+        </div>
+
+        <div class="field"><label>장기이평 필터 (봉, 0=없음)</label>
+          <input id="revdb_ma" class="mono" type="number" value="0" min="0" step="1">
+          <div class="hint">0이면 필터 없음. 예) 120 → 하락DB 발생 시 가격이 120SMA 아래일 때만 후보 등록.</div>
+        </div>
+
+        <div class="field"><label>PivotLow 탐색 범위 (봉, 콤마)</label>
+          <input id="revdb_pivot" class="mono" value="5,10,20">
+          <div class="hint">DB 이후 이 봉 수 안에서 최저점(pivotLow)을 찾습니다.</div>
+        </div>
+
+        <div class="row2">
+          <div class="field"><label>저점 허용훼손 ×TR (콤마)</label>
+            <input id="revdb_lbk" class="mono" value="0.1,0.2,0.33,0.5">
+            <div class="hint">pivotLow − TR×K 이하면 셋업 취소 (기본 0.33)</div>
+          </div>
+          <div class="field"><label>박스 최소 봉 수 (콤마)</label>
+            <input id="revdb_bmb" class="mono" value="3,5,7">
+            <div class="hint">pivotLow 이후 이 봉 이상 횡보해야 유효</div>
+          </div>
+        </div>
+
+        <div class="field"><label>최대 대기 봉 수</label>
+          <input id="revdb_wait" class="mono" type="number" value="50" min="5" step="5">
+          <div class="hint">pivotLow 이후 이 봉 안에 BB(4,4) 돌파가 없으면 폐기.</div>
+        </div>
+
+        <div class="field"><label>진입 방식</label>
+          <div class="subtabs" id="revdb_entry" data-cur="close">
+            <button data-m="close" class="on">신호봉 종가</button><button data-m="nextOpen">다음봉 시가</button>
+          </div>
+        </div>
+
+        <div class="row2">
+          <div class="field"><label>손절폭 ×TR (콤마)</label>
+            <input id="revdb_sl" class="mono" value="0.5,1.0,1.5">
+            <div class="hint">SL = pivotLow − 손절×TR(신호봉)</div>
+          </div>
+          <div class="field"><label>익절폭 ×TR (콤마)</label>
+            <input id="revdb_tp" class="mono" value="1.5,2.0,3.0">
+            <div class="hint">TP = 진입가 + 익절×TR(신호봉)</div>
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>미체결 만료 (봉)</label><input id="revdb_expiry" class="mono" type="number" value="50" min="1" step="1"></div>
+          <div class="field"><label>최소 거래수 필터</label><input id="revdb_min" class="mono" type="number" value="5" min="0" step="1"></div>
+        </div>
+
+        <button class="runbtn" id="revdb_run">▶ 변곡더블비 돌리기</button>
+        <div class="err" id="revdb_err"></div>
+        <div class="mono" id="revdb_status" style="font-size:11px;color:var(--ink-faint);margin-top:8px;line-height:1.5"></div>
+        <div class="note"><b>로직</b> · 하락 더블비(종가가 더블BB 하단 최초 하향돌파) → pivotLow 탐색(DB 이후 N봉 최저점) → pivotLow−TR×K 훼손 없이 박스 유지(누적 최저값 트래킹) → BB(4,4) 상단을 종가로 돌파 → 반전 롱 진입(단일진입). 손절=pivotLow−손절×TR(신호봉 TR), 익절=진입가+익절×TR. 손절·익절 동시 터치 시 손절 우선. RSI(14) 다이버전스: pivotLow봉 RSI가 DB봉 RSI보다 높으면 O. 동시 1포지션, 수수료·스프레드 미반영.</div>
+      </section>
+      <section id="revdb_results">
+        <div class="placeholder"><div class="big">조건을 설정하고 <span class="amb">변곡더블비 돌리기</span></div><div class="mono" style="font-size:12px">하락DB → pivotLow → 박스 유지 → BB(4,4) 상단 종가 돌파 → 반전 롱</div></div>
+      </section>
     </div>
   </div>
 

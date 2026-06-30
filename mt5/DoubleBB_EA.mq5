@@ -19,7 +19,7 @@
 //|   · 손절·익절 동시 = 손절 우선. 동시 1포지션.                      |
 //+------------------------------------------------------------------+
 #property copyright "LEVERAGE LAB"
-#property version   "1.03"
+#property version   "1.04"
 #property strict
 
 #include <Trade/Trade.mqh>
@@ -179,6 +179,13 @@ void ResetIdle()
 //+------------------------------------------------------------------+
 void PlaceEntryOrders()
   {
+   // ---- 거래모드 방어: 청산전용·거래중지 심볼은 신규주문 불가 ----
+   ENUM_SYMBOL_TRADE_MODE tmode=(ENUM_SYMBOL_TRADE_MODE)SymbolInfoInteger(_Symbol,SYMBOL_TRADE_MODE);
+   if(tmode==SYMBOL_TRADE_MODE_DISABLED || tmode==SYMBOL_TRADE_MODE_CLOSEONLY)
+     {
+      PrintFormat("주문 차단: %s 거래모드=%s → 신규진입 불가. IDLE 유지.",_Symbol,EnumToString(tmode));
+      return;
+     }
    bool isShort=(InpDir==DIR_SHORT);
    int  N=InpSplitCount;
    ArrayResize(g_orderPrices,0);
@@ -208,6 +215,7 @@ void PlaceEntryOrders()
    double ask = SymbolInfoDouble(_Symbol,SYMBOL_ASK);
    double bid = SymbolInfoDouble(_Symbol,SYMBOL_BID);
    ArrayResize(g_orderPrices,N);
+   int okCount=0;
    for(int k=0;k<N;k++)
      {
       double p=NormalizeDouble(prices[k],dig);
@@ -227,8 +235,10 @@ void PlaceEntryOrders()
          else         ok=g_trade.BuyStop (lot,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
         }
       if(!ok) PrintFormat("주문 실패 차수%d @%.*f (%s)",k,dig,p,g_trade.ResultRetcodeDescription());
+      else    okCount++;
      }
-   g_state=ST_ENTERING; g_barsSince=0;
+   if(okCount>0){ g_state=ST_ENTERING; g_barsSince=0; }
+   else         { Print("전체 주문 실패 → IDLE 복귀"); ResetIdle(); }
   }
 
 //+------------------------------------------------------------------+

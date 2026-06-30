@@ -3034,7 +3034,21 @@ function drawRSI(rCurve,holdCurve,log){
     });
     con.querySelectorAll(".revdb-dtl").forEach(b=>b.onclick=()=>showDetail(view[+b.dataset.idx]));
   }
-  // 서버시간 문자열을 KST 등으로 시차 보정 (브라우저 로컬TZ 영향 없이 UTC 산술)
+  // EU 서머타임 판정 (last Sun Mar ~ last Sun Oct). 한택 서버=EET(GMT+2/+3).
+  function lastSunday(y,month1){ const last=new Date(Date.UTC(y,month1,0)); return last.getUTCDate()-last.getUTCDay(); }
+  function euSummer(y,mo,da){
+    if(mo<3||mo>10)return false;
+    if(mo>3&&mo<10)return true;
+    if(mo===3)return da>=lastSunday(y,3);
+    return da<lastSunday(y,10);
+  }
+  // 한택 서버시간(EET) → 한국시간(GMT+9) 자동 보정: 겨울 +7 / 여름 +6
+  function autoKSTbase(str){
+    const m=String(str||"").match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if(!m)return 7;
+    return euSummer(+m[1],+m[2],+m[3])?6:7;
+  }
+  // 시각 문자열을 hours 만큼 이동 (브라우저 로컬TZ 영향 없이 UTC 산술)
   function shiftTime(str,hours){
     const m=String(str||"").match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/);
     if(!m)return String(str||"");
@@ -3045,11 +3059,11 @@ function drawRSI(rCurve,holdCurve,log){
   }
   function showDetail(r){
     const area=el("revdb_detail_area"); if(!area)return;
-    const tzoff=+el("revdb_tzoff").value||0;
+    const extra=+el("revdb_tzoff").value||0;  // 추가 미세보정(기본 0)
     const rsiO=r.trades.filter(t=>t.rsiDiv===true).length;
     const rsiAll=r.trades.filter(t=>t.rsiDiv!==null).length;
     let html=`<div class="sectitle">거래 내역 · ${r.label} · pivot=${r.pLook} lbK=${r.lbK} box=${r.bmb} SL=${r.slK} TP=${r.tpK} · RSI다이버전스 ${rsiO}/${rsiAll}건</div>
-    <div class="note" style="margin:6px 0 12px">자리 확인: <b>①DB발생봉</b>(하단 최초 하향돌파) → <b>②저점봉</b>(pivotLow 바닥) → <b>③신호봉</b>(더블비 상단 반전 돌파, 여기서 진입). 세 시점이 가까울수록 깔끔한 V자 반전. · 시각=트뷰 기준(보정 ${tzoff>=0?"+":""}${tzoff}h)</div>
+    <div class="note" style="margin:6px 0 12px">자리 확인: <b>①DB발생봉</b>(하단 최초 하향돌파) → <b>②저점봉</b>(pivotLow 바닥) → <b>③신호봉</b>(더블비 상단 반전 돌파, 여기서 진입). 세 시점이 가까울수록 깔끔한 V자 반전. · 시각=한국시간(서머타임 자동 +7/+6${extra?`, 추가 ${extra>=0?"+":""}${extra}h`:""})</div>
     <div class="ctable-wrap"><table class="ctable"><thead><tr>
       <th><div class="th-main">①DB발생봉</div><div class="th-sub">하향돌파</div></th>
       <th><div class="th-main">②저점봉</div><div class="th-sub">pivotLow</div></th>
@@ -3063,7 +3077,7 @@ function drawRSI(rCurve,holdCurve,log){
     for(const t of r.trades){
       const res=t.exitReason==="TP"?'<span class="pos">익절</span>':t.exitReason==="SL"?'<span class="neg">손절</span>':'<span class="dimv">만료</span>';
       const rdiv=t.rsiDiv===true?'<span class="pos">O</span>':t.rsiDiv===false?'<span class="neg">X</span>':'<span class="dimv">-</span>';
-      const dt=s=>shiftTime(s,tzoff);
+      const dt=s=>shiftTime(s,autoKSTbase(s)+extra);
       html+=`<tr>
         <td class="name mono" style="font-size:11px">${dt(t.dbDate)}</td>
         <td class="name mono" style="font-size:11px">${dt(t.pivotDate)}</td>

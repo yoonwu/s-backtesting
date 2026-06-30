@@ -784,9 +784,9 @@
           <div class="field"><label>미체결 만료 (봉)</label><input id="revdb_expiry" class="mono" type="number" value="50" min="1" step="1"></div>
           <div class="field"><label>최소 거래수 필터</label><input id="revdb_min" class="mono" type="number" value="5" min="0" step="1"></div>
         </div>
-        <div class="field"><label>내역 시각 보정 (시간) — 트뷰 기준</label>
-          <input id="revdb_tzoff" class="mono" type="number" value="7" step="1">
-          <div class="hint">CSV는 한택 서버시간. <b>트뷰랑 맞추기</b>: 보정 0으로 두고 ▸내역 시각을 트뷰 같은 캔들 시각과 비교 → 그 차이(예 +7)를 입력. 이후 내역=트뷰 시각. (트뷰 시간대를 Asia/Seoul로 두면 한국시간으로 일치)</div>
+        <div class="field"><label>시각 추가 미세보정 (시간)</label>
+          <input id="revdb_tzoff" class="mono" type="number" value="0" step="1">
+          <div class="hint">내역은 <b>한국시간 자동 변환</b>됨(한택 EET 서버 → KST, 서머타임 +7/+6 자동). 트뷰(Asia/Seoul)와 동일하게 표시. 혹시 1시간 어긋나면 여기서 ±1.</div>
         </div>
 
         <button class="runbtn" id="revdb_run">▶ 변곡더블비 돌리기</button>
@@ -984,6 +984,6 @@
 
 </div>
 
-<script src="leverage-lab.js?v=20260630d"></script>
+<script src="leverage-lab.js?v=20260630e"></script>
 </body>
 </html>

@@ -2999,15 +2999,18 @@ function drawRSI(rCurve,holdCurve,log){
       return(vb-va)*dir;
     });
     const best=sorted[0];
+    const CAP=300;
+    const view=sorted.slice(0,CAP);
+    const capNote=sorted.length>CAP?` <span class="dimv">· 상위 ${CAP}개만 표시 (전체 ${sorted.length.toLocaleString()}개)</span>`:"";
     function hdr(k,main,sub=""){return`<th class="db-sort revdb-s" data-k="${k}" style="cursor:pointer"><div class="th-main">${main}${arw(k)}</div>${sub?`<div class="th-sub">${sub}</div>`:""}</th>`;}
-    let html=`<div class="db-best">최상위: <b>${best.label}</b> · pivot=${best.pLook} · lbK=${best.lbK} · box=${best.bmb} · SL=${best.slK} · TP=${best.tpK} → <span class="pos">${pctStr(best.totalRet)}</span> · MDD ${pctStr(best.mdd)} · MAR ${pf2(best.mar)}</div>`;
+    let html=`<div class="db-best">최상위: <b>${best.label}</b> · pivot=${best.pLook} · lbK=${best.lbK} · box=${best.bmb} · SL=${best.slK} · TP=${best.tpK} → <span class="pos">${pctStr(best.totalRet)}</span> · MDD ${pctStr(best.mdd)} · MAR ${pf2(best.mar)}${capNote}</div>`;
     html+=`<div class="ctable-wrap"><table class="ctable"><thead><tr>
       <th><div class="th-main">데이터</div></th>
       ${hdr("pLook","Pivot봉")}${hdr("lbK","저점K")}${hdr("bmb","박스봉")}${hdr("slK","SL×TR")}${hdr("tpK","TP×TR")}
       ${hdr("cnt","거래수")}${hdr("winRate","승률")}${hdr("pf","손익비")}${hdr("totalRet","총수익률")}${hdr("mdd","MDD")}${hdr("mar","MAR")}
       <th><div class="th-main">내역</div></th>
     </tr></thead><tbody>`;
-    sorted.forEach((r,i)=>{
+    view.forEach((r,i)=>{
       html+=`<tr class="${i===0?"db-hot":""}">
         <td class="name mono" style="font-size:12px">${r.label}</td>
         <td class="num">${r.pLook}</td><td class="num">${r.lbK}</td><td class="num">${r.bmb}</td>
@@ -3028,7 +3031,7 @@ function drawRSI(rCurve,holdCurve,log){
       if(SORT.key===k)SORT.dir*=-1; else{SORT.key=k;SORT.dir=-1;}
       render();
     });
-    con.querySelectorAll(".revdb-dtl").forEach(b=>b.onclick=()=>showDetail(sorted[+b.dataset.idx]));
+    con.querySelectorAll(".revdb-dtl").forEach(b=>b.onclick=()=>showDetail(view[+b.dataset.idx]));
   }
   function showDetail(r){
     const area=el("revdb_detail_area"); if(!area)return;

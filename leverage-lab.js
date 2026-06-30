@@ -2808,47 +2808,42 @@ function drawRSI(rCurve,holdCurve,log){
     }
     return out;
   }
-  // 변곡더블비: 하락 중 가격이 BB(4,4) 하단(원비)에 닿는 바닥에서 반전 롱.
-  //  vturn=true: 4/4 하단밴드가 저점 찍고 위로 꺾인(뾰쪽한 V) 자리를 가격이 찌른 경우만.
-  //    → i-1이 밴드 V-팁(band[i-1]≤band[i-2] & band[i]>band[i-1]), 팁 저가가 밴드 찌름,
-  //      진입은 턴 확인봉 i. 추세하락(하단 계속 깸=돌파더블비 숏)은 자연 제외.
-  //  vturn=false: 기존 — 저가≤밴드 터치 봉 자체.
-  //  rejectClose: (팁/터치) 봉 종가가 밴드 위로 닫혀야 채택.
-  //  RSI 다이버전스 = 직전 자리 대비 저가↓·RSI↑(약세 둔화).
-  function detectSignals(bars,bb44Low,rsi,cooldown,rejectClose,entryMode,maArr,rsiReq,vturn){
+  // 변곡더블비 (재정의):
+  //  ① 볼밴 확장(찢어진) 상태의 하락DB: 종가<더블비하단 & 밴드폭 W≥expandK×평균W (투매성 하락 인정)
+  //  ② 이후 볼밴 수축 → ③ 4/4 하단이 캔들과 봉마감 재접촉: 저가≤4/4하단+meetK×TR & 종가≥4/4하단
+  //     & 4/4하단 상승(수축) & 접촉 밴드폭 W≤contractK×DB밴드폭 (추세하락=확장유지는 제외)
+  //  ④ RSI higher-low: 접촉 RSI > DB RSI (변곡 확인)
+  function detectSignals(bars,lower,upper,bb44Low,rsi,avgW,o){
     const sigs=[];
-    let lastSig=-1e9, prevLow=null, prevRsi=null;
-    for(let i=(vturn?2:1);i<bars.length;i++){
+    let lastSig=-1e9;
+    const W=upper.map((u,i)=>u!==null&&lower[i]!==null?u-lower[i]:null);
+    for(let i=2;i<bars.length;i++){
       const band=bb44Low[i];
-      if(band===null)continue;
-      let anchor;  // 자리(팁/터치) 봉 인덱스
-      if(vturn){
-        const bP=bb44Low[i-1], bPP=bb44Low[i-2];
-        if(bP===null||bPP===null)continue;
-        if(!(bP<=bPP && band>bP))continue;              // i-1이 밴드 V-팁(꺾여 올라옴)
-        if(bars[i-1].l>bP)continue;                     // 팁 저가가 밴드를 찌름
-        if(bars[i].l<=bars[i-1].l)continue;             // 저점 유지: 진입봉이 팁 저가를 안 깸(계속 하락=추세하락 제외)
-        if(rejectClose&&bars[i-1].c<bP)continue;        // 거부: 팁 봉 종가 밴드 위
-        anchor=i-1;
-      }else{
-        if(bars[i].l>band)continue;                     // 하단 4/4 미터치
-        if(rejectClose&&bars[i].c<band)continue;        // 거부: 종가 밴드 위
-        anchor=i;
+      if(band===null||bb44Low[i-1]===null||W[i]===null)continue;
+      // ③ 접촉: 캔들이 4/4 하단과 봉마감 만남 + 4/4 하단 상승(수축)
+      if(!(bars[i].l<=band+o.meetK*o.tr[i]))continue;     // 저가가 4/4 하단에 닿음
+      if(bars[i].c<band)continue;                          // 봉마감은 밴드 위(만남/거부)
+      if(!(band>bb44Low[i-1]))continue;                    // 4/4 하단 상승 = 수축
+      if(o.maArr&&(o.maArr[i]===null||bars[i].c>=o.maArr[i]))continue; // 하락맥락(옵션)
+      // ① 직전 윈도우의 '확장 하락DB' + ③ 그 DB 대비 현재 수축
+      let dbIdx=-1;
+      for(let d=i-1;d>=Math.max(1,i-o.dbWin);d--){
+        if(W[d]===null||avgW[d]===null||lower[d]===null)continue;
+        if(bars[d].c<lower[d] && W[d]>=o.expandK*avgW[d]){  // 확장 하락DB
+          if(W[i]<=o.contractK*W[d]){ dbIdx=d; break; }     // 접촉 밴드폭이 DB보다 수축
+        }
       }
-      if(maArr&&(maArr[anchor]===null||bars[anchor].c>=maArr[anchor]))continue; // 하락 맥락
-      let rsiDiv=null;
-      if(prevLow!==null&&rsi[anchor]!==null&&prevRsi!==null)
-        rsiDiv=(bars[anchor].l<prevLow&&rsi[anchor]>prevRsi);
-      prevLow=bars[anchor].l; prevRsi=rsi[anchor];      // 자리 체인 항상 갱신
-      if(rsiReq&&rsiDiv!==true)continue;                // 다이버전스 필수
-      if(i-lastSig<cooldown)continue;                   // 쿨다운(군집 방지)
+      if(dbIdx<0)continue;
+      // ④ RSI higher-low (접촉 RSI > DB RSI)
+      const rsiDiv=(rsi[i]!==null&&rsi[dbIdx]!==null)?rsi[i]>rsi[dbIdx]:null;
+      if(o.rsiReq&&rsiDiv!==true)continue;
+      if(i-lastSig<o.cooldown)continue;                    // 쿨다운
       lastSig=i;
-      // vturn이면 진입=턴 확인봉 i, 아니면 터치 봉 i
-      const sigIdx=i;
-      const entryIdx=entryMode==="nextOpen"?sigIdx+1:sigIdx;
+      let pivotLow=Infinity; for(let k=dbIdx;k<=i;k++)pivotLow=Math.min(pivotLow,bars[k].l); // 기준저점=DB~접촉 최저
+      const entryIdx=o.entryMode==="nextOpen"?i+1:i;
       if(entryIdx>=bars.length)continue;
-      const entryPrice=entryMode==="nextOpen"?bars[entryIdx].o:bars[sigIdx].c;
-      sigs.push({dbIdx:anchor,pivotIdx:anchor,signalIdx:sigIdx,entryIdx,entryPrice,pivotLow:bars[anchor].l,touchBand:bb44Low[anchor],rsiDiv});
+      const entryPrice=o.entryMode==="nextOpen"?bars[entryIdx].o:bars[i].c;
+      sigs.push({dbIdx,pivotIdx:dbIdx,signalIdx:i,entryIdx,entryPrice,pivotLow,touchBand:band,rsiDiv,Wdb:W[dbIdx],Wi:W[i]});
     }
     return sigs;
   }
@@ -2856,7 +2851,7 @@ function drawRSI(rCurve,holdCurve,log){
     const trades=[];
     let equity=1,peak=1,maxDD=0,wins=0,sumWin=0,sumLoss=0;
     for(const sig of sigs){
-      const {entryIdx,entryPrice,pivotLow,signalIdx,touchBand}=sig;
+      const {entryIdx,entryPrice,pivotLow,signalIdx,touchBand,dbIdx,Wdb,Wi}=sig;
       const sigTR=tr[signalIdx];
       const sl=pivotLow-slK*sigTR;
       const tp=entryPrice+tpK*sigTR;
@@ -2873,7 +2868,7 @@ function drawRSI(rCurve,holdCurve,log){
       if(equity>peak)peak=equity;
       const dd=equity/peak-1; if(dd<maxDD)maxDD=dd;
       if(ret>0){wins++;sumWin+=ret;}else{sumLoss+=Math.abs(ret);}
-      trades.push({date:bars[signalIdx].date||bars[signalIdx].day,pivotLow,touchBand,entryPrice,exitPrice:exitPx,sl,tp,ret,won:exitReason==="TP",exitReason,rsiDiv:sig.rsiDiv});
+      trades.push({dbDate:bars[dbIdx].date||bars[dbIdx].day,date:bars[signalIdx].date||bars[signalIdx].day,pivotLow,touchBand,Wdb,Wi,entryPrice,exitPrice:exitPx,sl,tp,ret,won:exitReason==="TP",exitReason,rsiDiv:sig.rsiDiv});
     }
     const cnt=trades.length;
     if(!cnt)return{trades,cnt,winRate:0,pf:0,totalRet:0,mdd:0,mar:0};
@@ -2952,44 +2947,49 @@ function drawRSI(rCurve,holdCurve,log){
     const btn=el("revdb_run"); btn.disabled=true;
     try{
       const maFilter=Math.max(0,+el("revdb_ma").value||0);
-      const cooldowns=parseList(el("revdb_cool").value,true,0);
-      const trWin=Math.max(1,+el("revdb_trwin").value||1);
-      const rejectClose=(el("revdb_close").dataset.cur||"touch")==="reject";
+      const wLook=Math.max(2,+el("revdb_wlook").value||20);
+      const expandKs=parseList(el("revdb_expand").value,false,0);
+      const contractKs=parseList(el("revdb_contract").value,false,0);
+      const dbWin=Math.max(2,+el("revdb_dbwin").value||50);
+      const meetK=Math.max(0,+el("revdb_meet").value||0);
+      const cooldown=Math.max(0,+el("revdb_cool").value||0);
       const rsiReq=(el("revdb_rsireq").dataset.cur||"off")==="req";
-      const vturn=(el("revdb_vturn").dataset.cur||"on")==="on";
       const slKs=parseList(el("revdb_sl").value,false,0);
       const tpKs=parseList(el("revdb_tp").value,false,0);
       const expiryBars=Math.max(1,+el("revdb_expiry").value||50);
       const minTr=Math.max(0,+el("revdb_min").value||0);
       const entryMode=el("revdb_entry").dataset.cur||"close";
-      if(!cooldowns.length||!slKs.length||!tpKs.length)
-        throw new Error("쿨다운·손절·익절 값을 하나 이상 입력하세요");
+      if(!expandKs.length||!contractKs.length||!slKs.length||!tpKs.length)
+        throw new Error("밴드확장·수축·손절·익절 값을 하나 이상 입력하세요");
       const sources=await loadSources();
       const rows=[];
-      const total=sources.length*cooldowns.length*slKs.length*tpKs.length;
+      const total=sources.length*expandKs.length*contractKs.length*slKs.length*tpKs.length;
       let combo=0;
       for(const src of sources){
         const bars=src.bars;
-        const bb44Low=calcBB44Lower(bars);
-        const tr0=calcTR(bars);
-        const tr=trWin>1?tr0.map((_,i)=>{let m=0;for(let k=0;k<trWin&&i-k>=0;k++)m=Math.max(m,tr0[i-k]);return m;}):tr0;
+        const lower=calcDoubleLower(bars), upper=calcDoubleUpper(bars), bb44Low=calcBB44Lower(bars);
+        const tr=calcTR(bars);
         const rsi14=calcRSI(bars,14);
+        const W=upper.map((u,i)=>u!==null&&lower[i]!==null?u-lower[i]:null);
+        const avgW=calcSMA(W.map(x=>x===null?0:x),wLook).map((v,i)=>W[i]===null?null:v);
         const maArr=maFilter>0?calcSMA(bars.map(b=>b.c),maFilter):null;
-        for(const cool of cooldowns){
-          const sigs=detectSignals(bars,bb44Low,rsi14,cool,rejectClose,entryMode,maArr,rsiReq,vturn);
-          for(const slK of slKs){
-            for(const tpK of tpKs){
-              combo++;
-              if(combo%100===0){statusMsg(`${combo}/${total} 조합…`);await new Promise(r=>setTimeout(r,0));}
-              const res=backtest(bars,sigs,tr,slK,tpK,expiryBars);
-              if(res.cnt<minTr)continue;
-              rows.push({label:src.label,cool,closeMode:rejectClose?"거부":"닿기만",slK,tpK,...res});
+        for(const expandK of expandKs){
+          for(const contractK of contractKs){
+            const sigs=detectSignals(bars,lower,upper,bb44Low,rsi14,avgW,{expandK,contractK,dbWin,meetK,cooldown,entryMode,maArr,rsiReq,tr});
+            for(const slK of slKs){
+              for(const tpK of tpKs){
+                combo++;
+                if(combo%100===0){statusMsg(`${combo}/${total} 조합…`);await new Promise(r=>setTimeout(r,0));}
+                const res=backtest(bars,sigs,tr,slK,tpK,expiryBars);
+                if(res.cnt<minTr)continue;
+                rows.push({label:src.label,expandK,contractK,slK,tpK,...res});
+              }
             }
           }
         }
       }
       RESULTS=rows;
-      statusMsg(`완료 — 유효 ${rows.length}개 / 전체 ${total}개 조합 · ${vturn?"V턴필수":"모든터치"} · 마감 ${rejectClose?"거부":"닿기만"} · ${rsiReq?"RSI다이버 필수":"RSI무시"}`);
+      statusMsg(`완료 — 유효 ${rows.length}개 / 전체 ${total}개 조합 · ${rsiReq?"RSI필수":"RSI무시"} · DB윈도우 ${dbWin}`);
       render();
     }catch(e){errMsg(e.message);statusMsg("");}
     finally{btn.disabled=false;}
@@ -3015,17 +3015,17 @@ function drawRSI(rCurve,holdCurve,log){
     const view=sorted.slice(0,CAP);
     const capNote=sorted.length>CAP?` <span class="dimv">· 상위 ${CAP}개만 표시 (전체 ${sorted.length.toLocaleString()}개)</span>`:"";
     function hdr(k,main,sub=""){return`<th class="db-sort revdb-s" data-k="${k}" style="cursor:pointer"><div class="th-main">${main}${arw(k)}</div>${sub?`<div class="th-sub">${sub}</div>`:""}</th>`;}
-    let html=`<div class="db-best">최상위: <b>${best.label}</b> · 쿨다운=${best.cool} · ${best.closeMode} · SL=${best.slK} · TP=${best.tpK} → <span class="pos">${pctStr(best.totalRet)}</span> · MDD ${pctStr(best.mdd)} · MAR ${pf2(best.mar)}${capNote}</div>`;
+    let html=`<div class="db-best">최상위: <b>${best.label}</b> · 확장×${best.expandK} · 수축×${best.contractK} · SL=${best.slK} · TP=${best.tpK} → <span class="pos">${pctStr(best.totalRet)}</span> · MDD ${pctStr(best.mdd)} · MAR ${pf2(best.mar)}${capNote}</div>`;
     html+=`<div class="ctable-wrap"><table class="ctable"><thead><tr>
       <th><div class="th-main">데이터</div></th>
-      ${hdr("cool","쿨다운")}<th><div class="th-main">마감</div></th>${hdr("slK","SL×TR")}${hdr("tpK","TP×TR")}
+      ${hdr("expandK","확장×")}${hdr("contractK","수축×")}${hdr("slK","SL×TR")}${hdr("tpK","TP×TR")}
       ${hdr("cnt","거래수")}${hdr("winRate","승률")}${hdr("pf","손익비")}${hdr("totalRet","총수익률")}${hdr("mdd","MDD")}${hdr("mar","MAR")}
       <th><div class="th-main">내역</div></th>
     </tr></thead><tbody>`;
     view.forEach((r,i)=>{
       html+=`<tr class="${i===0?"db-hot":""}">
         <td class="name mono" style="font-size:12px">${r.label}</td>
-        <td class="num">${r.cool}</td><td class="num" style="font-size:11px">${r.closeMode}</td>
+        <td class="num">${r.expandK}</td><td class="num">${r.contractK}</td>
         <td class="num">${r.slK}</td><td class="num">${r.tpK}</td>
         <td class="num">${r.cnt}</td>
         <td class="num ${numCls(r.winRate,0.55,0)}">${(r.winRate*100).toFixed(0)}%</td>
@@ -3073,23 +3073,27 @@ function drawRSI(rCurve,holdCurve,log){
     const extra=+el("revdb_tzoff").value||0;  // 추가 미세보정(기본 0)
     const rsiO=r.trades.filter(t=>t.rsiDiv===true).length;
     const rsiAll=r.trades.filter(t=>t.rsiDiv!==null).length;
-    let html=`<div class="sectitle">거래 내역 · ${r.label} · 쿨다운=${r.cool} ${r.closeMode} SL=${r.slK} TP=${r.tpK} · RSI다이버전스 ${rsiO}/${rsiAll}건</div>
-    <div class="note" style="margin:6px 0 12px">자리 확인: <b>터치봉</b>의 저가(꼬리)가 <b>BB(4,4) 하단</b>에 닿은 바닥. 진입은 그 봉 종가(또는 다음봉 시가). · 시각=한국시간(서머타임 자동 +7/+6${extra?`, 추가 ${extra>=0?"+":""}${extra}h`:""})</div>
+    let html=`<div class="sectitle">거래 내역 · ${r.label} · 확장×${r.expandK} 수축×${r.contractK} SL=${r.slK} TP=${r.tpK} · RSI변곡 ${rsiO}/${rsiAll}건</div>
+    <div class="note" style="margin:6px 0 12px">자리: <b>①확장 하락DB</b>(볼밴 찢어짐) → <b>②밴드 수축</b> → <b>③4/4 하단 재접촉</b>(진입). 밴드폭이 DB→접촉으로 줄어야 유효. · 시각=한국시간(서머타임 자동 +7/+6${extra?`, 추가 ${extra>=0?"+":""}${extra}h`:""})</div>
     <div class="ctable-wrap"><table class="ctable"><thead><tr>
-      <th><div class="th-main">터치봉</div><div class="th-sub">BB4,4 하단</div></th>
-      <th><div class="th-main">하단밴드</div></th>
-      <th><div class="th-main">터치저가</div></th>
+      <th><div class="th-main">①확장DB봉</div></th>
+      <th><div class="th-main">③접촉봉</div><div class="th-sub">진입</div></th>
+      <th><div class="th-main">밴드폭</div><div class="th-sub">DB→접촉</div></th>
+      <th><div class="th-main">4/4하단</div></th>
+      <th><div class="th-main">기준저점</div></th>
       <th><div class="th-main">진입가</div></th><th><div class="th-main">청산가</div></th>
       <th><div class="th-main">SL</div></th><th><div class="th-main">TP</div></th>
       <th><div class="th-main">수익률</div></th><th><div class="th-main">결과</div></th>
-      <th><div class="th-main">RSI다이버전스</div></th>
+      <th><div class="th-main">RSI변곡</div></th>
     </tr></thead><tbody>`;
     for(const t of r.trades){
       const res=t.exitReason==="TP"?'<span class="pos">익절</span>':t.exitReason==="SL"?'<span class="neg">손절</span>':'<span class="dimv">만료</span>';
       const rdiv=t.rsiDiv===true?'<span class="pos">O</span>':t.rsiDiv===false?'<span class="neg">X</span>':'<span class="dimv">-</span>';
       const dt=s=>shiftTime(s,autoKSTbase(s)+extra);
       html+=`<tr>
+        <td class="name mono" style="font-size:11px">${dt(t.dbDate)}</td>
         <td class="name mono" style="font-size:11px">${dt(t.date)}</td>
+        <td class="num mono" style="font-size:11px">${t.Wdb!=null?t.Wdb.toFixed(1):"-"}→${t.Wi!=null?t.Wi.toFixed(1):"-"}</td>
         <td class="num mono">${t.touchBand!=null?t.touchBand.toFixed(2):"-"}</td>
         <td class="num mono">${t.pivotLow!=null?t.pivotLow.toFixed(2):"-"}</td>
         <td class="num mono">${t.entryPrice.toFixed(2)}</td><td class="num mono">${t.exitPrice.toFixed(2)}</td>
@@ -3118,17 +3122,9 @@ function drawRSI(rCurve,holdCurve,log){
       el("revdb_entry").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
       el("revdb_entry").dataset.cur=b.dataset.m;
     });
-    el("revdb_close").querySelectorAll("button").forEach(b=>b.onclick=()=>{
-      el("revdb_close").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
-      el("revdb_close").dataset.cur=b.dataset.c;
-    });
     el("revdb_rsireq").querySelectorAll("button").forEach(b=>b.onclick=()=>{
       el("revdb_rsireq").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
       el("revdb_rsireq").dataset.cur=b.dataset.r;
-    });
-    el("revdb_vturn").querySelectorAll("button").forEach(b=>b.onclick=()=>{
-      el("revdb_vturn").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
-      el("revdb_vturn").dataset.cur=b.dataset.v;
     });
     el("revdb_file").onchange=async e=>{
       const f=e.target.files[0]; if(!f)return;

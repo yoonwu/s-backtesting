@@ -703,7 +703,7 @@
     <div class="grid">
       <section class="card">
         <h2>변곡더블비 백테스트</h2>
-        <div class="intro"><b>변곡더블비</b> · 하락 중 캔들의 <b>저가(꼬리 포함)가 BB(4,4) 하단(원비)에 닿고</b> 봉마감하면 그 바닥 자리에서 반전 롱. 마감조건(닿기만/거부)·쿨다운 조절 가능. RSI(14) 다이버전스(직전 터치 대비 저가↓·RSI↑)는 가점이며 내역에 <b>O/X</b>로 표시됩니다.</div>
+        <div class="intro"><b>변곡더블비</b> · ① <b>볼밴 확장(찢어진) 상태의 하락 더블비</b>(투매성 하락 인정) → ② 이후 <b>볼밴 수축</b> → ③ 수축하며 <b>4/4 하단(원비)이 캔들과 봉마감으로 재접촉</b>(더 못 밀고 둔화) → ④ RSI higher-low 변곡. 횡보 수축 노이즈와 추세하락(확장 유지)은 자동 제외. RSI는 내역에 <b>O/X</b> 표시.</div>
 
         <div class="field"><label>데이터 소스</label>
           <div class="subtabs" id="revdb_src" data-cur="stored">
@@ -744,36 +744,43 @@
           <div class="hint">0이면 필터 없음. 예) 120 → 종가가 120SMA 아래(하락 맥락)일 때만 터치 후보 등록.</div>
         </div>
 
-        <div class="field"><label>마감 조건 (BB4,4 하단 터치)</label>
-          <div class="subtabs" id="revdb_close" data-cur="reject">
-            <button data-c="touch">닿기만 (꼬리 OK)</button><button data-c="reject" class="on">밴드 위 종가(거부)</button>
-          </div>
-          <div class="hint">닿기만 = 저가≤하단밴드. 거부 = 저가≤하단밴드 + 종가>하단밴드(하락 멈춤 확인). 거부가 노이즈 적음.</div>
-        </div>
-
-        <div class="field"><label>RSI 다이버전스 필터</label>
-          <div class="subtabs" id="revdb_rsireq" data-cur="off">
-            <button data-r="off" class="on">무시 (O/X만 표시)</button><button data-r="req">필수</button>
-          </div>
-          <div class="hint">필수 = 직전 터치 대비 <b>저가↓·RSI↑</b>(약세 둔화)인 신호만 채택. 떨어지는 칼 거르고 진짜 바닥 반등만 → 일관성 ↑.</div>
-        </div>
-
-        <div class="field"><label>4/4 하단 V턴 필수 (뾰쪽한 자리만)</label>
-          <div class="subtabs" id="revdb_vturn" data-cur="on">
-            <button data-v="on" class="on">필수</button><button data-v="off">무시 (모든 터치)</button>
-          </div>
-          <div class="hint"><b>필수</b> = 4/4 하단밴드가 저점 찍고 <b>위로 꺾인(뾰쪽한 V) 자리</b>를 가격이 찌른 경우만. 하단을 계속 깨는 추세하락(=돌파더블비 숏 자리)은 제외. 진입은 턴 확인봉.</div>
+        <div class="field"><label>밴드폭 평균기간 (봉)</label>
+          <input id="revdb_wlook" class="mono" type="number" value="20" min="2" step="1">
+          <div class="hint">더블비 밴드폭(상단−하단)의 평균 기간. 확장 판정 기준.</div>
         </div>
 
         <div class="row2">
-          <div class="field"><label>재진입 쿨다운 (봉, 콤마)</label>
-            <input id="revdb_cool" class="mono" value="5,10,20">
-            <div class="hint">직전 신호 후 이 봉 수 안엔 새 신호 무시(군집 방지).</div>
+          <div class="field"><label>① 밴드확장 배수 (콤마)</label>
+            <input id="revdb_expand" class="mono" value="1.0,1.2,1.5">
+            <div class="hint">하락DB 시점 밴드폭 ≥ 배수×평균. <b>볼밴 찢어진(확장) 상태의 DB만</b> 인정(투매성 하락).</div>
           </div>
-          <div class="field"><label>TR 윈도우 (봉)</label>
-            <input id="revdb_trwin" class="mono" type="number" value="1" min="1" step="1">
-            <div class="hint">SL/TP용 TR. 1=신호봉 단일 TR, N=최근 N봉 최대 TR.</div>
+          <div class="field"><label>③ 수축 배수 (콤마)</label>
+            <input id="revdb_contract" class="mono" value="0.7,0.85,1.0">
+            <div class="hint">접촉 시 밴드폭 ≤ 배수×DB밴드폭. <b>DB 이후 수축</b>해야 인정. 추세하락(확장 유지)은 제외.</div>
           </div>
+        </div>
+
+        <div class="row2">
+          <div class="field"><label>② DB→접촉 최대봉</label>
+            <input id="revdb_dbwin" class="mono" type="number" value="50" min="2" step="1">
+            <div class="hint">하락DB 이후 이 봉 안에서 4/4 재접촉을 찾음.</div>
+          </div>
+          <div class="field"><label>접촉 여유 ×TR</label>
+            <input id="revdb_meet" class="mono" value="0">
+            <div class="hint">캔들 저가가 4/4 하단 +여유×TR 안이면 접촉 인정(0=정확히 닿음). 봉마감은 밴드 위.</div>
+          </div>
+        </div>
+
+        <div class="field"><label>RSI higher-low 필터</label>
+          <div class="subtabs" id="revdb_rsireq" data-cur="off">
+            <button data-r="off" class="on">무시 (O/X만 표시)</button><button data-r="req">필수</button>
+          </div>
+          <div class="hint">필수 = 접촉 시 RSI가 <b>하락DB 시점보다 높음</b>(약세 둔화 변곡 확인).</div>
+        </div>
+
+        <div class="field"><label>재진입 쿨다운 (봉)</label>
+          <input id="revdb_cool" class="mono" type="number" value="10" min="0" step="1">
+          <div class="hint">직전 신호 후 이 봉 수 안엔 새 신호 무시(군집 방지).</div>
         </div>
 
         <div class="field"><label>진입 방식</label>
@@ -785,7 +792,7 @@
         <div class="row2">
           <div class="field"><label>손절폭 ×TR (콤마)</label>
             <input id="revdb_sl" class="mono" value="0.5,1.0,1.5">
-            <div class="hint">SL = 터치봉 저가 − 손절×TR</div>
+            <div class="hint">SL = 기준저점(DB~접촉 최저) − 손절×TR</div>
           </div>
           <div class="field"><label>익절폭 ×TR (콤마)</label>
             <input id="revdb_tp" class="mono" value="1.5,2.0,3.0">
@@ -1157,6 +1164,6 @@
 
 </div>
 
-<script src="leverage-lab.js?v=20260630k"></script>
+<script src="leverage-lab.js?v=20260630l"></script>
 </body>
 </html>

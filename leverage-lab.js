@@ -3049,7 +3049,7 @@ function drawRSI(rCurve,holdCurve,log){
     const rsiO=r.trades.filter(t=>t.rsiDiv===true).length;
     const rsiAll=r.trades.filter(t=>t.rsiDiv!==null).length;
     let html=`<div class="sectitle">거래 내역 · ${r.label} · pivot=${r.pLook} lbK=${r.lbK} box=${r.bmb} SL=${r.slK} TP=${r.tpK} · RSI다이버전스 ${rsiO}/${rsiAll}건</div>
-    <div class="note" style="margin:6px 0 12px">자리 확인: <b>①DB발생봉</b>(하단 최초 하향돌파) → <b>②저점봉</b>(pivotLow 바닥) → <b>③신호봉</b>(더블비 상단 반전 돌파, 여기서 진입). 세 시점이 가까울수록 깔끔한 V자 반전. · 시각=KST(보정 +${tzoff}h)</div>
+    <div class="note" style="margin:6px 0 12px">자리 확인: <b>①DB발생봉</b>(하단 최초 하향돌파) → <b>②저점봉</b>(pivotLow 바닥) → <b>③신호봉</b>(더블비 상단 반전 돌파, 여기서 진입). 세 시점이 가까울수록 깔끔한 V자 반전. · 시각=트뷰 기준(보정 ${tzoff>=0?"+":""}${tzoff}h)</div>
     <div class="ctable-wrap"><table class="ctable"><thead><tr>
       <th><div class="th-main">①DB발생봉</div><div class="th-sub">하향돌파</div></th>
       <th><div class="th-main">②저점봉</div><div class="th-sub">pivotLow</div></th>

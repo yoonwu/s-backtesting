@@ -3115,3 +3115,510 @@ function drawRSI(rCurve,holdCurve,log){
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init); else init();
 })();
 //__CHUNK_END__
+
+/* ===== REVERSAL DOUBLE-BB CODEX (변곡더블비-코덱스) ===== */
+(function(){
+  const el=id=>document.getElementById(id);
+  function bbSide(arr,period,mult,up){
+    const out=new Array(arr.length).fill(null);
+    for(let i=period-1;i<arr.length;i++){
+      let s=0; for(let k=0;k<period;k++) s+=arr[i-k];
+      const m=s/period; let v=0;
+      for(let k=0;k<period;k++){const d=arr[i-k]-m;v+=d*d;}
+      out[i]=m+(up?1:-1)*mult*Math.sqrt(v/period);
+    }
+    return out;
+  }
+  function calcDoubleLower(bars){
+    const l1=bbSide(bars.map(b=>b.o),4,4,false);
+    const l2=bbSide(bars.map(b=>b.c),20,2,false);
+    return l1.map((v,i)=>v!==null&&l2[i]!==null?Math.min(v,l2[i]):null);
+  }
+  // 더블비 상단 = max(BB(시가,4,4σ), BB(종가,20,2σ)) — 기존 더블비 전략과 동일.
+  // (종가 기준 4,4σ는 종가가 자기 밴드를 못 넘어 신호가 절대 안 나오므로 시가 기준 사용)
+  function calcDoubleUpper(bars){
+    const u1=bbSide(bars.map(b=>b.o),4,4,true);
+    const u2=bbSide(bars.map(b=>b.c),20,2,true);
+    return u1.map((v,i)=>v!==null&&u2[i]!==null?Math.max(v,u2[i]):null);
+  }
+  function calcTR(bars){
+    return bars.map((b,i)=>{
+      if(i===0)return b.h-b.l;
+      const pc=bars[i-1].c;
+      return Math.max(b.h-b.l,Math.abs(b.h-pc),Math.abs(b.l-pc));
+    });
+  }
+  function calcRSI(bars,period){
+    const n=bars.length, rsi=new Array(n).fill(null);
+    if(n<=period)return rsi;
+    let ag=0,al=0;
+    for(let i=1;i<=period;i++){const d=bars[i].c-bars[i-1].c; if(d>0)ag+=d; else al-=d;}
+    ag/=period; al/=period;
+    rsi[period]=al===0?100:100-100/(1+ag/al);
+    for(let i=period+1;i<n;i++){
+      const d=bars[i].c-bars[i-1].c;
+      ag=(ag*(period-1)+Math.max(d,0))/period;
+      al=(al*(period-1)+Math.max(-d,0))/period;
+      rsi[i]=al===0?100:100-100/(1+ag/al);
+    }
+    return rsi;
+  }
+  function calcSMA(arr,n){
+    const out=new Array(arr.length).fill(null); let s=0;
+    for(let i=0;i<arr.length;i++){
+      s+=arr[i]; if(i>=n)s-=arr[i-n];
+      if(i>=n-1)out[i]=s/n;
+    }
+    return out;
+  }
+  function calcNullableSMA(arr,n){
+    const out=new Array(arr.length).fill(null);
+    let s=0,c=0;
+    for(let i=0;i<arr.length;i++){
+      if(arr[i]!==null&&isFinite(arr[i])){s+=arr[i];c++;}
+      if(i>=n&&arr[i-n]!==null&&isFinite(arr[i-n])){s-=arr[i-n];c--;}
+      if(i>=n-1&&c===n)out[i]=s/n;
+    }
+    return out;
+  }
+  function calcRiskTR(tr,anchorIdx,signalIdx,trMode){
+    if(trMode==="anchor")return tr[anchorIdx]||tr[signalIdx]||0;
+    if(trMode==="setupMax"){
+      let mx=0;
+      for(let i=Math.max(0,anchorIdx);i<=signalIdx;i++)mx=Math.max(mx,tr[i]||0);
+      return mx||tr[signalIdx]||0;
+    }
+    return tr[signalIdx]||0;
+  }
+  function downDbFlags(bars,lower){
+    const out=new Array(bars.length).fill(false);
+    for(let i=1;i<bars.length;i++){
+      if(lower[i]===null||lower[i-1]===null)continue;
+      out[i]=bars[i].c<lower[i]&&bars[i-1].c>=lower[i-1];
+    }
+    return out;
+  }
+  function detectUpperBreakSignals(bars,lower,upper,tr,rsi,pivotLookahead,lowBreakK,boxMinBars,maxWaitBars,entryMode,maArr,trMode){
+    const sigs=[];
+    for(let dbIdx=1;dbIdx<bars.length;dbIdx++){
+      if(lower[dbIdx]===null||lower[dbIdx-1]===null)continue;
+      if(!(bars[dbIdx].c<lower[dbIdx]&&bars[dbIdx-1].c>=lower[dbIdx-1]))continue;
+      if(maArr&&(maArr[dbIdx]===null||bars[dbIdx].c>=maArr[dbIdx]))continue;
+      const searchEnd=Math.min(bars.length-1,dbIdx+pivotLookahead);
+      let pivotIdx=dbIdx, pivotLow=bars[dbIdx].l;
+      for(let j=dbIdx+1;j<=searchEnd;j++){
+        if(bars[j].l<pivotLow){pivotLow=bars[j].l;pivotIdx=j;}
+      }
+      const allowedBreak=tr[pivotIdx]*lowBreakK;
+      const breakLevel=pivotLow-allowedBreak;
+      const waitEnd=Math.min(bars.length-2,pivotIdx+maxWaitBars);
+      let minLow=Infinity;
+      for(let i=pivotIdx+1;i<=waitEnd;i++){
+        minLow=Math.min(minLow,bars[i].l);
+        if(minLow<breakLevel)break;
+        if(i<pivotIdx+boxMinBars)continue;
+        if(upper[i]===null)continue;
+        if(bars[i].c<=upper[i])continue;
+        const entryIdx=entryMode==="nextOpen"?i+1:i;
+        if(entryIdx>=bars.length)continue;
+        const entryPrice=entryMode==="nextOpen"?bars[entryIdx].o:bars[i].c;
+        const rsiDiv=(rsi[pivotIdx]!==null&&rsi[dbIdx]!==null)?rsi[pivotIdx]>rsi[dbIdx]:null;
+        sigs.push({mode:"upperBreak",dbIdx,pivotIdx,anchorIdx:pivotIdx,signalIdx:i,entryIdx,entryPrice,pivotLow,rsiDiv,riskTR:calcRiskTR(tr,pivotIdx,i,trMode),dbCount:1,anchorRsi:rsi[dbIdx],signalRsi:rsi[pivotIdx]});
+        break;
+      }
+    }
+    return sigs;
+  }
+  function bb44TurnMeetOk(bars,bb44Lower,tr,i,opts){
+    if(!bb44Lower||bb44Lower[i]===null)return null;
+    const band=bb44Lower[i], curTR=tr[i]||0;
+    const start=Math.max(1,i-opts.bb44Lookback);
+    let minBand=Infinity,minIdx=-1;
+    for(let j=start;j<=i;j++){
+      if(bb44Lower[j]!==null&&bb44Lower[j]<minBand){minBand=bb44Lower[j];minIdx=j;}
+    }
+    if(minIdx<0||minIdx>=i)return null;
+    const prev=bb44Lower[i-1];
+    if(prev===null)return null;
+    const slope=band-prev;
+    const turnedUp=band>minBand&&slope>=curTR*opts.bb44SlopeK;
+    if(!turnedUp)return null;
+    const meet=bars[i].l<=band+curTR*opts.bb44MeetK&&bars[i].c>=band-curTR*opts.bb44MeetK;
+    if(!meet)return null;
+    const bodyOk=Math.abs(bars[i].c-bars[i].o)<=curTR*opts.bodyK;
+    if(!bodyOk)return null;
+    return {band,slope};
+  }
+  function detectRsiPivotSignals(bars,lower,bb44Lower,tr,rsi,rsiMa,opts){
+    const sigs=[];
+    const dbFlags=downDbFlags(bars,lower);
+    const n=bars.length;
+    let nextAllowed=0;
+    for(let i=2;i<n-1;i++){
+      if(i<nextAllowed)continue;
+      if(lower[i]===null||rsi[i]===null)continue;
+      if(opts.maArr&&(opts.maArr[i]===null||bars[i].c>=opts.maArr[i]))continue;
+      const winStart=Math.max(1,i-opts.dbLookback);
+      let dbCount=0,lastDb=-1;
+      for(let j=winStart;j<=i;j++){
+        if(dbFlags[j]){dbCount++;lastDb=j;}
+      }
+      if(dbCount<opts.dbMin||lastDb<0)continue;
+      if(i-lastDb>opts.maxWaitBars)continue;
+      const anchorStart=Math.max(winStart,i-opts.pivotLookahead);
+      const anchorEnd=i-opts.boxMinBars;
+      if(anchorEnd<=anchorStart)continue;
+      let anchorIdx=anchorStart,anchorLow=bars[anchorStart].l;
+      for(let j=anchorStart+1;j<=anchorEnd;j++){
+        if(bars[j].l<anchorLow){anchorLow=bars[j].l;anchorIdx=j;}
+      }
+      if(rsi[anchorIdx]===null)continue;
+      const refTR=Math.max(tr[anchorIdx]||0,tr[i]||0);
+      const retestBand=refTR*opts.lowBreakK;
+      const candidateLow=bars[i].l;
+      const lowRetest=candidateLow<=anchorLow+retestBand&&candidateLow>=anchorLow-retestBand;
+      if(!lowRetest)continue;
+      const lowerTouch=bars[i].l<=lower[i]+(tr[i]||0)*opts.bandTouchK;
+      if(!lowerTouch)continue;
+      const bb44=bb44TurnMeetOk(bars,bb44Lower,tr,i,opts);
+      if(!bb44)continue;
+      let minRsi=Infinity;
+      for(let j=winStart;j<=i;j++)if(rsi[j]!==null)minRsi=Math.min(minRsi,rsi[j]);
+      if(minRsi>opts.rsiFloor)continue;
+      const rsiDiv=rsi[i]>=rsi[anchorIdx]+opts.rsiGap;
+      if(!rsiDiv)continue;
+      const turnUp=rsi[i]>rsi[i-1]&&(rsi[i-1]===null||i<3||rsi[i-1]<=rsi[i-2]||bars[i].c>bars[i-1].c);
+      const maRecover=rsiMa&&rsiMa[i]!==null&&rsi[i]>=rsiMa[i]&&(rsiMa[i-1]===null||rsi[i-1]===null||rsi[i-1]<rsiMa[i-1]||rsi[i]>rsi[i-1]);
+      if(opts.rsiConfirm==="turn"&&!turnUp)continue;
+      if(opts.rsiConfirm==="ma"&&!maRecover)continue;
+      const entryIdx=opts.entryMode==="nextOpen"?i+1:i;
+      if(entryIdx>=n)continue;
+      const entryPrice=opts.entryMode==="nextOpen"?bars[entryIdx].o:bars[i].c;
+      const pivotLow=Math.min(anchorLow,candidateLow);
+      sigs.push({
+        mode:"rsiPivot",dbIdx:lastDb,pivotIdx:i,anchorIdx,signalIdx:i,entryIdx,entryPrice,pivotLow,
+        rsiDiv:true,dbCount,anchorRsi:rsi[anchorIdx],signalRsi:rsi[i],rsiMa:rsiMa?rsiMa[i]:null,
+        bb44Lower:bb44.band,bb44Slope:bb44.slope,riskTR:calcRiskTR(tr,anchorIdx,i,opts.trMode)
+      });
+      nextAllowed=i+Math.max(1,opts.boxMinBars);
+    }
+    return sigs;
+  }
+  function backtest(bars,sigs,slK,tpK,expiryBars){
+    const trades=[];
+    let equity=1,peak=1,maxDD=0,wins=0,sumWin=0,sumLoss=0,lossStreak=0,maxLossStreak=0,activeUntil=-1;
+    for(const sig of sigs){
+      if(sig.entryIdx<=activeUntil)continue;
+      const {entryIdx,entryPrice,pivotLow,signalIdx}=sig;
+      const sigTR=sig.riskTR||0;
+      if(!(sigTR>0))continue;
+      const sl=pivotLow-slK*sigTR;
+      const tp=entryPrice+tpK*sigTR;
+      const expire=Math.min(bars.length-1,entryIdx+expiryBars);
+      let exitPx=null,exitReason="EXPIRE",exitIdx=expire;
+      for(let j=entryIdx+1;j<=expire;j++){
+        const b=bars[j];
+        if(b.l<=sl){exitPx=sl;exitReason="SL";exitIdx=j;break;}
+        if(b.h>=tp){exitPx=tp;exitReason="TP";exitIdx=j;break;}
+      }
+      if(exitPx===null)exitPx=bars[expire].c;
+      const ret=(exitPx-entryPrice)/entryPrice;
+      equity*=(1+ret);
+      if(equity>peak)peak=equity;
+      const dd=equity/peak-1; if(dd<maxDD)maxDD=dd;
+      if(ret>0){wins++;sumWin+=ret;lossStreak=0;}else{sumLoss+=Math.abs(ret);lossStreak++;maxLossStreak=Math.max(maxLossStreak,lossStreak);}
+      activeUntil=exitIdx;
+      trades.push({
+        mode:sig.mode,date:bars[signalIdx].date||bars[signalIdx].day,entryPrice,exitPrice:exitPx,sl,tp,ret,
+        won:exitReason==="TP",exitReason,rsiDiv:sig.rsiDiv,dbCount:sig.dbCount||0,
+        anchorRsi:sig.anchorRsi,signalRsi:sig.signalRsi,riskTR:sigTR,holdBars:exitIdx-entryIdx
+        ,bb44Lower:sig.bb44Lower,bb44Slope:sig.bb44Slope
+      });
+    }
+    const cnt=trades.length;
+    if(!cnt)return{trades,cnt,winRate:0,pf:0,payoff:0,totalRet:0,mdd:0,mar:0,maxLossStreak:0,avgHoldBars:0};
+    const losses=cnt-wins;
+    const avgWin=wins?sumWin/wins:0,avgLoss=losses?sumLoss/losses:0;
+    const payoff=avgLoss>0?avgWin/avgLoss:(avgWin>0?Infinity:0);
+    const pf=sumLoss>0?sumWin/sumLoss:(sumWin>0?Infinity:0);
+    const totalRet=equity-1;
+    const mar=maxDD<0?totalRet/Math.abs(maxDD):(totalRet>0?Infinity:0);
+    const avgHoldBars=trades.reduce((s,t)=>s+t.holdBars,0)/cnt;
+    return{trades,cnt,winRate:wins/cnt,pf,payoff,totalRet,mdd:maxDD,mar,maxLossStreak,avgHoldBars};
+  }
+  function parseMT5local(text){
+    const lines=text.split(/\r?\n/),out=[];
+    const start=/date|open|time/i.test(lines[0]||"")?1:0;
+    for(let i=start;i<lines.length;i++){
+      const ln=lines[i].trim(); if(!ln)continue;
+      const p=ln.split(/[\t,;]+/); if(p.length<5)continue;
+      const d=p[0].replace(/\./g,"-").replace(/\//g,"-").slice(0,10);
+      const hasT=/:/.test(p[1]||""); const oi=hasT?2:1;
+      const o=+p[oi],h=+p[oi+1],l=+p[oi+2],c=+p[oi+3];
+      if(!isFinite(o)||!isFinite(h)||!isFinite(l)||!isFinite(c)||c<=0)continue;
+      out.push({day:d,date:d+" "+(hasT?p[1]:"00:00:00"),o,h,l,c});
+    }
+    if(out.length<2)throw new Error("CSV에서 유효한 OHLC 행을 못 찾음");
+    return out;
+  }
+  function groupByDay(bars){const m={},order=[];for(const b of bars){if(!m[b.day]){m[b.day]=[];order.push(b.day);}m[b.day].push(b);}return{m,order};}
+  function aggBars(g){let h=-Infinity,l=Infinity;for(const x of g){if(x.h>h)h=x.h;if(x.l<l)l=x.l;}return{day:g[0].day,date:g[0].date,o:g[0].o,h,l,c:g[g.length-1].c};}
+  function intradayOnly(bars){const{m}=groupByDay(bars);return bars.filter(b=>m[b.day].length>1);}
+  function resampleN(bars,nn){const{m,order}=groupByDay(bars);const out=[];for(const d of order){const a=m[d];for(let k=0;k<a.length;k+=nn)out.push(aggBars(a.slice(k,k+nn)));}return out;}
+  function resampleDaily(bars){const{m,order}=groupByDay(bars);return order.map(d=>aggBars(m[d]));}
+  function buildTF(raw,tf){
+    if(tf==="5m")return intradayOnly(raw);
+    if(tf==="10m")return resampleN(intradayOnly(raw),2);
+    if(tf==="1h")return resampleN(intradayOnly(raw),12);
+    return resampleDaily(raw);
+  }
+  let RAWCACHE={}, RESULTS=[], SORT={key:"mar",dir:-1};
+  function parseList(str,intOnly,minV){
+    return String(str).split(/[,\s]+/).map(x=>+x).filter(x=>isFinite(x)&&x>=(minV||0)&&(!intOnly||Number.isInteger(x)));
+  }
+  function val(id,fallback){const x=el(id);return x?x.value:fallback;}
+  function cur(id,fallback){const x=el(id);return x?(x.dataset.cur||fallback):fallback;}
+  function errMsg(msg){el("revdbc_err").textContent=msg||"";}
+  function statusMsg(msg){el("revdbc_status").textContent=msg||"";}
+  async function loadSources(){
+    const src=el("revdbc_src").dataset.cur;
+    if(src==="upload"){
+      if(!RAWCACHE.__upload__)throw new Error("CSV 파일을 먼저 선택하세요");
+      return[{label:RAWCACHE.__uploadName__||"업로드",bars:buildTF(RAWCACHE.__upload__,el("revdbc_tf").value)}];
+    }
+    if(src==="yahoo"){
+      const sym=el("revdbc_sym").value.trim(); if(!sym)throw new Error("야후 티커를 입력하세요");
+      const from=el("revdbc_from").value,to=el("revdbc_to").value;
+      statusMsg(`야후 ${sym} 불러오는 중…`);
+      const u=`${PROXY}/?yahoo=${encodeURIComponent(sym)}&from=${from}&to=${to}&interval=5m`;
+      const r=await fetch(u); const j=await r.json();
+      if(!r.ok||!j.data)throw new Error(j.error||"프록시 오류 "+r.status);
+      const raw=j.data.map(x=>({day:String(x.date).slice(0,10),date:String(x.date),o:+x.o,h:+x.h,l:+x.l,c:+x.c}));
+      return[{label:sym,bars:buildTF(raw,el("revdbc_tf").value)}];
+    }
+    const picks=selectedCsvFiles("revdbc");
+    if(!picks.length)throw new Error("비교할 저장 CSV를 1개 이상 체크하세요");
+    const out=[];
+    for(const cf of picks){
+      if(!RAWCACHE[cf.file]){
+        statusMsg(`${cf.sym} ${cf.tf} 불러오는 중…`);
+        const r=await fetch(cf.file,{cache:"force-cache"});
+        if(!r.ok)throw new Error(`${cf.file} 못 찾음(404)`);
+        const parsed=parseMT5local(await r.text());
+        RAWCACHE[cf.file]=cf.raw?intradayOnly(parsed):parsed;
+      }
+      out.push({label:`${cf.sym}·${cf.tf}`,file:cf.file,bars:RAWCACHE[cf.file]});
+    }
+    return out;
+  }
+  async function run(){
+    errMsg(""); RESULTS=[];
+    const btn=el("revdbc_run"); btn.disabled=true;
+    try{
+      const mode=cur("revdbc_mode","rsiPivot");
+      const maFilter=Math.max(0,+el("revdbc_ma").value||0);
+      const pivotLookaheads=parseList(el("revdbc_pivot").value,true,1);
+      const lowBreakKs=parseList(el("revdbc_lbk").value,false,0);
+      const boxMinBarsList=parseList(el("revdbc_bmb").value,true,1);
+      const maxWait=Math.max(5,+el("revdbc_wait").value||50);
+      const slKs=parseList(el("revdbc_sl").value,false,0);
+      const tpKs=parseList(el("revdbc_tp").value,false,0);
+      const expiryBars=Math.max(1,+el("revdbc_expiry").value||50);
+      const minTr=Math.max(0,+el("revdbc_min").value||0);
+      const entryMode=cur("revdbc_entry","nextOpen");
+      const trMode=cur("revdbc_trmode","setupMax");
+      const dbLookback=Math.max(5,+val("revdbc_dblook","80")||80);
+      const dbMins=parseList(val("revdbc_dbmin","1,2,3"),true,1);
+      const rsiPeriod=Math.max(2,+val("revdbc_rsi_period","14")||14);
+      const rsiMaLen=Math.max(2,+val("revdbc_rsi_ma","14")||14);
+      const rsiFloors=parseList(val("revdbc_rsi_floor","30,35,40"),false,0);
+      const rsiGaps=parseList(val("revdbc_rsi_gap","3,5,8"),false,0);
+      const bandKs=parseList(val("revdbc_bandk","0,0.33,0.5"),false,0);
+      const bb44SlopeKs=parseList(val("revdbc_bb44_slope","0,0.1"),false,0);
+      const bb44MeetKs=parseList(val("revdbc_bb44_meet","0.33"),false,0);
+      const bb44Lookback=Math.max(1,+val("revdbc_bb44_look","4")||4);
+      const bodyKs=parseList(val("revdbc_bodyk","1.2"),false,0);
+      const rsiConfirm=cur("revdbc_rsi_confirm","turn");
+      if(!pivotLookaheads.length||!lowBreakKs.length||!boxMinBarsList.length||!slKs.length||!tpKs.length)
+        throw new Error("파라미터 값을 하나 이상 입력하세요");
+      if(mode==="rsiPivot"&&(!dbMins.length||!rsiFloors.length||!rsiGaps.length||!bandKs.length||!bb44SlopeKs.length||!bb44MeetKs.length||!bodyKs.length))
+        throw new Error("RSI V2 파라미터 값을 하나 이상 입력하세요");
+      const sources=await loadSources();
+      const rows=[];
+      const extra=mode==="rsiPivot"?dbMins.length*rsiFloors.length*rsiGaps.length*bandKs.length*bb44SlopeKs.length*bb44MeetKs.length*bodyKs.length:1;
+      const total=sources.length*pivotLookaheads.length*lowBreakKs.length*boxMinBarsList.length*slKs.length*tpKs.length*extra;
+      let combo=0;
+      for(const src of sources){
+        const bars=src.bars;
+        const lower=calcDoubleLower(bars);
+        const bb44Lower=bbSide(bars.map(b=>b.o),4,4,false);
+        const upper=calcDoubleUpper(bars);
+        const tr=calcTR(bars);
+        const rsiArr=calcRSI(bars,rsiPeriod);
+        const rsiMa=calcNullableSMA(rsiArr,rsiMaLen);
+        const maArr=maFilter>0?calcSMA(bars.map(b=>b.c),maFilter):null;
+        for(const pLook of pivotLookaheads){
+          for(const lbK of lowBreakKs){
+            for(const bmb of boxMinBarsList){
+              const signalSets=[];
+              if(mode==="upperBreak"){
+                signalSets.push({sigs:detectUpperBreakSignals(bars,lower,upper,tr,rsiArr,pLook,lbK,bmb,maxWait,entryMode,maArr,trMode),dbMin:"-",rsiFloor:"-",rsiGap:"-",bandK:"-"});
+              }else{
+                for(const dbMin of dbMins){
+                  for(const rsiFloor of rsiFloors){
+                    for(const rsiGap of rsiGaps){
+                      for(const bandK of bandKs){
+                        for(const bb44SlopeK of bb44SlopeKs){
+                          for(const bb44MeetK of bb44MeetKs){
+                            for(const bodyK of bodyKs){
+                              signalSets.push({
+                                sigs:detectRsiPivotSignals(bars,lower,bb44Lower,tr,rsiArr,rsiMa,{maArr,dbLookback,dbMin,pivotLookahead:pLook,lowBreakK:lbK,boxMinBars:bmb,maxWaitBars:maxWait,entryMode,trMode,rsiFloor,rsiGap,bandTouchK:bandK,bb44Lookback,bb44SlopeK,bb44MeetK,bodyK,rsiConfirm}),
+                                dbMin,rsiFloor,rsiGap,bandK,bb44SlopeK,bb44MeetK,bodyK
+                              });
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              for(const ss of signalSets){
+                for(const slK of slKs){
+                  for(const tpK of tpKs){
+                    combo++;
+                    if(combo%200===0){statusMsg(`${combo}/${total} 조합…`);await new Promise(r=>setTimeout(r,0));}
+                    const res=backtest(bars,ss.sigs,slK,tpK,expiryBars);
+                    if(res.cnt<minTr)continue;
+                    rows.push({label:src.label,mode,pLook,lbK,bmb,dbLookback,dbMin:ss.dbMin,rsiFloor:ss.rsiFloor,rsiGap:ss.rsiGap,bandK:ss.bandK,bb44SlopeK:ss.bb44SlopeK,bb44MeetK:ss.bb44MeetK,bodyK:ss.bodyK,rsiConfirm,trMode,entryMode,slK,tpK,...res});
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      RESULTS=rows;
+      statusMsg(`완료 — 유효 ${rows.length}개 / 전체 ${total}개 조합`);
+      render();
+    }catch(e){errMsg(e.message);statusMsg("");}
+    finally{btn.disabled=false;}
+  }
+  function pctStr(x){return(x>=0?"+":"")+(x*100).toFixed(1)+"%";}
+  function pf2(x){return x===Infinity?"∞":x.toFixed(2);}
+  function arw(k){return SORT.key===k?(SORT.dir<0?" ▾":" ▴"):"";}
+  function numCls(v,good,bad){return v>=good?"hl-good":v<=bad?"hl-bad":"";}
+  function render(){
+    const con=el("revdbc_results");
+    if(!RESULTS.length){
+      con.innerHTML=`<div class="placeholder"><div class="big">결과가 없습니다</div><div class="mono">최소거래수를 낮추거나 범위를 넓혀보세요</div></div>`;
+      return;
+    }
+    const key=SORT.key, dir=SORT.dir;
+    const sorted=[...RESULTS].sort((a,b)=>{
+      const va=isFinite(a[key])?a[key]:1e9*Math.sign(dir);
+      const vb=isFinite(b[key])?b[key]:1e9*Math.sign(dir);
+      return(vb-va)*dir;
+    });
+    const best=sorted[0];
+    function hdr(k,main,sub=""){return`<th class="db-sort revdbc-s" data-k="${k}" style="cursor:pointer"><div class="th-main">${main}${arw(k)}</div>${sub?`<div class="th-sub">${sub}</div>`:""}</th>`;}
+    let html=`<div class="db-best">최상위: <b>${best.label}</b> · ${best.mode==="rsiPivot"?"RSI변곡":"상단돌파"} · pivot=${best.pLook} · lbK=${best.lbK} · box=${best.bmb} · DB≥${best.dbMin} · RSI갭=${best.rsiGap} · 밴드K=${best.bandK} · 44턴=${best.bb44SlopeK} · 만남=${best.bb44MeetK} · SL=${best.slK} · TP=${best.tpK} → <span class="pos">${pctStr(best.totalRet)}</span> · MDD ${pctStr(best.mdd)} · MAR ${pf2(best.mar)}</div>`;
+    html+=`<div class="ctable-wrap"><table class="ctable"><thead><tr>
+      <th><div class="th-main">데이터</div></th>
+      ${hdr("pLook","Pivot")}${hdr("lbK","저점K")}${hdr("bmb","간격")}${hdr("dbMin","DB≥")}${hdr("rsiGap","RSI갭")}${hdr("bandK","밴드K")}${hdr("bb44SlopeK","44턴")}${hdr("bb44MeetK","만남")}
+      ${hdr("slK","SL×TR")}${hdr("tpK","TP×TR")}${hdr("cnt","거래수")}${hdr("winRate","승률")}${hdr("pf","PF")}${hdr("payoff","PO")}
+      ${hdr("totalRet","총수익률")}${hdr("mdd","MDD")}${hdr("mar","MAR")}${hdr("maxLossStreak","연패")}${hdr("avgHoldBars","보유봉")}
+      <th><div class="th-main">내역</div></th>
+    </tr></thead><tbody>`;
+    sorted.forEach((r,i)=>{
+      html+=`<tr class="${i===0?"db-hot":""}">
+        <td class="name mono" style="font-size:12px">${r.label}</td>
+        <td class="num">${r.pLook}</td><td class="num">${r.lbK}</td><td class="num">${r.bmb}</td>
+        <td class="num">${r.dbMin}</td><td class="num">${r.rsiGap}</td><td class="num">${r.bandK}</td><td class="num">${r.bb44SlopeK}</td><td class="num">${r.bb44MeetK}</td>
+        <td class="num">${r.slK}</td><td class="num">${r.tpK}</td>
+        <td class="num">${r.cnt}</td>
+        <td class="num ${numCls(r.winRate,0.55,0)}">${(r.winRate*100).toFixed(0)}%</td>
+        <td class="num ${numCls(r.pf,1.5,1)}">${pf2(r.pf)}</td>
+        <td class="num ${numCls(r.payoff,1.2,0.8)}">${pf2(r.payoff)}</td>
+        <td class="num ${r.totalRet>0?"pos":"neg"}">${pctStr(r.totalRet)}</td>
+        <td class="num neg">${pctStr(r.mdd)}</td>
+        <td class="num ${numCls(r.mar,2,0)}">${pf2(r.mar)}</td>
+        <td class="num">${r.maxLossStreak}</td>
+        <td class="num">${r.avgHoldBars.toFixed(1)}</td>
+        <td><button class="revdbc-dtl" data-idx="${i}" style="padding:4px 9px;border:1px solid var(--cyan);background:rgba(8,145,178,.1);color:var(--cyan);border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">▸내역</button></td>
+      </tr>`;
+    });
+    html+=`</tbody></table></div><div id="revdbc_detail_area" style="margin-top:20px"></div>`;
+    con.innerHTML=html;
+    con.querySelectorAll(".revdbc-s").forEach(th=>th.onclick=()=>{
+      const k=th.dataset.k;
+      if(SORT.key===k)SORT.dir*=-1; else{SORT.key=k;SORT.dir=-1;}
+      render();
+    });
+    con.querySelectorAll(".revdbc-dtl").forEach(b=>b.onclick=()=>showDetail(sorted[+b.dataset.idx]));
+  }
+  function showDetail(r){
+    const area=el("revdbc_detail_area"); if(!area)return;
+    const rsiO=r.trades.filter(t=>t.rsiDiv===true).length;
+    const rsiAll=r.trades.filter(t=>t.rsiDiv!==null).length;
+    let html=`<div class="sectitle">거래 내역 · ${r.label} · ${r.mode==="rsiPivot"?"RSI변곡":"상단돌파"} · pivot=${r.pLook} lbK=${r.lbK} box=${r.bmb} DB≥${r.dbMin} RSI갭=${r.rsiGap} 밴드K=${r.bandK} 44턴=${r.bb44SlopeK} 만남=${r.bb44MeetK} SL=${r.slK} TP=${r.tpK} · RSI다이버전스 ${rsiO}/${rsiAll}건</div>
+    <div class="ctable-wrap"><table class="ctable"><thead><tr>
+      <th><div class="th-main">날짜(신호봉)</div></th>
+      <th><div class="th-main">진입가</div></th><th><div class="th-main">청산가</div></th>
+      <th><div class="th-main">SL</div></th><th><div class="th-main">TP</div></th>
+      <th><div class="th-main">수익률</div></th><th><div class="th-main">결과</div></th><th><div class="th-main">DB수</div></th>
+      <th><div class="th-main">RSI</div><div class="th-sub">anchor→signal</div></th><th><div class="th-main">44밴드</div><div class="th-sub">값/기울기</div></th><th><div class="th-main">TR</div></th>
+    </tr></thead><tbody>`;
+    for(const t of r.trades){
+      const res=t.exitReason==="TP"?'<span class="pos">익절</span>':t.exitReason==="SL"?'<span class="neg">손절</span>':'<span class="dimv">만료</span>';
+      const rsiTxt=t.anchorRsi!=null&&t.signalRsi!=null?`${t.anchorRsi.toFixed(1)}→${t.signalRsi.toFixed(1)}`:"-";
+      html+=`<tr>
+        <td class="name mono" style="font-size:11px">${String(t.date).slice(0,16)}</td>
+        <td class="num mono">${t.entryPrice.toFixed(2)}</td><td class="num mono">${t.exitPrice.toFixed(2)}</td>
+        <td class="num mono">${t.sl.toFixed(2)}</td><td class="num mono">${t.tp.toFixed(2)}</td>
+        <td class="num ${t.ret>0?"pos":"neg"}">${pctStr(t.ret)}</td>
+        <td>${res}</td><td class="num">${t.dbCount||"-"}</td>
+        <td class="num mono">${rsiTxt}</td><td class="num mono">${t.bb44Lower!=null?t.bb44Lower.toFixed(2):"-"} / ${t.bb44Slope!=null?t.bb44Slope.toFixed(2):"-"}</td><td class="num mono">${t.riskTR?t.riskTR.toFixed(2):"-"}</td>
+      </tr>`;
+    }
+    html+=`</tbody></table></div>`;
+    area.innerHTML=html;
+    area.scrollIntoView({behavior:"smooth"});
+  }
+  function setSrcMode(s){
+    el("revdbc_src").dataset.cur=s;
+    el("revdbc_src").querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.s===s));
+    el("revdbc_storedRow").style.display=s==="stored"?"":"none";
+    el("revdbc_uploadRow").style.display=s==="upload"?"":"none";
+    el("revdbc_yahooRow").style.display=s==="yahoo"?"":"none";
+    el("revdbc_tfrow").style.display=s==="stored"?"none":"";
+  }
+  function init(){
+    if(!el("revdbc_run"))return;
+    renderCsvChecks("revdbc");
+    el("revdbc_src").querySelectorAll("button").forEach(b=>b.onclick=()=>setSrcMode(b.dataset.s));
+    ["revdbc_mode","revdbc_rsi_confirm","revdbc_trmode"].forEach(id=>{
+      const box=el(id); if(!box)return;
+      box.querySelectorAll("button").forEach(b=>b.onclick=()=>{
+        box.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+        box.dataset.cur=b.dataset.m||b.dataset.c;
+      });
+    });
+    el("revdbc_entry").querySelectorAll("button").forEach(b=>b.onclick=()=>{
+      el("revdbc_entry").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+      el("revdbc_entry").dataset.cur=b.dataset.m;
+    });
+    el("revdbc_file").onchange=async e=>{
+      const f=e.target.files[0]; if(!f)return;
+      try{RAWCACHE.__upload__=parseMT5local(await f.text());RAWCACHE.__uploadName__=f.name.replace(/\.csv$/i,"");}
+      catch(ex){errMsg("⚠ "+ex.message);}
+    };
+    el("revdbc_reload").onclick=()=>{RAWCACHE={};statusMsg("캐시 비움");};
+    el("revdbc_from").value=(()=>{const d=new Date();d.setDate(d.getDate()-730);return d.toISOString().slice(0,10);})();
+    el("revdbc_to").value=today();
+    el("revdbc_run").onclick=run;
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init); else init();
+})();
+
+//__CHUNK_END__

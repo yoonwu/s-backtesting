@@ -745,10 +745,17 @@
         </div>
 
         <div class="field"><label>마감 조건 (BB4,4 하단 터치)</label>
-          <div class="subtabs" id="revdb_close" data-cur="touch">
-            <button data-c="touch" class="on">닿기만 (꼬리 OK)</button><button data-c="reject">밴드 위 종가(거부)</button>
+          <div class="subtabs" id="revdb_close" data-cur="reject">
+            <button data-c="touch">닿기만 (꼬리 OK)</button><button data-c="reject" class="on">밴드 위 종가(거부)</button>
           </div>
-          <div class="hint">닿기만 = 저가≤하단밴드. 거부 = 저가≤하단밴드 + 종가>하단밴드(하락 멈춤 확인).</div>
+          <div class="hint">닿기만 = 저가≤하단밴드. 거부 = 저가≤하단밴드 + 종가>하단밴드(하락 멈춤 확인). 거부가 노이즈 적음.</div>
+        </div>
+
+        <div class="field"><label>RSI 다이버전스 필터</label>
+          <div class="subtabs" id="revdb_rsireq" data-cur="off">
+            <button data-r="off" class="on">무시 (O/X만 표시)</button><button data-r="req">필수</button>
+          </div>
+          <div class="hint">필수 = 직전 터치 대비 <b>저가↓·RSI↑</b>(약세 둔화)인 신호만 채택. 떨어지는 칼 거르고 진짜 바닥 반등만 → 일관성 ↑.</div>
         </div>
 
         <div class="row2">
@@ -854,7 +861,7 @@
 
         <div class="row2">
           <div class="field"><label>DB 탐색 범위 (봉)</label><input id="revdbc_dblook" class="mono" type="number" value="80" min="5" step="5"></div>
-          <div class="field"><label>최소 하락DB 개수 (콤마)</label><input id="revdbc_dbmin" class="mono" value="1,2,3"></div>
+          <div class="field"><label>최소 하락DB 개수 (콤마)</label><input id="revdbc_dbmin" class="mono" value="1,2"></div>
         </div>
 
         <div class="row2">
@@ -864,23 +871,23 @@
               <input id="revdbc_rsi_ma" class="mono" type="number" value="14" min="2" step="1">
             </div>
           </div>
-          <div class="field"><label>RSI 저점 상한 (콤마)</label><input id="revdbc_rsi_floor" class="mono" value="30,35,40"></div>
+          <div class="field"><label>RSI 저점 상한 (콤마)</label><input id="revdbc_rsi_floor" class="mono" value="35,40"></div>
         </div>
 
         <div class="row2">
           <div class="field"><label>RSI 다이버전스 최소폭 (콤마)</label>
-            <input id="revdbc_rsi_gap" class="mono" value="3,5,8">
+            <input id="revdbc_rsi_gap" class="mono" value="3,5">
             <div class="hint">현재 RSI가 기준 저점 RSI보다 이 값 이상 높아야 합니다.</div>
           </div>
           <div class="field"><label>하단밴드 터치 여유 ×TR (콤마)</label>
-            <input id="revdbc_bandk" class="mono" value="0,0.33,0.5">
+            <input id="revdbc_bandk" class="mono" value="0.33,0.5">
             <div class="hint">저가가 더블BB 하단 + TR×K 안에 들어오면 retest로 인정.</div>
           </div>
         </div>
 
         <div class="row2">
           <div class="field"><label>4/4 하단밴드 턴 강도 ×TR (콤마)</label>
-            <input id="revdbc_bb44_slope" class="mono" value="0,0.1">
+            <input id="revdbc_bb44_slope" class="mono" value="0">
             <div class="hint">4/4 하단밴드가 저점 이후 위로 꺾여 올라오는 최소 기울기.</div>
           </div>
           <div class="field"><label>캔들-4/4 만남 여유 ×TR (콤마)</label>
@@ -904,17 +911,17 @@
         </div>
 
         <div class="field"><label>PivotLow 탐색 범위 (봉, 콤마)</label>
-          <input id="revdbc_pivot" class="mono" value="5,10,20,30">
+          <input id="revdbc_pivot" class="mono" value="10,20">
           <div class="hint">DB 이후 이 봉 수 안에서 최저점(pivotLow)을 찾습니다.</div>
         </div>
 
         <div class="row2">
           <div class="field"><label>저점 허용훼손 ×TR (콤마)</label>
-            <input id="revdbc_lbk" class="mono" value="0.1,0.2,0.33,0.5">
+            <input id="revdbc_lbk" class="mono" value="0.2,0.33">
             <div class="hint">pivotLow − TR×K 이하면 셋업 취소 (기본 0.33)</div>
           </div>
           <div class="field"><label>박스 최소 봉 수 (콤마)</label>
-            <input id="revdbc_bmb" class="mono" value="1,3,5,7">
+            <input id="revdbc_bmb" class="mono" value="3,5">
             <div class="hint">pivotLow 이후 이 봉 이상 횡보해야 유효</div>
           </div>
         </div>
@@ -938,11 +945,11 @@
 
         <div class="row2">
           <div class="field"><label>손절폭 ×TR (콤마)</label>
-            <input id="revdbc_sl" class="mono" value="0.5,0.75,1.0,1.5,2.0">
+            <input id="revdbc_sl" class="mono" value="1.0,1.5,2.0">
             <div class="hint">SL = pivotLow − 손절×TR(신호봉)</div>
           </div>
           <div class="field"><label>익절폭 ×TR (콤마)</label>
-            <input id="revdbc_tp" class="mono" value="1.0,1.5,2.0,3.0,4.0">
+            <input id="revdbc_tp" class="mono" value="1.0,1.5,2.0">
             <div class="hint">TP = 진입가 + 익절×TR(신호봉)</div>
           </div>
         </div>
@@ -1146,6 +1153,6 @@
 
 </div>
 
-<script src="leverage-lab.js?v=20260630g"></script>
+<script src="leverage-lab.js?v=20260630h"></script>
 </body>
 </html>

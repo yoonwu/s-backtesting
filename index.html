@@ -705,7 +705,14 @@
             <label class="csv-check"><input type="checkbox" data-tf="M10" checked><span class="csv-name">10분봉</span></label>
             <label class="csv-check"><input type="checkbox" data-tf="M15" checked><span class="csv-name">15분봉</span></label>
             <label class="csv-check"><input type="checkbox" data-tf="M30" checked><span class="csv-name">30분봉</span></label>
+            <label class="csv-check"><input type="checkbox" data-tf="H1" checked><span class="csv-name">1시간봉</span></label>
+            <label class="csv-check"><input type="checkbox" data-tf="H2" checked><span class="csv-name">2시간봉</span></label>
+            <label class="csv-check"><input type="checkbox" data-tf="H4" checked><span class="csv-name">4시간봉</span></label>
+            <label class="csv-check"><input type="checkbox" data-tf="H8" checked><span class="csv-name">8시간봉</span></label>
+            <label class="csv-check"><input type="checkbox" data-tf="H12" checked><span class="csv-name">12시간봉 <small style="opacity:.6">US100만</small></span></label>
+            <label class="csv-check"><input type="checkbox" data-tf="Daily" checked><span class="csv-name">일봉</span></label>
           </div>
+          <div class="hint">H3·H6·주봉은 CSV 파일이 없어요(MT5에서 export 후 업로드 필요). 일봉은 가격이 120일선과 멀어 이격·터치가 거의 안 생겨요 → <b>이평 기간을 20~50으로 낮춰서</b> 쓰세요.</div>
         </div>
 
         <div class="row2">
@@ -2362,11 +2369,12 @@ function drawRSI(rCurve,holdCurve,log){
     const start=/date|open|time/i.test(lines[0]||"")?1:0;
     for(let i=start;i<lines.length;i++){
       const ln=lines[i].trim(); if(!ln)continue;
-      const p=ln.split(/[\t,;]+/); if(p.length<6)continue;
+      const p=ln.split(/[\t,;]+/); if(p.length<5)continue;
       const d=p[0].replace(/\./g,"-").replace(/\//g,"-").slice(0,10);
-      const o=+p[2],h=+p[3],l=+p[4],c=+p[5];
+      const hasTime=/:/.test(p[1]||""); const oi=hasTime?2:1;   // 일봉·주봉은 시간열 없음
+      const o=+p[oi],h=+p[oi+1],l=+p[oi+2],c=+p[oi+3];
       if(!isFinite(o)||!isFinite(h)||!isFinite(l)||!isFinite(c)||c<=0)continue;
-      out.push({day:d,date:d+" "+(p[1]||"00:00:00"),o,h,l,c});
+      out.push({day:d,date:d+" "+(hasTime?p[1]:"00:00:00"),o,h,l,c});
     }
     if(out.length<2)throw new Error("CSV에서 유효한 OHLC 행을 못 찾음");
     return out;
@@ -2742,11 +2750,12 @@ function drawRSI(rCurve,holdCurve,log){
     const start=/date|open|time/i.test(lines[0]||"")?1:0;
     for(let i=start;i<lines.length;i++){
       const ln=lines[i].trim(); if(!ln)continue;
-      const p=ln.split(/[\t,;]+/); if(p.length<6)continue;
+      const p=ln.split(/[\t,;]+/); if(p.length<5)continue;
       const d=p[0].replace(/\./g,"-").replace(/\//g,"-").slice(0,10);
-      const o=+p[2],h=+p[3],l=+p[4],c=+p[5];
+      const hasTime=/:/.test(p[1]||""); const oi=hasTime?2:1;   // 일봉·주봉은 시간열 없음
+      const o=+p[oi],h=+p[oi+1],l=+p[oi+2],c=+p[oi+3];
       if(!isFinite(o)||!isFinite(h)||!isFinite(l)||!isFinite(c)||c<=0)continue;
-      out.push({day:d,date:d+" "+(p[1]||"00:00:00"),o,h,l,c});
+      out.push({day:d,date:d+" "+(hasTime?p[1]:"00:00:00"),o,h,l,c});
     }
     if(out.length<2)throw new Error("CSV에서 유효한 OHLC 행을 못 찾음");
     return out;
@@ -2983,7 +2992,7 @@ function drawRSI(rCurve,holdCurve,log){
   const el=id=>document.getElementById(id);
   if(!el("br_run"))return;
 
-  const TF_MIN={M1:1,M2:2,M3:3,M5:5,M10:10,M15:15,M30:30,H1:60};
+  const TF_MIN={M1:1,M2:2,M3:3,M4:4,M5:5,M10:10,M12:12,M15:15,M30:30,H1:60,H2:120,H4:240,H8:480,H12:720,Daily:1440,Weekly:10080};
   let CACHE={}, RESULTS=[], SORT={key:"mar",dir:-1};
 
   function parseList(str,intOnly,minV){
@@ -3007,10 +3016,11 @@ function drawRSI(rCurve,holdCurve,log){
     const start=/date|open|time/i.test(lines[0]||"")?1:0;
     for(let i=start;i<lines.length;i++){
       const ln=lines[i].trim(); if(!ln)continue;
-      const p=ln.split(/[\t,;]+/); if(p.length<6)continue;
+      const p=ln.split(/[\t,;]+/); if(p.length<5)continue;
       const d=p[0].replace(/\./g,"-").replace(/\//g,"-").slice(0,10);
-      const date=d+" "+(p[1]||"00:00:00");
-      const o=+p[2],h=+p[3],l=+p[4],c=+p[5];
+      const hasTime=/:/.test(p[1]||""); const oi=hasTime?2:1;   // 일봉·주봉은 시간열 없음
+      const date=d+" "+(hasTime?p[1]:"00:00:00");
+      const o=+p[oi],h=+p[oi+1],l=+p[oi+2],c=+p[oi+3];
       if(!isFinite(o)||!isFinite(h)||!isFinite(l)||!isFinite(c)||c<=0)continue;
       out.push({day:d,date,t:toMs(date),o,h,l,c});
     }
@@ -3085,6 +3095,10 @@ function drawRSI(rCurve,holdCurve,log){
       const inNorm=b.t>=normStart;
       const isNews=avgRng[j]!=null && rng>=opt.newsMult*avgRng[j];
       if(inNorm||isNews){ if(rng>kr)kr=rng; }
+    }
+    // 고타임프레임(일봉·주봉 등) 안전장치: 봉 간격이 시간창보다 커서 비면 최근 3봉 최대 레인지로 대체
+    if(kr===0){
+      for(let j=idx-1;j>=Math.max(0,idx-3);j--){ const r=bars[j].h-bars[j].l; if(r>kr)kr=r; }
     }
     return kr>0?kr:null;
   }
@@ -3482,11 +3496,12 @@ function drawRSI(rCurve,holdCurve,log){
     const start=/date|open|time/i.test(lines[0]||"")?1:0;
     for(let i=start;i<lines.length;i++){
       const ln=lines[i].trim(); if(!ln)continue;
-      const p=ln.split(/[\t,;]+/); if(p.length<6)continue;
+      const p=ln.split(/[\t,;]+/); if(p.length<5)continue;
       const d=p[0].replace(/\./g,"-").replace(/\//g,"-").slice(0,10);
-      const o=+p[2],h=+p[3],l=+p[4],c=+p[5];
+      const hasTime=/:/.test(p[1]||""); const oi=hasTime?2:1;   // 일봉·주봉은 시간열 없음
+      const o=+p[oi],h=+p[oi+1],l=+p[oi+2],c=+p[oi+3];
       if(!isFinite(o)||!isFinite(h)||!isFinite(l)||!isFinite(c)||c<=0)continue;
-      out.push({day:d,date:d+" "+(p[1]||"00:00:00"),o,h,l,c});
+      out.push({day:d,date:d+" "+(hasTime?p[1]:"00:00:00"),o,h,l,c});
     }
     if(out.length<2)throw new Error("CSV에서 유효한 OHLC 행을 못 찾음");
     return out;

@@ -748,6 +748,14 @@
         </div>
 
         <button class="runbtn" id="br_run">▶ 120선 눌림목 돌리기</button>
+
+        <div class="row2" style="margin-top:10px">
+          <div class="field"><label>랜덤 윈도우 (개월)</label><input id="br_rndMonths" class="mono" type="number" value="3" min="1" step="1"></div>
+          <div class="field"><label>반복 횟수</label><input id="br_rndReps" class="mono" type="number" value="10" min="1" step="1"></div>
+        </div>
+        <button class="runbtn" id="br_rnd" style="background:linear-gradient(90deg,#7c4dff,#b388ff)">🎲 랜덤 기간 견고성 테스트</button>
+        <div class="hint">현재 입력한 격자(분할·손절·익절)·방향·이격으로, 랜덤 N개월 구간을 반복 추출해 각 구간의 최적 조합을 뽑습니다. 심볼·TF는 1개씩 권장. 우수 구간이 많을수록 견고한 전략.</div>
+
         <div class="err" id="br_err"></div>
         <div class="mono" id="br_status" style="font-size:11px;color:var(--ink-faint);margin-top:8px;line-height:1.5"></div>
         <div class="note"><b>로직</b> · 종가가 120SMA×(1+이격%) 이상으로 벌어지면 무장(arm). 이후 저가가 120SMA에 <b>처음</b> 닿는 봉에서 1차 매수(=120선). 추가매수=120선−KR, −2KR…(N분할). <b>KR</b>=최근 N시간 최대 봉(고가−저가); 단 평균봉 대비 큰봉배수를 넘는 <b>뉴스봉</b>은 큰봉지속시간(기본24h) 동안 KR로 유지(비농·FOMC 효과 지속). 손절=최하단 매수가−손절×KR. 익절=평단+익절×KR 또는 가격이 120선 복귀 터치. 무장은 120선 대기시간 초과 시 해제, 터치 1회당 1셋업(재무장하려면 다시 이격% 위로 벌어져야 함). 손절·익절 동시 터치 시 손절 우선. 수수료·스프레드 미반영.</div>
@@ -3227,6 +3235,99 @@ function drawRSI(rCurve,holdCurve,log){
     finally{ btn.disabled=false; }
   }
 
+  // 랜덤 N개월 구간을 reps회 추출 → 각 구간 격자 최적 조합 → 견고성 평가
+  async function runRandom(){
+    err("");
+    el("br_rnd").disabled=true; el("br_run").disabled=true;
+    try{
+      const syms=selectedSyms(), tfs=selectedTfs();
+      if(!syms.length||!tfs.length)throw new Error("심볼·진입분봉을 1개 이상 선택하세요");
+      const months=Math.max(1,Math.round(+el("br_rndMonths").value||3));
+      const reps=Math.max(1,Math.round(+el("br_rndReps").value||10));
+      const winMs=months*30.44*24*60*60*1000;
+      const dir=el("br_dir").value||"long";
+      const maLen=Math.max(2,Math.round(+el("br_maLen").value||120));
+      const gapPct=Math.max(0,(+el("br_gap").value||1.5)/100);
+      const trHours=Math.max(1,+el("br_trHours").value||12);
+      const newsHours=Math.max(trHours,+el("br_newsHours").value||24);
+      const newsMult=Math.max(1,+el("br_newsMult").value||3);
+      const tpMode=el("br_tpMode").value||"avg";
+      const touchWaitH=Math.max(1,+el("br_touchWaitH").value||168);
+      const expiryBars=Math.max(1,Math.round(+el("br_expiry").value||240));
+      const Ns=parseList(el("br_n").value,true,1);
+      const slKs=parseList(el("br_sl").value,false,0);
+      let tpKs=parseList(el("br_tp").value,false,0);
+      if(tpMode==="ma")tpKs=[0];
+      if(!Ns.length||!slKs.length||!tpKs.length)throw new Error("분할·손절·익절 값을 1개 이상 입력하세요");
+      const rows=[]; const skipped=[];
+      const fmtD=t=>new Date(t).toISOString().slice(0,10);
+      for(const sym of syms){
+        for(const tf of tfs){
+          const ecf=findCsv(sym,tf); if(!ecf){ skipped.push(`${sym} ${tf}:CSV없음`); continue; }
+          const bars=await loadCsv(ecf);
+          if(bars.length<maLen+50){ skipped.push(`${sym} ${tf}:봉부족`); continue; }
+          const ma=sma(bars.map(b=>b.c),maLen);
+          const avgRng=rollMeanRange(bars,100);
+          const t0=bars[0].t, tN=bars[bars.length-1].t;
+          if(tN-t0 < winMs*1.2){ skipped.push(`${sym} ${tf}:기간짧음`); continue; }
+          for(let rep=0;rep<reps;rep++){
+            const fromT=t0 + Math.random()*((tN-winMs)-t0);
+            const toT=fromT+winMs;
+            const {setups}=makeSetups(bars,ma,avgRng,{tf,dir,maLen,gapPct,trHours,newsHours,newsMult,touchWaitH,fromT,toT});
+            let best=null;
+            for(const N of Ns)for(const slK of slKs)for(const tpK of tpKs){
+              const r=backtest(bars,ma,setups,N,slK,tpK,expiryBars,tpMode,dir);
+              if(r.trades>=5 && r.mdd<0 && (!best || r.mar>best.mar)) best={...r};
+            }
+            rows.push({sym,tf,dir,tpMode,fromS:fmtD(fromT),toS:fmtD(toT),setups:setups.length,best});
+            status(`${sym} ${tf} 랜덤 ${rep+1}/${reps} 구간…`);
+            await pause();
+          }
+        }
+      }
+      renderRandom(rows,{months,reps,dir,skipped});
+    }catch(e){ err("⚠ "+e.message); status(""); }
+    finally{ el("br_rnd").disabled=false; el("br_run").disabled=false; }
+  }
+
+  function renderRandom(rows,meta){
+    const wrap=el("br_results");
+    if(!rows.length){ wrap.innerHTML=`<div class="placeholder"><div class="big">결과 없음</div><div class="mono" style="font-size:12px">기간이 너무 짧거나 심볼 미선택</div></div>`; return; }
+    const valid=rows.filter(r=>r.best);
+    const sorted=rows.slice().sort((a,b)=>((b.best?b.best.mar:-99))-((a.best?a.best.mar:-99)));
+    const pos=valid.filter(r=>r.best.totalRet>0).length;
+    const mars=valid.map(r=>r.best.mar).sort((a,b)=>a-b);
+    const med=mars.length?mars[Math.floor(mars.length/2)]:0;
+    const avg=mars.length?mars.reduce((s,x)=>s+x,0)/mars.length:0;
+    const tpLab=r=>r.tpMode==="ma"?"120복귀":r.best.tpK+"KR";
+    const trRows=sorted.map(r=>{
+      if(!r.best) return `<tr><td class="mono dimv">${r.fromS}~${r.toS}</td><td class="mono dimv">${r.sym}·${r.tf}</td><td class="num dimv" colspan="6">거래부족(셋업 ${r.setups})</td></tr>`;
+      const b=r.best;
+      return `<tr class="${b.totalRet>0?'':'db-dim'}">
+        <td class="mono dimv">${r.fromS}~${r.toS}</td>
+        <td class="mono dimv">${r.sym}·${r.tf}</td>
+        <td class="num">${b.N}/${b.slK}/${tpLab(r)}</td>
+        <td class="num ${b.totalRet>=0?'pos':'neg'}">${(b.totalRet>=0?'+':'')+(b.totalRet*100).toFixed(1)}%</td>
+        <td class="num neg">${(b.mdd*100).toFixed(1)}%</td>
+        <td class="num cy">${b.mar===Infinity?'∞':b.mar.toFixed(2)}</td>
+        <td class="num">${(b.winrate*100).toFixed(0)}%</td>
+        <td class="num dimv">${b.trades}</td>
+      </tr>`;
+    }).join("");
+    wrap.innerHTML=`
+      <div class="db-best">🎲 랜덤 ${meta.months}개월 × ${rows.length}구간 (${meta.dir==="short"?"숏":"롱"}) ·
+        <b class="${pos>valid.length/2?'pos':'neg'}">수익 구간 ${pos}/${valid.length}</b> · 평균 MAR <b class="cy">${avg.toFixed(2)}</b> · 중앙 MAR <b class="cy">${med.toFixed(2)}</b>
+        ${meta.skipped.length?` · 건너뜀: ${meta.skipped.join(", ")}`:""}</div>
+      <div class="ctable-wrap"><table class="ctable"><thead><tr>
+        <th><span class="th-main">기간</span><span class="th-sub">${meta.months}M WINDOW</span></th>
+        <th><span class="th-main">데이터</span></th>
+        <th><span class="th-main">최적 조합</span><span class="th-sub">N/SL/TP</span></th>
+        <th><span class="th-main">수익</span></th><th><span class="th-main">MDD</span></th>
+        <th><span class="th-main">MAR</span></th><th><span class="th-main">승률</span></th><th><span class="th-main">거래</span></th>
+      </tr></thead><tbody>${trRows}</tbody></table></div>
+      <div class="note" style="margin-top:14px">각 구간마다 입력한 격자에서 <b>구간 내 최적(MAR)</b> 조합을 뽑은 결과. <b class="pos">수익 구간 비율</b>이 높고 평균·중앙 MAR이 안정적이면 견고한 전략. 흐린 줄=손실 구간. <b>구간별 최적이라 실제 운용(고정 파라미터)보다 낙관적</b>인 점 감안.</div>`;
+  }
+
   function render(){
     const wrap=el("br_results");
     if(!RESULTS.length){ wrap.innerHTML=`<div class="placeholder"><div class="big">조건에 맞는 조합이 없어요</div><div class="mono" style="font-size:12px">최소 거래수나 대기시간을 조정해보세요</div></div>`; return; }
@@ -3274,6 +3375,7 @@ function drawRSI(rCurve,holdCurve,log){
 
   $$("#br_syms button").forEach(b=>b.onclick=()=>b.classList.toggle("on"));
   el("br_run").onclick=run;
+  el("br_rnd").onclick=runRandom;
 })();
 
 /* ============================================================

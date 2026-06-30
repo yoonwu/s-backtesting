@@ -2808,30 +2808,46 @@ function drawRSI(rCurve,holdCurve,log){
     }
     return out;
   }
-  // 변곡더블비: 하락 중 캔들 저가(꼬리)가 BB(4,4) 하단(원비)에 닿으면 반전 롱.
-  //  rejectClose=true 면 종가는 밴드 위로 닫혀야(하락 멈춤/거부) 채택.
-  //  RSI 다이버전스 = 직전 터치 대비 저가는 낮은데 RSI는 높음(약세 둔화).
-  function detectSignals(bars,bb44Low,rsi,cooldown,rejectClose,entryMode,maArr,rsiReq){
+  // 변곡더블비: 하락 중 가격이 BB(4,4) 하단(원비)에 닿는 바닥에서 반전 롱.
+  //  vturn=true: 4/4 하단밴드가 저점 찍고 위로 꺾인(뾰쪽한 V) 자리를 가격이 찌른 경우만.
+  //    → i-1이 밴드 V-팁(band[i-1]≤band[i-2] & band[i]>band[i-1]), 팁 저가가 밴드 찌름,
+  //      진입은 턴 확인봉 i. 추세하락(하단 계속 깸=돌파더블비 숏)은 자연 제외.
+  //  vturn=false: 기존 — 저가≤밴드 터치 봉 자체.
+  //  rejectClose: (팁/터치) 봉 종가가 밴드 위로 닫혀야 채택.
+  //  RSI 다이버전스 = 직전 자리 대비 저가↓·RSI↑(약세 둔화).
+  function detectSignals(bars,bb44Low,rsi,cooldown,rejectClose,entryMode,maArr,rsiReq,vturn){
     const sigs=[];
-    let lastSig=-1e9, prevTouchLow=null, prevTouchRsi=null;
-    for(let i=1;i<bars.length;i++){
+    let lastSig=-1e9, prevLow=null, prevRsi=null;
+    for(let i=(vturn?2:1);i<bars.length;i++){
       const band=bb44Low[i];
       if(band===null)continue;
-      if(bars[i].l>band)continue;                       // 하단 4/4 미터치
-      if(rejectClose&&bars[i].c<band)continue;          // 거부모드: 종가 밴드 위
-      if(maArr&&(maArr[i]===null||bars[i].c>=maArr[i]))continue; // 하락 맥락(종가<MA)
-      // RSI 다이버전스(직전 터치 대비): 저가↓·RSI↑
+      let anchor;  // 자리(팁/터치) 봉 인덱스
+      if(vturn){
+        const bP=bb44Low[i-1], bPP=bb44Low[i-2];
+        if(bP===null||bPP===null)continue;
+        if(!(bP<=bPP && band>bP))continue;              // i-1이 밴드 V-팁(꺾여 올라옴)
+        if(bars[i-1].l>bP)continue;                     // 팁 저가가 밴드를 찌름
+        if(rejectClose&&bars[i-1].c<bP)continue;        // 거부: 팁 봉 종가 밴드 위
+        anchor=i-1;
+      }else{
+        if(bars[i].l>band)continue;                     // 하단 4/4 미터치
+        if(rejectClose&&bars[i].c<band)continue;        // 거부: 종가 밴드 위
+        anchor=i;
+      }
+      if(maArr&&(maArr[anchor]===null||bars[anchor].c>=maArr[anchor]))continue; // 하락 맥락
       let rsiDiv=null;
-      if(prevTouchLow!==null&&rsi[i]!==null&&prevTouchRsi!==null)
-        rsiDiv=(bars[i].l<prevTouchLow&&rsi[i]>prevTouchRsi);
-      prevTouchLow=bars[i].l; prevTouchRsi=rsi[i];      // 터치 체인은 항상 갱신
-      if(rsiReq&&rsiDiv!==true)continue;                // 다이버전스 필수 모드: 거름
+      if(prevLow!==null&&rsi[anchor]!==null&&prevRsi!==null)
+        rsiDiv=(bars[anchor].l<prevLow&&rsi[anchor]>prevRsi);
+      prevLow=bars[anchor].l; prevRsi=rsi[anchor];      // 자리 체인 항상 갱신
+      if(rsiReq&&rsiDiv!==true)continue;                // 다이버전스 필수
       if(i-lastSig<cooldown)continue;                   // 쿨다운(군집 방지)
       lastSig=i;
-      const entryIdx=entryMode==="nextOpen"?i+1:i;
+      // vturn이면 진입=턴 확인봉 i, 아니면 터치 봉 i
+      const sigIdx=i;
+      const entryIdx=entryMode==="nextOpen"?sigIdx+1:sigIdx;
       if(entryIdx>=bars.length)continue;
-      const entryPrice=entryMode==="nextOpen"?bars[entryIdx].o:bars[i].c;
-      sigs.push({dbIdx:i,pivotIdx:i,signalIdx:i,entryIdx,entryPrice,pivotLow:bars[i].l,touchBand:band,rsiDiv});
+      const entryPrice=entryMode==="nextOpen"?bars[entryIdx].o:bars[sigIdx].c;
+      sigs.push({dbIdx:anchor,pivotIdx:anchor,signalIdx:sigIdx,entryIdx,entryPrice,pivotLow:bars[anchor].l,touchBand:bb44Low[anchor],rsiDiv});
     }
     return sigs;
   }
@@ -2939,6 +2955,7 @@ function drawRSI(rCurve,holdCurve,log){
       const trWin=Math.max(1,+el("revdb_trwin").value||1);
       const rejectClose=(el("revdb_close").dataset.cur||"touch")==="reject";
       const rsiReq=(el("revdb_rsireq").dataset.cur||"off")==="req";
+      const vturn=(el("revdb_vturn").dataset.cur||"on")==="on";
       const slKs=parseList(el("revdb_sl").value,false,0);
       const tpKs=parseList(el("revdb_tp").value,false,0);
       const expiryBars=Math.max(1,+el("revdb_expiry").value||50);
@@ -2958,7 +2975,7 @@ function drawRSI(rCurve,holdCurve,log){
         const rsi14=calcRSI(bars,14);
         const maArr=maFilter>0?calcSMA(bars.map(b=>b.c),maFilter):null;
         for(const cool of cooldowns){
-          const sigs=detectSignals(bars,bb44Low,rsi14,cool,rejectClose,entryMode,maArr,rsiReq);
+          const sigs=detectSignals(bars,bb44Low,rsi14,cool,rejectClose,entryMode,maArr,rsiReq,vturn);
           for(const slK of slKs){
             for(const tpK of tpKs){
               combo++;
@@ -2971,7 +2988,7 @@ function drawRSI(rCurve,holdCurve,log){
         }
       }
       RESULTS=rows;
-      statusMsg(`완료 — 유효 ${rows.length}개 / 전체 ${total}개 조합 · 마감 ${rejectClose?"거부":"닿기만"} · ${rsiReq?"RSI다이버 필수":"RSI무시"}`);
+      statusMsg(`완료 — 유효 ${rows.length}개 / 전체 ${total}개 조합 · ${vturn?"V턴필수":"모든터치"} · 마감 ${rejectClose?"거부":"닿기만"} · ${rsiReq?"RSI다이버 필수":"RSI무시"}`);
       render();
     }catch(e){errMsg(e.message);statusMsg("");}
     finally{btn.disabled=false;}
@@ -3107,6 +3124,10 @@ function drawRSI(rCurve,holdCurve,log){
     el("revdb_rsireq").querySelectorAll("button").forEach(b=>b.onclick=()=>{
       el("revdb_rsireq").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
       el("revdb_rsireq").dataset.cur=b.dataset.r;
+    });
+    el("revdb_vturn").querySelectorAll("button").forEach(b=>b.onclick=()=>{
+      el("revdb_vturn").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+      el("revdb_vturn").dataset.cur=b.dataset.v;
     });
     el("revdb_file").onchange=async e=>{
       const f=e.target.files[0]; if(!f)return;

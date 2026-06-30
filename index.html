@@ -687,7 +687,7 @@
     <div class="grid">
       <section class="card">
         <h2>120선 눌림목 백테스트</h2>
-        <div class="intro"><b>이격 후 눌림</b> · 종가가 120선보다 설정% 이상 위로 벌어진 뒤, 되돌림으로 120선을 <b>처음 터치</b>하는 자리에서 TR 분할매수합니다. TR(KR)은 최근 N시간 또는 최근 2세션의 <b>최대 봉(고가−저가)</b>. 이평·이격·TR기준·익절방식 전부 조정 가능.</div>
+        <div class="intro"><b>이격 후 눌림</b> · 종가가 120선보다 설정% 이상 위로 벌어진 뒤, 되돌림으로 120선을 <b>처음 터치</b>하는 자리에서 TR 분할매수합니다. TR(KR)=최근 N시간 <b>최대 봉(고가−저가)</b>, 단 비농·FOMC급 <b>큰봉은 24시간 지속</b>. 이평·이격·TR·익절방식 전부 조정 가능.</div>
 
         <div class="field"><label>심볼</label>
           <div class="subtabs" id="br_syms" style="margin-bottom:0">
@@ -713,14 +713,10 @@
           <div class="field"><label>이격 조건 (%)</label><input id="br_gap" class="mono" type="number" value="1.5" min="0" step="0.1"></div>
         </div>
         <div class="row2">
-          <div class="field"><label>TR(KR) 기준</label>
-            <select id="br_trMode" class="mono">
-              <option value="hours">최근 N시간 최대봉</option>
-              <option value="session">최근 2세션 최대봉</option>
-            </select>
-          </div>
           <div class="field"><label>TR 윈도우 (시간)</label><input id="br_trHours" class="mono" type="number" value="12" min="1" step="1"></div>
+          <div class="field"><label>큰봉 지속 (시간)</label><input id="br_newsHours" class="mono" type="number" value="24" min="1" step="1"></div>
         </div>
+        <div class="field"><label>큰봉 배수 (평균봉 대비 이 배수 넘으면 뉴스봉 = 지속시간 동안 KR 유지)</label><input id="br_newsMult" class="mono" type="number" value="3" min="1" step="0.5"></div>
         <div class="row2">
           <div class="field"><label>120선 대기 (시간)</label><input id="br_touchWaitH" class="mono" type="number" value="168" min="1" step="1"></div>
           <div class="field"><label>진입 후 만료 (봉)</label><input id="br_expiry" class="mono" type="number" value="240" min="1" step="1"></div>
@@ -742,7 +738,7 @@
         <button class="runbtn" id="br_run">▶ 120선 눌림목 돌리기</button>
         <div class="err" id="br_err"></div>
         <div class="mono" id="br_status" style="font-size:11px;color:var(--ink-faint);margin-top:8px;line-height:1.5"></div>
-        <div class="note"><b>로직</b> · 종가가 120SMA×(1+이격%) 이상으로 벌어지면 무장(arm). 이후 저가가 120SMA에 <b>처음</b> 닿는 봉에서 1차 매수(=120선). 추가매수=120선−KR, −2KR…(N분할). KR=최근 N시간(또는 최근 2세션) 최대 봉(고가−저가). 손절=최하단 매수가−손절×KR. 익절=평단+익절×KR 또는 가격이 120선 복귀 터치. 무장은 120선 대기시간 초과 시 해제, 터치 1회당 1셋업(재무장하려면 다시 이격% 위로 벌어져야 함). 손절·익절 동시 터치 시 손절 우선. 수수료·스프레드 미반영.</div>
+        <div class="note"><b>로직</b> · 종가가 120SMA×(1+이격%) 이상으로 벌어지면 무장(arm). 이후 저가가 120SMA에 <b>처음</b> 닿는 봉에서 1차 매수(=120선). 추가매수=120선−KR, −2KR…(N분할). <b>KR</b>=최근 N시간 최대 봉(고가−저가); 단 평균봉 대비 큰봉배수를 넘는 <b>뉴스봉</b>은 큰봉지속시간(기본24h) 동안 KR로 유지(비농·FOMC 효과 지속). 손절=최하단 매수가−손절×KR. 익절=평단+익절×KR 또는 가격이 120선 복귀 터치. 무장은 120선 대기시간 초과 시 해제, 터치 1회당 1셋업(재무장하려면 다시 이격% 위로 벌어져야 함). 손절·익절 동시 터치 시 손절 우선. 수수료·스프레드 미반영.</div>
       </section>
       <section id="br_results"><div class="placeholder"><div class="big">조건을 고르고 <span class="amb">120선 눌림목 돌리기</span></div><div class="mono" style="font-size:12px">이격 무장 · 120선 첫 터치 · KR 분할매수 · 평단/120복귀 익절</div></div></section>
     </div>
@@ -3043,30 +3039,38 @@ function drawRSI(rCurve,holdCurve,log){
     return bars.map((_,i)=>(u1[i]==null||u2[i]==null)?null:Math.max(u1[i],u2[i]));
   }
 
-  // TR(KR) = 최근 N시간 또는 최근 2세션의 최대 봉(고가−저가)
-  function computeTR(bars, idx, opt){
+  // 봉크기(고가−저가)의 이동평균 — 뉴스봉 판정 기준
+  function rollMeanRange(bars,n){
+    const out=new Array(bars.length).fill(null); let sum=0;
+    for(let i=0;i<bars.length;i++){
+      const r=bars[i].h-bars[i].l; sum+=r;
+      if(i>=n)sum-=(bars[i-n].h-bars[i-n].l);
+      if(i>=n-1)out[i]=sum/n;
+    }
+    return out;
+  }
+
+  // TR(KR) = 최근 N시간 최대 봉. 단 평균봉×큰봉배수를 넘는 뉴스봉(비농·FOMC)은
+  //          큰봉지속시간(기본 24h) 동안 KR로 유지된다.
+  function computeTR(bars, idx, opt, avgRng){
     const hour=60*60*1000;
     const endT=bars[idx].t;
+    const normStart=endT-opt.trHours*hour;
+    const newsStart=endT-opt.newsHours*hour;
     let kr=0;
-    if(opt.trMode==="session"){
-      const sess=t=>Math.floor(t/(8*hour));   // 8시간 세션(아시아/유럽/미국 근사, 서버시간 기준)
-      const cur=sess(endT);
-      for(let j=idx-1;j>=0;j--){
-        if(sess(bars[j].t) < cur-1) break;     // 현재+직전 세션 = 최근 ~2세션
-        const tr=bars[j].h-bars[j].l; if(tr>kr)kr=tr;
-      }
-    } else {
-      const startT=endT-opt.trHours*hour;
-      for(let j=idx-1;j>=0;j--){
-        if(bars[j].t<startT) break;
-        const tr=bars[j].h-bars[j].l; if(tr>kr)kr=tr;
-      }
+    for(let j=idx-1;j>=0;j--){
+      const b=bars[j];
+      if(b.t<newsStart)break;
+      const rng=b.h-b.l;
+      const inNorm=b.t>=normStart;
+      const isNews=avgRng[j]!=null && rng>=opt.newsMult*avgRng[j];
+      if(inNorm||isNews){ if(rng>kr)kr=rng; }
     }
     return kr>0?kr:null;
   }
 
   // 이격 무장 → 120선 첫 터치 셋업 추출
-  function makeSetups(entryBars,ma,opt){
+  function makeSetups(entryBars,ma,avgRng,opt){
     const setups=[];
     const stats={armed:0,touch:0,noKr:0};
     const hour=60*60*1000;
@@ -3082,7 +3086,7 @@ function drawRSI(rCurve,holdCurve,log){
       if(b.t-armT > opt.touchWaitH*hour){ armed=false; continue; }
       // 첫 터치: 저가가 이평선에 닿음 (…되돌림 눌림)
       if(b.l<=m){
-        const kr=computeTR(entryBars,i,opt);
+        const kr=computeTR(entryBars,i,opt,avgRng);
         armed=false;                          // 터치 1회당 1셋업, 재무장 필요
         if(!kr){ stats.noKr++; continue; }
         setups.push({ touchIdx:i, touchT:b.t, touchPx:m, kr, touchDate:b.date, tfMin });
@@ -3155,8 +3159,9 @@ function drawRSI(rCurve,holdCurve,log){
       if(!tfs.length)throw new Error("진입 분봉을 1개 이상 선택하세요");
       const maLen=Math.max(2,Math.round(+el("br_maLen").value||120));
       const gapPct=Math.max(0,(+el("br_gap").value||1.5)/100);
-      const trMode=el("br_trMode").value||"hours";
       const trHours=Math.max(1,+el("br_trHours").value||12);
+      const newsHours=Math.max(trHours,+el("br_newsHours").value||24);
+      const newsMult=Math.max(1,+el("br_newsMult").value||3);
       const tpMode=el("br_tpMode").value||"avg";
       const touchWaitH=Math.max(1,+el("br_touchWaitH").value||168);
       const expiryBars=Math.max(1,Math.round(+el("br_expiry").value||240));
@@ -3177,7 +3182,8 @@ function drawRSI(rCurve,holdCurve,log){
           if(entryBars.length<maLen+20){ skipped.push(`${sym} ${tf}: 봉 수 부족`); continue; }
           status(`${sym} ${tf} 셋업 추출 중…`);
           const ma=sma(entryBars.map(b=>b.c),maLen);
-          const {setups,stats}=makeSetups(entryBars,ma,{tf,maLen,gapPct,trMode,trHours,touchWaitH});
+          const avgRng=rollMeanRange(entryBars,100);
+          const {setups,stats}=makeSetups(entryBars,ma,avgRng,{tf,maLen,gapPct,trHours,newsHours,newsMult,touchWaitH});
           total+=totalPer;
           status(`${sym} ${tf} 엔진 실행 · 셋업 ${setups.length}개 · ${totalPer}조합…`);
           for(const N of Ns)for(const slK of slKs)for(const tpK of tpKs){
@@ -3232,7 +3238,7 @@ function drawRSI(rCurve,holdCurve,log){
         ${head("totalRet","총수익","RETURN")}${head("mdd","최대낙폭","MDD")}${head("mar","위험대비","MAR")}
         <th><span class="th-main">청산</span><span class="th-sub">TP/SL/E</span></th>${head("setups","셋업","120 touch")}
       </tr></thead><tbody>${rows}</tbody></table></div>
-      <div class="note" style="margin-top:14px"><b class="hl-good">초록</b>=최고 총수익/MAR · <b class="hl-bad">빨강</b>=최대 낙폭 · 호박색 줄=MAR 최적 · KR=최근 N시간(또는 2세션) 최대 봉(고가−저가) · 셋업=이격 무장 뒤 120선 첫 터치 발생 수.</div>`;
+      <div class="note" style="margin-top:14px"><b class="hl-good">초록</b>=최고 총수익/MAR · <b class="hl-bad">빨강</b>=최대 낙폭 · 호박색 줄=MAR 최적 · KR=최근 N시간 최대 봉(뉴스봉은 24h 지속) · 셋업=이격 무장 뒤 120선 첫 터치 발생 수.</div>`;
     wrap.querySelectorAll(".br-sort").forEach(th=>th.onclick=()=>{
       const k=th.dataset.k;
       if(SORT.key===k)SORT.dir*=-1; else{ SORT.key=k; SORT.dir=(k==="mdd"||k==="label"?1:-1); }

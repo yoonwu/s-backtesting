@@ -3527,8 +3527,11 @@ function drawRSI(rCurve,holdCurve,log){
       return(vb-va)*dir;
     });
     const best=sorted[0];
+    const CAP=500;
+    const view=sorted.slice(0,CAP);
+    const capNote=sorted.length>CAP?` <span class="dimv">· 상위 ${CAP}개만 표시 (전체 ${sorted.length.toLocaleString()}개)</span>`:"";
     function hdr(k,main,sub=""){return`<th class="db-sort revdbc-s" data-k="${k}" style="cursor:pointer"><div class="th-main">${main}${arw(k)}</div>${sub?`<div class="th-sub">${sub}</div>`:""}</th>`;}
-    let html=`<div class="db-best">최상위: <b>${best.label}</b> · ${best.mode==="rsiPivot"?"RSI변곡":"상단돌파"} · pivot=${best.pLook} · lbK=${best.lbK} · box=${best.bmb} · DB≥${best.dbMin} · RSI갭=${best.rsiGap} · 밴드K=${best.bandK} · 44턴=${best.bb44SlopeK} · 만남=${best.bb44MeetK} · SL=${best.slK} · TP=${best.tpK} → <span class="pos">${pctStr(best.totalRet)}</span> · MDD ${pctStr(best.mdd)} · MAR ${pf2(best.mar)}</div>`;
+    let html=`<div class="db-best">최상위: <b>${best.label}</b> · ${best.mode==="rsiPivot"?"RSI변곡":"상단돌파"} · pivot=${best.pLook} · lbK=${best.lbK} · box=${best.bmb} · DB≥${best.dbMin} · RSI갭=${best.rsiGap} · 밴드K=${best.bandK} · 44턴=${best.bb44SlopeK} · 만남=${best.bb44MeetK} · SL=${best.slK} · TP=${best.tpK} → <span class="pos">${pctStr(best.totalRet)}</span> · MDD ${pctStr(best.mdd)} · MAR ${pf2(best.mar)}${capNote}</div>`;
     html+=`<div class="ctable-wrap"><table class="ctable"><thead><tr>
       <th><div class="th-main">데이터</div></th>
       ${hdr("pLook","Pivot")}${hdr("lbK","저점K")}${hdr("bmb","간격")}${hdr("dbMin","DB≥")}${hdr("rsiGap","RSI갭")}${hdr("bandK","밴드K")}${hdr("bb44SlopeK","44턴")}${hdr("bb44MeetK","만남")}
@@ -3536,7 +3539,7 @@ function drawRSI(rCurve,holdCurve,log){
       ${hdr("totalRet","총수익률")}${hdr("mdd","MDD")}${hdr("mar","MAR")}${hdr("maxLossStreak","연패")}${hdr("avgHoldBars","보유봉")}
       <th><div class="th-main">내역</div></th>
     </tr></thead><tbody>`;
-    sorted.forEach((r,i)=>{
+    view.forEach((r,i)=>{
       html+=`<tr class="${i===0?"db-hot":""}">
         <td class="name mono" style="font-size:12px">${r.label}</td>
         <td class="num">${r.pLook}</td><td class="num">${r.lbK}</td><td class="num">${r.bmb}</td>
@@ -3561,7 +3564,7 @@ function drawRSI(rCurve,holdCurve,log){
       if(SORT.key===k)SORT.dir*=-1; else{SORT.key=k;SORT.dir=-1;}
       render();
     });
-    con.querySelectorAll(".revdbc-dtl").forEach(b=>b.onclick=()=>showDetail(sorted[+b.dataset.idx]));
+    con.querySelectorAll(".revdbc-dtl").forEach(b=>b.onclick=()=>showDetail(view[+b.dataset.idx]));
   }
   function showDetail(r){
     const area=el("revdbc_detail_area"); if(!area)return;

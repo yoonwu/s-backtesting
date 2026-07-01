@@ -19,7 +19,7 @@
 //|   · 손절·익절 동시 = 손절 우선. 동시 1포지션.                      |
 //+------------------------------------------------------------------+
 #property copyright "LEVERAGE LAB"
-#property version   "1.04"
+#property version   "1.05"
 #property strict
 
 #include <Trade/Trade.mqh>
@@ -52,6 +52,8 @@ input double       InpLot4        = 0.01;          // 4차수 랏
 input long         InpMagic       = 990001;        // 매직넘버 (전략마다 고유값!)
 input int          InpMaxSpreadPts= 0;             // 최대 스프레드(포인트, 0=무시)
 input string       InpComment     = "DBB";         // 주문 코멘트
+input string       InpExpectedSymbol = "";         // 차트 종목 접두어 가드(예: XAUUSD, US100)
+input ENUM_TIMEFRAMES InpExpectedTF = PERIOD_CURRENT; // 차트 타임프레임 가드(PERIOD_CURRENT=끄기)
 input bool         InpDebugSignals= false;         // 신호판정 로그 출력
 
 //--- double BB 고정 파라미터
@@ -78,6 +80,17 @@ int OnInit()
    g_trade.SetTypeFillingBySymbol(_Symbol);
    g_trade.SetDeviationInPoints(20);
    if(InpSplitCount<1){ Print("InpSplitCount must be >=1"); return(INIT_PARAMETERS_INCORRECT); }
+   if(StringLen(InpExpectedSymbol)>0 && StringFind(_Symbol,InpExpectedSymbol)!=0)
+     {
+      PrintFormat("DoubleBB_EA chart mismatch: expected symbol prefix %s, got %s", InpExpectedSymbol, _Symbol);
+      return(INIT_PARAMETERS_INCORRECT);
+     }
+   if(InpExpectedTF!=PERIOD_CURRENT && _Period!=InpExpectedTF)
+     {
+      PrintFormat("DoubleBB_EA chart mismatch: expected TF %s, got %s",
+                  EnumToString(InpExpectedTF), EnumToString((ENUM_TIMEFRAMES)_Period));
+      return(INIT_PARAMETERS_INCORRECT);
+     }
    if(!AccountInfoInteger(ACCOUNT_TRADE_ALLOWED))
       Print("경고: 이 계좌에서 자동매매가 허용되지 않음(또는 알고리즘 트레이딩 OFF).");
    if((ENUM_ACCOUNT_MARGIN_MODE)AccountInfoInteger(ACCOUNT_MARGIN_MODE)!=ACCOUNT_MARGIN_MODE_RETAIL_HEDGING)

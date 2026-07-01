@@ -23,3 +23,5 @@ InpLot4=0.01
 InpMagic=880004
 InpMaxSpreadPts=0
 InpComment=MAPB-US100-H4
+InpExpectedSymbol=US100
+InpExpectedTF=16388

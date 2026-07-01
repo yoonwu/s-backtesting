@@ -21,3 +21,5 @@ InpLot4=0.01
 InpMagic=990001
 InpMaxSpreadPts=0
 InpComment=DBB-US100-M5
+InpExpectedSymbol=US100
+InpExpectedTF=5

@@ -22,3 +22,5 @@ InpLot4=0.01
 InpMagic=990006
 InpMaxSpreadPts=0
 InpComment=DBB-XAU-H2
+InpExpectedSymbol=XAUUSD
+InpExpectedTF=16386

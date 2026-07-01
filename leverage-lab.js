@@ -3624,4 +3624,391 @@ function drawRSI(rCurve,holdCurve,log){
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init); else init();
 })();
+
+/* ===== STRUCTURAL REVERSAL (변곡신호) — 더블비 없이 추세반전 자체를 수치화 =====
+ * ① 하락 맥락(종가<MA)에서 프랙탈 스윙저점 탐지
+ * ② 새 스윙저점이 이전 저점을 안 깨면(Higher Low) 구조적 반전 후보
+ * ③ Higher Low 시점 RSI > 이전 저점 RSI(다이버전스)면 확정
+ * ④ 두 저점 사이 반등고점(넥라인)을 종가로 돌파하면 반전 확정 → 롱 진입
+ * ⑤ SL=Higher Low−slK×TR, TP=진입가+tpK×TR, 표시시간은 계산과 분리(+7h는 표시전용)
+ */
+(function(){
+  const el=id=>document.getElementById(id);
+  function bbSide(arr,period,mult,up){
+    const out=new Array(arr.length).fill(null);
+    for(let i=period-1;i<arr.length;i++){
+      let s=0; for(let k=0;k<period;k++) s+=arr[i-k];
+      const m=s/period; let v=0;
+      for(let k=0;k<period;k++){const d=arr[i-k]-m;v+=d*d;}
+      out[i]=m+(up?1:-1)*mult*Math.sqrt(v/period);
+    }
+    return out;
+  }
+  function calcTR(bars){
+    return bars.map((b,i)=>{
+      if(i===0)return b.h-b.l;
+      const pc=bars[i-1].c;
+      return Math.max(b.h-b.l,Math.abs(b.h-pc),Math.abs(b.l-pc));
+    });
+  }
+  function calcRSI(bars,period){
+    const n=bars.length, rsi=new Array(n).fill(null);
+    if(n<=period)return rsi;
+    let ag=0,al=0;
+    for(let i=1;i<=period;i++){const d=bars[i].c-bars[i-1].c; if(d>0)ag+=d; else al-=d;}
+    ag/=period; al/=period;
+    rsi[period]=al===0?100:100-100/(1+ag/al);
+    for(let i=period+1;i<n;i++){
+      const d=bars[i].c-bars[i-1].c;
+      ag=(ag*(period-1)+Math.max(d,0))/period;
+      al=(al*(period-1)+Math.max(-d,0))/period;
+      rsi[i]=al===0?100:100-100/(1+ag/al);
+    }
+    return rsi;
+  }
+  function calcSMA(arr,n){
+    const out=new Array(arr.length).fill(null); let s=0;
+    for(let i=0;i<arr.length;i++){
+      s+=arr[i]; if(i>=n)s-=arr[i-n];
+      if(i>=n-1)out[i]=s/n;
+    }
+    return out;
+  }
+  // 프랙탈 스윙저점: 좌측 L봉·우측 R봉 안에서 가장 낮은 저가.
+  function findSwingLows(bars,L,R){
+    const out=[];
+    for(let i=L;i<bars.length-R;i++){
+      let isLow=true;
+      for(let k=1;k<=L;k++)if(bars[i-k].l<bars[i].l){isLow=false;break;}
+      if(isLow)for(let k=1;k<=R;k++)if(bars[i+k].l<bars[i].l){isLow=false;break;}
+      if(isLow)out.push(i);
+    }
+    return out;
+  }
+  // 연속 스윙저점 쌍에서: Higher Low(구조반전 후보) + RSI다이버 + 넥라인(사이 최고가) 종가돌파.
+  function detectStructuralReversal(bars,maArr,rsi,tr,opts){
+    const {swingL,swingR,rsiGapMin,maxWaitBars,breakK}=opts;
+    const swings=findSwingLows(bars,swingL,swingR);
+    const signals=[];
+    for(let k=1;k<swings.length;k++){
+      const prevIdx=swings[k-1], curIdx=swings[k];
+      if(curIdx-prevIdx>maxWaitBars)continue;
+      if(maArr&&(maArr[curIdx]===null||bars[curIdx].c>=maArr[curIdx]))continue; // 하락맥락
+      if(bars[curIdx].l<=bars[prevIdx].l)continue; // Higher Low여야(구조반전)
+      if(rsi[curIdx]===null||rsi[prevIdx]===null)continue;
+      const gap=rsi[curIdx]-rsi[prevIdx];
+      if(gap<rsiGapMin)continue;
+      let neckline=-Infinity;
+      for(let j=prevIdx;j<=curIdx;j++)neckline=Math.max(neckline,bars[j].h);
+      const end=Math.min(bars.length-1,curIdx+maxWaitBars);
+      for(let i=curIdx+1;i<=end;i++){
+        if(bars[i].c>neckline+breakK*(tr[i]||0)){
+          signals.push({
+            prevIdx,curIdx,breakIdx:i,
+            prevDate:bars[prevIdx].date||bars[prevIdx].day,
+            curDate:bars[curIdx].date||bars[curIdx].day,
+            breakDate:bars[i].date||bars[i].day,
+            prevLow:bars[prevIdx].l,curLow:bars[curIdx].l,neckline,
+            prevRsi:rsi[prevIdx],curRsi:rsi[curIdx],rsiGap:gap
+          });
+          break;
+        }
+      }
+    }
+    return signals;
+  }
+  function getSetupTR(tr,seedIdx,signalIdx,mode){
+    if(mode==="seed")return tr[seedIdx]||tr[signalIdx]||0;
+    if(mode==="signal")return tr[signalIdx]||tr[seedIdx]||0;
+    let mx=0;
+    for(let i=seedIdx;i<=signalIdx;i++)mx=Math.max(mx,tr[i]||0);
+    return mx||tr[signalIdx]||tr[seedIdx]||0;
+  }
+  // 넥라인 돌파 신호 → 롱 진입 → SL=curLow(HigherLow)−slK×TR, TP=진입가+tpK×TR.
+  function backtestStructuralReversal(bars,signals,tr,opts){
+    const {slK,tpK,expiryBars,trMode,entryMode}=opts;
+    const trades=[];
+    let equity=1,peak=1,maxDD=0,wins=0,sumWin=0,sumLoss=0,activeUntil=-1;
+    for(const sig of signals){
+      const entryIdx=entryMode==="nextOpen"?sig.breakIdx+1:sig.breakIdx;
+      if(entryIdx>=bars.length)continue;
+      if(entryIdx<=activeUntil)continue;
+      const entryPrice=entryMode==="nextOpen"?bars[entryIdx].o:bars[sig.breakIdx].c;
+      const riskTR=getSetupTR(tr,sig.curIdx,sig.breakIdx,trMode);
+      if(!(riskTR>0))continue;
+      const sl=sig.curLow-slK*riskTR;
+      const tp=entryPrice+tpK*riskTR;
+      const expireIdx=Math.min(bars.length-1,entryIdx+expiryBars);
+      let exitIdx=expireIdx, exitPrice=bars[expireIdx].c, exitReason="EXPIRE";
+      for(let i=entryIdx+1;i<=expireIdx;i++){
+        const b=bars[i];
+        if(b.l<=sl){exitIdx=i;exitPrice=sl;exitReason="SL";break;}
+        if(b.h>=tp){exitIdx=i;exitPrice=tp;exitReason="TP";break;}
+      }
+      const ret=(exitPrice-entryPrice)/entryPrice;
+      equity*=1+ret; if(equity>peak)peak=equity;
+      const dd=equity/peak-1; if(dd<maxDD)maxDD=dd;
+      if(ret>0){wins++;sumWin+=ret;}else{sumLoss+=Math.abs(ret);}
+      activeUntil=exitIdx;
+      trades.push({...sig,entryIdx,entryPrice,exitIdx,exitPrice,exitReason,sl,tp,riskTR,ret,won:exitReason==="TP"});
+    }
+    const cnt=trades.length;
+    const losses=cnt-wins;
+    const avgWin=wins?sumWin/wins:0, avgLoss=losses?sumLoss/losses:0;
+    const payoff=avgLoss>0?avgWin/avgLoss:(avgWin>0?Infinity:0);
+    const totalRet=equity-1;
+    const mar=maxDD<0?totalRet/Math.abs(maxDD):(totalRet>0?Infinity:0);
+    return{
+      trades,cnt,winRate:cnt?wins/cnt:0,payoff,totalRet,mdd:maxDD,mar,
+      tpC:trades.filter(t=>t.exitReason==="TP").length,
+      slC:trades.filter(t=>t.exitReason==="SL").length,
+      eodC:trades.filter(t=>t.exitReason==="EXPIRE").length
+    };
+  }
+  function formatDisplayTime(rawDate,offsetHours){
+    if(!rawDate)return "-";
+    const normalized=String(rawDate).replace(" ","T");
+    const d=new Date(normalized);
+    if(Number.isNaN(d.getTime()))return String(rawDate);
+    d.setHours(d.getHours()+(offsetHours||0));
+    const yyyy=d.getFullYear(), mm=String(d.getMonth()+1).padStart(2,"0"), dd=String(d.getDate()).padStart(2,"0");
+    const hh=String(d.getHours()).padStart(2,"0"), mi=String(d.getMinutes()).padStart(2,"0");
+    return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+  }
+  function parseMT5local(text){
+    const lines=text.split(/\r?\n/),out=[];
+    const start=/date|open|time/i.test(lines[0]||"")?1:0;
+    for(let i=start;i<lines.length;i++){
+      const ln=lines[i].trim(); if(!ln)continue;
+      const p=ln.split(/[\t,;]+/); if(p.length<5)continue;
+      const d=p[0].replace(/\./g,"-").replace(/\//g,"-").slice(0,10);
+      const hasT=/:/.test(p[1]||""); const oi=hasT?2:1;
+      const o=+p[oi],h=+p[oi+1],l=+p[oi+2],c=+p[oi+3];
+      if(!isFinite(o)||!isFinite(h)||!isFinite(l)||!isFinite(c)||c<=0)continue;
+      out.push({day:d,date:d+" "+(hasT?p[1]:"00:00:00"),o,h,l,c});
+    }
+    if(out.length<2)throw new Error("CSV에서 유효한 OHLC 행을 못 찾음");
+    return out;
+  }
+  function groupByDay(bars){const m={},order=[];for(const b of bars){if(!m[b.day]){m[b.day]=[];order.push(b.day);}m[b.day].push(b);}return{m,order};}
+  function aggBars(g){let h=-Infinity,l=Infinity;for(const x of g){if(x.h>h)h=x.h;if(x.l<l)l=x.l;}return{day:g[0].day,date:g[0].date,o:g[0].o,h,l,c:g[g.length-1].c};}
+  function intradayOnly(bars){const{m}=groupByDay(bars);return bars.filter(b=>m[b.day].length>1);}
+  function resampleN(bars,nn){const{m,order}=groupByDay(bars);const out=[];for(const d of order){const a=m[d];for(let k=0;k<a.length;k+=nn)out.push(aggBars(a.slice(k,k+nn)));}return out;}
+  function resampleDaily(bars){const{m,order}=groupByDay(bars);return order.map(d=>aggBars(m[d]));}
+  function buildTF(raw,tf){
+    if(tf==="5m")return intradayOnly(raw);
+    if(tf==="10m")return resampleN(intradayOnly(raw),2);
+    if(tf==="1h")return resampleN(intradayOnly(raw),12);
+    return resampleDaily(raw);
+  }
+  let RAWCACHE={}, RESULTS=[], SORT={key:"mar",dir:-1};
+  function parseList(str,intOnly,minV){
+    return String(str).split(/[,\s]+/).map(x=>+x).filter(x=>isFinite(x)&&x>=(minV||0)&&(!intOnly||Number.isInteger(x)));
+  }
+  function val(id,fallback){const x=el(id);return x?x.value:fallback;}
+  function cur(id,fallback){const x=el(id);return x?(x.dataset.cur||fallback):fallback;}
+  function errMsg(msg){el("trsig_err").textContent=msg||"";}
+  function statusMsg(msg){el("trsig_status").textContent=msg||"";}
+  async function loadSources(){
+    const src=el("trsig_src").dataset.cur;
+    if(src==="upload"){
+      if(!RAWCACHE.__upload__)throw new Error("CSV 파일을 먼저 선택하세요");
+      return[{label:RAWCACHE.__uploadName__||"업로드",bars:buildTF(RAWCACHE.__upload__,el("trsig_tf").value)}];
+    }
+    if(src==="yahoo"){
+      const sym=el("trsig_sym").value.trim(); if(!sym)throw new Error("야후 티커를 입력하세요");
+      const from=el("trsig_from").value,to=el("trsig_to").value;
+      statusMsg(`야후 ${sym} 불러오는 중…`);
+      const u=`${PROXY}/?yahoo=${encodeURIComponent(sym)}&from=${from}&to=${to}&interval=5m`;
+      const r=await fetch(u); const j=await r.json();
+      if(!r.ok||!j.data)throw new Error(j.error||"프록시 오류 "+r.status);
+      const raw=j.data.map(x=>({day:String(x.date).slice(0,10),date:String(x.date),o:+x.o,h:+x.h,l:+x.l,c:+x.c}));
+      return[{label:sym,bars:buildTF(raw,el("trsig_tf").value)}];
+    }
+    const picks=selectedCsvFiles("trsig");
+    if(!picks.length)throw new Error("비교할 저장 CSV를 1개 이상 체크하세요");
+    const out=[];
+    for(const cf of picks){
+      if(!RAWCACHE[cf.file]){
+        statusMsg(`${cf.sym} ${cf.tf} 불러오는 중…`);
+        const r=await fetch(cf.file,{cache:"force-cache"});
+        if(!r.ok)throw new Error(`${cf.file} 못 찾음(404)`);
+        const parsed=parseMT5local(await r.text());
+        RAWCACHE[cf.file]=cf.raw?intradayOnly(parsed):parsed;
+      }
+      out.push({label:`${cf.sym}·${cf.tf}`,file:cf.file,bars:RAWCACHE[cf.file]});
+    }
+    return out;
+  }
+  async function run(){
+    errMsg(""); RESULTS=[];
+    const btn=el("trsig_run"); btn.disabled=true;
+    try{
+      const maFilter=Math.max(0,+el("trsig_ma").value||0);
+      const swingLs=parseList(el("trsig_swingl").value,true,1);
+      const swingRs=parseList(el("trsig_swingr").value,true,1);
+      const rsiPeriod=Math.max(2,+val("trsig_rsi_period","14")||14);
+      const rsiGaps=parseList(el("trsig_rsi_gap").value,false,0);
+      const maxWait=Math.max(5,+el("trsig_wait").value||100);
+      const breakKs=parseList(el("trsig_breakk").value,false,0);
+      const entryMode=cur("trsig_entry","nextOpen");
+      const trMode=cur("trsig_trmode","setupMax");
+      const slKs=parseList(el("trsig_sl").value,false,0);
+      const tpKs=parseList(el("trsig_tp").value,false,0);
+      const expiryBars=Math.max(1,+el("trsig_expiry").value||50);
+      const dispOffset=+el("trsig_dispoff").value||0;
+      if(!swingLs.length||!swingRs.length||!rsiGaps.length||!breakKs.length||!slKs.length||!tpKs.length)
+        throw new Error("스윙봉·RSI갭·넥라인여유·손절·익절 값을 하나 이상 입력하세요");
+      const sources=await loadSources();
+      const rows=[];
+      const total=sources.length*swingLs.length*swingRs.length*rsiGaps.length*breakKs.length*slKs.length*tpKs.length;
+      const maxCombos=20000;
+      if(total>maxCombos)
+        throw new Error(`조합이 ${total.toLocaleString()}개입니다. CSV 선택이나 콤마 값을 줄여서 ${maxCombos.toLocaleString()}개 이하로 맞춰주세요.`);
+      let combo=0;
+      for(const src of sources){
+        const bars=src.bars;
+        const maArr=maFilter>0?calcSMA(bars.map(b=>b.c),maFilter):null;
+        const tr=calcTR(bars);
+        const rsiArr=calcRSI(bars,rsiPeriod);
+        for(const swingL of swingLs){
+          for(const swingR of swingRs){
+            for(const rsiGapMin of rsiGaps){
+              for(const breakK of breakKs){
+                const sigs=detectStructuralReversal(bars,maArr,rsiArr,tr,{swingL,swingR,rsiGapMin,maxWaitBars:maxWait,breakK});
+                for(const slK of slKs){
+                  for(const tpK of tpKs){
+                    combo++;
+                    if(combo%20===0){statusMsg(`${combo}/${total} 조합…`);await new Promise(r=>setTimeout(r,0));}
+                    const res=backtestStructuralReversal(bars,sigs,tr,{slK,tpK,expiryBars,trMode,entryMode});
+                    if(res.cnt<1)continue;
+                    rows.push({label:src.label,swingL,swingR,rsiGapMin,breakK,slK,tpK,dispOffset,...res});
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      RESULTS=rows;
+      statusMsg(`완료 — 유효 ${rows.length}개 / 전체 ${total}개 조합 · 표시시간 +${dispOffset}h(계산엔 미적용)`);
+      render();
+    }catch(e){errMsg(e.message);statusMsg("");}
+    finally{btn.disabled=false;}
+  }
+  function pctStr(x){return(x>=0?"+":"")+(x*100).toFixed(1)+"%";}
+  function pf2(x){return x===Infinity?"∞":x.toFixed(2);}
+  function arw(k){return SORT.key===k?(SORT.dir<0?" ▾":" ▴"):"";}
+  function numCls(v,good,bad){return v>=good?"hl-good":v<=bad?"hl-bad":"";}
+  function render(){
+    const con=el("trsig_results");
+    if(!RESULTS.length){
+      con.innerHTML=`<div class="placeholder"><div class="big">거래가 없습니다</div><div class="mono">RSI갭·넥라인여유를 낮추거나 만료봉을 늘려보세요</div></div>`;
+      return;
+    }
+    const key=SORT.key, dir=SORT.dir;
+    const sorted=[...RESULTS].sort((a,b)=>{
+      const va=isFinite(a[key])?a[key]:1e9*Math.sign(dir);
+      const vb=isFinite(b[key])?b[key]:1e9*Math.sign(dir);
+      return(vb-va)*dir;
+    });
+    const best=sorted[0];
+    const CAP=500;
+    const view=sorted.slice(0,CAP);
+    const capNote=sorted.length>CAP?` <span class="dimv">· 상위 ${CAP}개만 표시 (전체 ${sorted.length.toLocaleString()}개)</span>`:"";
+    function hdr(k,main,sub=""){return`<th class="db-sort trsig-s" data-k="${k}" style="cursor:pointer"><div class="th-main">${main}${arw(k)}</div>${sub?`<div class="th-sub">${sub}</div>`:""}</th>`;}
+    let html=`<div class="db-best">최상위: <b>${best.label}</b> · 스윙${best.swingL}/${best.swingR} · RSI갭≥${best.rsiGapMin} · 넥라인여유=${best.breakK} · SL=${best.slK} TP=${best.tpK} → 거래 <b>${best.cnt}</b>건(TP${best.tpC}/SL${best.slC}/만료${best.eodC}) · 승률 ${(best.winRate*100).toFixed(0)}% · 손익비 ${pf2(best.payoff)} · 총수익 ${pctStr(best.totalRet)} · MDD ${pctStr(best.mdd)} · MAR ${pf2(best.mar)}${capNote}</div>`;
+    html+=`<div class="ctable-wrap"><table class="ctable"><thead><tr>
+      <th><div class="th-main">데이터</div></th>
+      ${hdr("swingL","스윙L")}${hdr("swingR","스윙R")}${hdr("rsiGapMin","RSI갭")}${hdr("breakK","넥라인")}${hdr("slK","손절")}${hdr("tpK","익절")}
+      ${hdr("cnt","거래수")}${hdr("winRate","승률")}${hdr("payoff","손익비")}${hdr("totalRet","총수익")}${hdr("mdd","최대낙폭")}${hdr("mar","MAR")}
+      <th><div class="th-main">청산</div><div class="th-sub">TP/SL/E</div></th>
+      <th><div class="th-main">내역</div></th>
+    </tr></thead><tbody>`;
+    view.forEach((r,i)=>{
+      html+=`<tr class="${i===0?"db-hot":""}">
+        <td class="name mono" style="font-size:12px">${r.label}</td>
+        <td class="num">${r.swingL}</td><td class="num">${r.swingR}</td><td class="num">${r.rsiGapMin}</td><td class="num">${r.breakK}</td>
+        <td class="num">${r.slK}</td><td class="num">${r.tpK}</td>
+        <td class="num">${r.cnt}</td>
+        <td class="num ${numCls(r.winRate,0.55,0)}">${(r.winRate*100).toFixed(0)}%</td>
+        <td class="num ${numCls(r.payoff,1.2,0.8)}">${pf2(r.payoff)}</td>
+        <td class="num ${r.totalRet>0?"pos":"neg"}">${pctStr(r.totalRet)}</td>
+        <td class="num neg">${pctStr(r.mdd)}</td>
+        <td class="num ${numCls(r.mar,2,0)}">${pf2(r.mar)}</td>
+        <td class="num mono" style="font-size:11px">${r.tpC}/${r.slC}/${r.eodC}</td>
+        <td><button class="trsig-dtl" data-idx="${i}" style="padding:4px 9px;border:1px solid var(--cyan);background:rgba(8,145,178,.1);color:var(--cyan);border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">▸내역</button></td>
+      </tr>`;
+    });
+    html+=`</tbody></table></div><div id="trsig_detail_area" style="margin-top:20px"></div>`;
+    con.innerHTML=html;
+    con.querySelectorAll(".trsig-s").forEach(th=>th.onclick=()=>{
+      const k=th.dataset.k;
+      if(SORT.key===k)SORT.dir*=-1; else{SORT.key=k;SORT.dir=-1;}
+      render();
+    });
+    con.querySelectorAll(".trsig-dtl").forEach(b=>b.onclick=()=>showDetail(view[+b.dataset.idx]));
+  }
+  function showDetail(r){
+    const area=el("trsig_detail_area"); if(!area)return;
+    const off=r.dispOffset||0;
+    let html=`<div class="sectitle">거래 내역 · ${r.label} · 스윙${r.swingL}/${r.swingR} RSI갭≥${r.rsiGapMin} 넥라인여유=${r.breakK} SL=${r.slK} TP=${r.tpK} · 시각=트뷰 KST 기준(서버+${off}h, 표시전용)</div>
+    <div class="ctable-wrap"><table class="ctable"><thead><tr>
+      <th><div class="th-main">이전 저점</div></th>
+      <th><div class="th-main">Higher Low</div></th>
+      <th><div class="th-main">넥라인돌파</div></th>
+      <th><div class="th-main">진입가</div></th><th><div class="th-main">SL</div></th><th><div class="th-main">TP</div></th>
+      <th><div class="th-main">청산가</div></th><th><div class="th-main">결과</div></th><th><div class="th-main">수익률</div></th>
+      <th><div class="th-main">이전저점가</div></th><th><div class="th-main">HL가</div></th><th><div class="th-main">넥라인</div></th>
+      <th><div class="th-main">이전RSI</div></th><th><div class="th-main">HL RSI</div></th><th><div class="th-main">RSI갭</div></th>
+    </tr></thead><tbody>`;
+    for(const t of r.trades){
+      const res=t.exitReason==="TP"?'<span class="pos">익절</span>':t.exitReason==="SL"?'<span class="neg">손절</span>':'<span class="dimv">만료</span>';
+      html+=`<tr>
+        <td class="name mono" style="font-size:11px">${formatDisplayTime(t.prevDate,off)}</td>
+        <td class="name mono" style="font-size:11px">${formatDisplayTime(t.curDate,off)}</td>
+        <td class="name mono" style="font-size:11px">${formatDisplayTime(t.breakDate,off)}</td>
+        <td class="num mono">${t.entryPrice.toFixed(2)}</td><td class="num mono">${t.sl.toFixed(2)}</td><td class="num mono">${t.tp.toFixed(2)}</td>
+        <td class="num mono">${t.exitPrice.toFixed(2)}</td><td>${res}</td>
+        <td class="num ${t.ret>0?"pos":"neg"}">${pctStr(t.ret)}</td>
+        <td class="num mono">${t.prevLow.toFixed(2)}</td><td class="num mono">${t.curLow.toFixed(2)}</td><td class="num mono">${t.neckline.toFixed(2)}</td>
+        <td class="num mono">${t.prevRsi!=null?t.prevRsi.toFixed(1):"-"}</td><td class="num mono">${t.curRsi!=null?t.curRsi.toFixed(1):"-"}</td>
+        <td class="num pos">${t.rsiGap!=null?t.rsiGap.toFixed(1):"-"}</td>
+      </tr>`;
+    }
+    html+=`</tbody></table></div>`;
+    area.innerHTML=html;
+    area.scrollIntoView({behavior:"smooth"});
+  }
+  function setSrcMode(s){
+    el("trsig_src").dataset.cur=s;
+    el("trsig_src").querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.s===s));
+    el("trsig_storedRow").style.display=s==="stored"?"":"none";
+    el("trsig_uploadRow").style.display=s==="upload"?"":"none";
+    el("trsig_yahooRow").style.display=s==="yahoo"?"":"none";
+    el("trsig_tfrow").style.display=s==="stored"?"none":"";
+  }
+  function init(){
+    if(!el("trsig_run"))return;
+    renderCsvChecks("trsig");
+    el("trsig_src").querySelectorAll("button").forEach(b=>b.onclick=()=>setSrcMode(b.dataset.s));
+    ["trsig_entry","trsig_trmode"].forEach(id=>{
+      const box=el(id); if(!box)return;
+      box.querySelectorAll("button").forEach(b=>b.onclick=()=>{
+        box.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+        box.dataset.cur=b.dataset.m||b.dataset.c||b.dataset.t;
+      });
+    });
+    el("trsig_file").onchange=async e=>{
+      const f=e.target.files[0]; if(!f)return;
+      try{RAWCACHE.__upload__=parseMT5local(await f.text());RAWCACHE.__uploadName__=f.name.replace(/\.csv$/i,"");}
+      catch(ex){errMsg("⚠ "+ex.message);}
+    };
+    el("trsig_reload").onclick=()=>{RAWCACHE={};statusMsg("캐시 비움");};
+    el("trsig_from").value=(()=>{const d=new Date();d.setDate(d.getDate()-730);return d.toISOString().slice(0,10);})();
+    el("trsig_to").value=today();
+    el("trsig_run").onclick=run;
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init); else init();
+})();
 //__CHUNK_END__

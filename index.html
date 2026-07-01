@@ -903,6 +903,31 @@
           </div>
         </div>
 
+        <div class="row2">
+          <div class="field"><label>RSI 리셋 기준</label>
+            <div class="row2" style="grid-template-columns:1fr 1fr;gap:8px">
+              <input id="revdbc_reset_gap" class="mono" type="number" value="20" min="0" step="1">
+              <input id="revdbc_reset_level" class="mono" type="number" value="50" min="1" step="1">
+            </div>
+            <div class="hint">최저 RSI 이후 +왼쪽값 또는 오른쪽 RSI 레벨 이상 회복하면 이전 다이버 셋업 폐기. 예) 30 → 50 회복이면 취소.</div>
+          </div>
+          <div class="field"><label>최대 다이버 거리 (봉)</label>
+            <input id="revdbc_maxdiv" class="mono" type="number" value="24" min="1" step="1">
+            <div class="hint">pivotLow 이후 이 봉 수를 넘기면 같은 쌍바닥/다이버로 보지 않습니다.</div>
+          </div>
+        </div>
+
+        <div class="row2">
+          <div class="field"><label>신호봉 최대 몸통 ×TR</label>
+            <input id="revdbc_bodyk" class="mono" value="1.2">
+            <div class="hint">너무 긴 장대 신호봉은 제외합니다.</div>
+          </div>
+          <div class="field"><label>신호봉 최대 길이 ×TR</label>
+            <input id="revdbc_rangek" class="mono" value="2.0">
+            <div class="hint">고가-저가 전체 길이가 너무 큰 봉은 제외합니다.</div>
+          </div>
+        </div>
+
         <div class="field"><label>4/4 접촉 기준</label>
           <div class="subtabs" id="revdbc_touch" data-cur="wick">
             <button data-t="body">몸통 접촉</button><button data-t="wick" class="on">꼬리 접촉</button>
@@ -910,7 +935,7 @@
           <div class="hint">DB/4-4 재접촉은 <b>근처면 안 되고 실제로 닿아야</b> 함. <b>꼬리 접촉</b>(기본)=고가~저가가 밴드를 포함. <b>몸통 접촉</b>=시가~종가 범위가 밴드를 포함(더 엄격, 실전에서 거의 안 나옴).</div>
         </div>
 
-        <div class="note"><b>3단계 백테스트</b> · 재접촉 신호에서 롱 진입 → SL=기준저점(seed~재접촉 최저가)−손절×TR, TP=진입가+익절×TR → SL/TP 중 먼저 닿는 쪽으로 청산(동시 도달 시 SL 우선), 만료 시 종가 청산.</div>
+        <div class="note"><b>3단계 백테스트</b> · 재접촉 신호에서 롱 진입 → SL=기준저점(seed~재접촉 최저가)−손절×TR, TP=진입가+익절×TR → SL/TP 중 먼저 닿는 쪽으로 청산(동시 도달 시 SL 우선), 만료 시 종가 청산. RSI가 중간에 크게 회복되거나 신호가 너무 멀고 장대봉이면 제외.</div>
 
         <div class="row2">
           <div class="field"><label>진입 방식</label>

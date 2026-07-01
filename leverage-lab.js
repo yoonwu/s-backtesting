@@ -3247,6 +3247,7 @@ function drawRSI(rCurve,holdCurve,log){
   // 단순 버전: 찢는 하락DB(확장 볼밴에서만 인정)=기준점(seed, 신호 아님) → 대기 → DB 또는 4/4 원비
   // 재접촉(실제 접촉만, 근처X) → 가격은 seed 이후 저점 근처인데 RSI는 그때 최저RSI보다 높음(다이버전스).
   function candleTouchesBand(candle,band,mode){
+    if(band===null||!isFinite(band))return false;
     if(mode==="body"){
       const bodyLow=Math.min(candle.o,candle.c), bodyHigh=Math.max(candle.o,candle.c);
       return bodyLow<=band && bodyHigh>=band;
@@ -3255,6 +3256,11 @@ function drawRSI(rCurve,holdCurve,log){
   }
   function detectSimpleReversalDbLong(bars,doubleLower,bb44Lower,widthRatio,tr,rsi,opts){
     const {expandK,maxWaitBars,retestK,rsiGap,touchMode}=opts;
+    const rsiResetGap=opts.rsiResetGap??20;
+    const rsiResetLevel=opts.rsiResetLevel??50;
+    const maxDivBars=opts.maxDivBars??24;
+    const maxSignalBodyTR=opts.maxSignalBodyTR??1.2;
+    const maxSignalRangeTR=opts.maxSignalRangeTR??2.0;
     const signals=[];
     for(let seedIdx=2;seedIdx<bars.length-2;seedIdx++){
       const seed=bars[seedIdx];
@@ -3271,6 +3277,17 @@ function drawRSI(rCurve,holdCurve,log){
         const b=bars[i];
         if(b.l<pivotLow){pivotLow=b.l;pivotIdx=i;}
         if(rsi[i]!==null&&rsi[i]<minRsi){minRsi=rsi[i];minRsiIdx=i;}
+        if(i-pivotIdx>maxDivBars)break;
+        if(rsi[i]===null||!isFinite(minRsi))continue;
+
+        const refTR=Math.max(tr[i]||0,tr[seedIdx]||0);
+        const body=Math.abs(b.c-b.o), range=b.h-b.l;
+        if(refTR>0&&(body>refTR*maxSignalBodyTR||range>refTR*maxSignalRangeTR)){
+          if(rsi[i]>=minRsi+rsiResetGap||rsi[i]>=rsiResetLevel)break;
+          continue;
+        }
+        if(rsi[i]>=minRsi+rsiResetGap||rsi[i]>=rsiResetLevel)break;
+
         const dl=doubleLower[i], b44=bb44Lower[i];
         if(dl===null&&b44===null)continue;
         const touchedDouble=dl!==null&&candleTouchesBand(b,dl,touchMode);
@@ -3278,19 +3295,21 @@ function drawRSI(rCurve,holdCurve,log){
         const touched44=b44!==null&&candleTouchesBand(b,b44,touchMode);
         const touchType=(closedBelowDouble||touchedDouble)?"DB":(touched44?"4-4":null);
         if(!touchType)continue;
-        const refTR=tr[i]||tr[seedIdx]||0;
         const priceRetest=b.l<=pivotLow+refTR*retestK;
         if(!priceRetest)continue;
-        if(rsi[i]===null||!isFinite(minRsi))continue;
         const gap=rsi[i]-minRsi;
-        if(gap<rsiGap)continue;
+        if(gap<rsiGap){
+          if(rsi[i]>=minRsi+rsiResetGap||rsi[i]>=rsiResetLevel)break;
+          continue;
+        }
         signals.push({
           seedIdx,pivotIdx,minRsiIdx,signalIdx:i,touchType,
           seedDate:bars[seedIdx].date||bars[seedIdx].day,
           signalDate:bars[i].date||bars[i].day,
           seedLow:seed.l,pivotLow,signalLow:b.l,
           seedRsi:rsi[seedIdx],minRsi,signalRsi:rsi[i],rsiGap:gap,
-          seedWidth:widthRatio[seedIdx],signalWidth:widthRatio[i]
+          seedWidth:widthRatio[seedIdx],signalWidth:widthRatio[i],
+          bodyTR:refTR>0?body/refTR:null,rangeTR:refTR>0?range/refTR:null
         });
         break;
       }
@@ -3383,7 +3402,7 @@ function drawRSI(rCurve,holdCurve,log){
     if(tf==="1h")return resampleN(intradayOnly(raw),12);
     return resampleDaily(raw);
   }
-  let RAWCACHE={}, RESULTS=[], SORT={key:"rsiGapActual",dir:-1};
+  let RAWCACHE={}, RESULTS=[], SORT={key:"mar",dir:-1};
   function parseList(str,intOnly,minV){
     return String(str).split(/[,\s]+/).map(x=>+x).filter(x=>isFinite(x)&&x>=(minV||0)&&(!intOnly||Number.isInteger(x)));
   }
@@ -3432,6 +3451,11 @@ function drawRSI(rCurve,holdCurve,log){
       const retestKs=parseList(val("revdbc_retestk","0.5"),false,0);
       const rsiPeriod=Math.max(2,+val("revdbc_rsi_period","14")||14);
       const rsiGaps=parseList(val("revdbc_rsi_gap","3"),false,0);
+      const rsiResetGap=Math.max(0,+val("revdbc_reset_gap","20")||20);
+      const rsiResetLevel=Math.max(1,+val("revdbc_reset_level","50")||50);
+      const maxDivBars=Math.max(1,+val("revdbc_maxdiv","24")||24);
+      const maxSignalBodyTR=Math.max(0.1,+val("revdbc_bodyk","1.2")||1.2);
+      const maxSignalRangeTR=Math.max(0.1,+val("revdbc_rangek","2.0")||2.0);
       const touchMode=cur("revdbc_touch","wick");
       const entryMode=cur("revdbc_entry","nextOpen");
       const trMode=cur("revdbc_trmode","setupMax");
@@ -3456,17 +3480,18 @@ function drawRSI(rCurve,holdCurve,log){
         const widthRatio=bandState.widthRatio;
         const tr=calcTR(bars);
         const rsiArr=calcRSI(bars,rsiPeriod);
+        const detectOpts={rsiResetGap,rsiResetLevel,maxDivBars,maxSignalBodyTR,maxSignalRangeTR,touchMode};
         for(const expandK of expandKs){
           for(const retestK of retestKs){
             for(const rsiGap of rsiGaps){
-              const sigs=detectSimpleReversalDbLong(bars,lower,bb44Lower,widthRatio,tr,rsiArr,{expandK,maxWaitBars:maxWait,retestK,rsiGap,touchMode});
+              const sigs=detectSimpleReversalDbLong(bars,lower,bb44Lower,widthRatio,tr,rsiArr,{...detectOpts,expandK,maxWaitBars:maxWait,retestK,rsiGap});
               for(const slK of slKs){
                 for(const tpK of tpKs){
                   combo++;
                   if(combo%20===0){statusMsg(`${combo}/${total} 조합…`);await new Promise(r=>setTimeout(r,0));}
                   const res=backtestSimpleReversalDbLong(bars,sigs,tr,{slK,tpK,expiryBars,trMode,entryMode});
                   if(res.cnt<1)continue;
-                  rows.push({label:src.label,expandK,retestK,rsiGap,slK,tpK,dispOffset,...res});
+                  rows.push({label:src.label,expandK,retestK,rsiGap,rsiResetGap,rsiResetLevel,maxDivBars,maxSignalBodyTR,maxSignalRangeTR,slK,tpK,dispOffset,...res});
                 }
               }
             }
@@ -3502,10 +3527,10 @@ function drawRSI(rCurve,holdCurve,log){
     const view=sorted.slice(0,CAP);
     const capNote=sorted.length>CAP?` <span class="dimv">· 상위 ${CAP}개만 표시 (전체 ${sorted.length.toLocaleString()}개)</span>`:"";
     function hdr(k,main,sub=""){return`<th class="db-sort revdbc-s" data-k="${k}" style="cursor:pointer"><div class="th-main">${main}${arw(k)}</div>${sub?`<div class="th-sub">${sub}</div>`:""}</th>`;}
-    let html=`<div class="db-best">최상위: <b>${best.label}</b> · 확장≥${best.expandK} · 재접촉여유=${best.retestK} · RSI갭=${best.rsiGap} · SL=${best.slK} TP=${best.tpK} → 거래 <b>${best.cnt}</b>건(TP${best.tpC}/SL${best.slC}/만료${best.eodC}) · 승률 ${(best.winRate*100).toFixed(0)}% · 손익비 ${pf2(best.payoff)} · 총수익 ${pctStr(best.totalRet)} · MDD ${pctStr(best.mdd)} · MAR ${pf2(best.mar)}${capNote}</div>`;
+    let html=`<div class="db-best">최상위: <b>${best.label}</b> · 확장≥${best.expandK} · 재접촉여유=${best.retestK} · RSI갭=${best.rsiGap} · 리셋 ${best.rsiResetLevel}/${best.rsiResetGap} · 거리≤${best.maxDivBars}봉 · 몸통≤${best.maxSignalBodyTR}TR · 봉≤${best.maxSignalRangeTR}TR · SL=${best.slK} TP=${best.tpK} → 거래 <b>${best.cnt}</b>건(TP${best.tpC}/SL${best.slC}/만료${best.eodC}) · 승률 ${(best.winRate*100).toFixed(0)}% · 손익비 ${pf2(best.payoff)} · 총수익 ${pctStr(best.totalRet)} · MDD ${pctStr(best.mdd)} · MAR ${pf2(best.mar)}${capNote}</div>`;
     html+=`<div class="ctable-wrap"><table class="ctable"><thead><tr>
       <th><div class="th-main">데이터</div></th>
-      ${hdr("expandK","확장")}${hdr("retestK","재접촉")}${hdr("rsiGap","RSI갭")}${hdr("slK","손절")}${hdr("tpK","익절")}
+      ${hdr("expandK","확장")}${hdr("retestK","재접촉")}${hdr("rsiGap","RSI갭")}${hdr("rsiResetLevel","RSI리셋")}${hdr("maxDivBars","거리")}${hdr("maxSignalBodyTR","몸통")}${hdr("maxSignalRangeTR","봉길이")}${hdr("slK","손절")}${hdr("tpK","익절")}
       ${hdr("cnt","거래수")}${hdr("winRate","승률")}${hdr("payoff","손익비")}${hdr("totalRet","총수익")}${hdr("mdd","최대낙폭")}${hdr("mar","MAR")}
       <th><div class="th-main">청산</div><div class="th-sub">TP/SL/E</div></th>
       <th><div class="th-main">내역</div></th>
@@ -3514,6 +3539,7 @@ function drawRSI(rCurve,holdCurve,log){
       html+=`<tr class="${i===0?"db-hot":""}">
         <td class="name mono" style="font-size:12px">${r.label}</td>
         <td class="num">${r.expandK}</td><td class="num">${r.retestK}</td><td class="num">${r.rsiGap}</td>
+        <td class="num">${r.rsiResetLevel}/${r.rsiResetGap}</td><td class="num">${r.maxDivBars}</td><td class="num">${r.maxSignalBodyTR}</td><td class="num">${r.maxSignalRangeTR}</td>
         <td class="num">${r.slK}</td><td class="num">${r.tpK}</td>
         <td class="num">${r.cnt}</td>
         <td class="num ${numCls(r.winRate,0.55,0)}">${(r.winRate*100).toFixed(0)}%</td>
@@ -3537,7 +3563,7 @@ function drawRSI(rCurve,holdCurve,log){
   function showDetail(r){
     const area=el("revdbc_detail_area"); if(!area)return;
     const off=r.dispOffset||0;
-    let html=`<div class="sectitle">거래 내역 · ${r.label} · 확장≥${r.expandK} 재접촉=${r.retestK} RSI갭=${r.rsiGap} SL=${r.slK} TP=${r.tpK} · 시각=트뷰 KST 기준(서버+${off}h, 표시전용)</div>
+    let html=`<div class="sectitle">거래 내역 · ${r.label} · 확장≥${r.expandK} 재접촉=${r.retestK} RSI갭=${r.rsiGap} 리셋=${r.rsiResetLevel}/${r.rsiResetGap} 거리≤${r.maxDivBars}봉 SL=${r.slK} TP=${r.tpK} · 시각=트뷰 KST 기준(서버+${off}h, 표시전용)</div>
     <div class="ctable-wrap"><table class="ctable"><thead><tr>
       <th><div class="th-main">seed DB 시간</div></th>
       <th><div class="th-main">신호 시간</div></th>
@@ -3546,6 +3572,7 @@ function drawRSI(rCurve,holdCurve,log){
       <th><div class="th-main">청산가</div></th><th><div class="th-main">결과</div></th><th><div class="th-main">수익률</div></th>
       <th><div class="th-main">pivotLow</div></th>
       <th><div class="th-main">seed RSI</div></th><th><div class="th-main">min RSI</div></th><th><div class="th-main">signal RSI</div></th><th><div class="th-main">RSI갭</div></th>
+      <th><div class="th-main">몸통/봉</div><div class="th-sub">×TR</div></th>
     </tr></thead><tbody>`;
     for(const t of r.trades){
       const res=t.exitReason==="TP"?'<span class="pos">익절</span>':t.exitReason==="SL"?'<span class="neg">손절</span>':'<span class="dimv">만료</span>';
@@ -3559,6 +3586,7 @@ function drawRSI(rCurve,holdCurve,log){
         <td class="num mono">${t.pivotLow.toFixed(2)}</td>
         <td class="num mono">${t.seedRsi!=null?t.seedRsi.toFixed(1):"-"}</td><td class="num mono">${t.minRsi!=null?t.minRsi.toFixed(1):"-"}</td><td class="num mono">${t.signalRsi!=null?t.signalRsi.toFixed(1):"-"}</td>
         <td class="num pos">${t.rsiGap!=null?t.rsiGap.toFixed(1):"-"}</td>
+        <td class="num mono">${t.bodyTR!=null?t.bodyTR.toFixed(2):"-"} / ${t.rangeTR!=null?t.rangeTR.toFixed(2):"-"}</td>
       </tr>`;
     }
     html+=`</tbody></table></div>`;

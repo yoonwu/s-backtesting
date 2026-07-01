@@ -2956,7 +2956,7 @@ function drawRSI(rCurve,holdCurve,log){
       const expandKs=parseList(el("revdb_expand").value,false,0);
       const contractKs=parseList(el("revdb_contract").value,false,0);
       const dbWin=Math.max(2,+el("revdb_dbwin").value||50);
-      const touchMode=(el("revdb_touch").dataset.cur||"body");
+      const touchMode=(el("revdb_touch").dataset.cur||"wick");
       const cooldown=Math.max(0,+el("revdb_cool").value||0);
       const rsiReq=(el("revdb_rsireq").dataset.cur||"off")==="req";
       const slKs=parseList(el("revdb_sl").value,false,0);
@@ -3268,7 +3268,7 @@ function drawRSI(rCurve,holdCurve,log){
     if(!turnedUp)return null;
 
     const bodyLow=Math.min(b.o,b.c), bodyHigh=Math.max(b.o,b.c);
-    const touchMode=opts.bb44TouchMode||"body";
+    const touchMode=opts.bb44TouchMode||"wick";
     const bodyTouched=bodyLow<=band && bodyHigh>=band && b.c>=band;
     const wickTouched=b.l<=band && b.h>=band && b.c>=band;
     const touched=touchMode==="wick"?wickTouched:bodyTouched;
@@ -3472,7 +3472,7 @@ function drawRSI(rCurve,holdCurve,log){
       const rsiGaps=parseList(val("revdbc_rsi_gap","3,5,8"),false,0);
       const pivotRetestKs=parseList(val("revdbc_bandk","0.5,1.0"),false,0);
       const bb44SlopeKs=parseList(val("revdbc_bb44_slope","0,0.1"),false,0);
-      const bb44TouchMode=cur("revdbc_touch","body");
+      const bb44TouchMode=cur("revdbc_touch","wick");
       const bb44Lookback=Math.max(1,+val("revdbc_bb44_look","4")||4);
       const bodyKs=parseList(val("revdbc_bodyk","1.0,1.3"),false,0);
       const rsiConfirm=cur("revdbc_rsi_confirm","turn");

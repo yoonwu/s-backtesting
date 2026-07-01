@@ -1,0 +1,23 @@
+; ============================================================
+; DoubleBB_EA 프리셋 — ① 나스닥 단기롱 (US100.x M5)
+; 차트: US100.x · M5 · 헤징계좌 · 알고리즘 트레이딩 ON
+; 무비용 성과: +52% MDD-4.6% MAR11.1 PO1.40 WR55%
+; 로드: EA 속성 → 입력 탭 → [로드] → 이 파일. 랏만 자금 맞게.
+; ============================================================
+InpDir=0
+InpEntryMode=1
+InpSplitCount=3
+InpTPMode=0
+InpSL_x=1.5
+InpTP_x=3.0
+InpMAPeriod=120
+InpUseConfirm=false
+InpConfirmWin=5
+InpExpiryBars=50
+InpLot1=0.01
+InpLot2=0.01
+InpLot3=0.01
+InpLot4=0.01
+InpMagic=990001
+InpMaxSpreadPts=0
+InpComment=DBB-US100-M5

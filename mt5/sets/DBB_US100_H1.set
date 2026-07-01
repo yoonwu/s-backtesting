@@ -1,0 +1,23 @@
+; ============================================================
+; DoubleBB_EA 프리셋 — ⑤ 나스닥 장기롱 (US100.x H1)
+; 차트: US100.x · H1 · 헤징계좌 · 알고리즘 트레이딩 ON
+; 무비용 성과: +79% MDD-5.0% MAR15.7 PO3.45 (비용 면역, 큰 비중 가능)
+; 컨펌 3봉 사용. 로드: EA 속성 → 입력 탭 → [로드] → 이 파일.
+; ============================================================
+InpDir=0
+InpEntryMode=0
+InpSplitCount=3
+InpTPMode=0
+InpSL_x=1.0
+InpTP_x=3.0
+InpMAPeriod=0
+InpUseConfirm=true
+InpConfirmWin=3
+InpExpiryBars=50
+InpLot1=0.01
+InpLot2=0.01
+InpLot3=0.01
+InpLot4=0.01
+InpMagic=990005
+InpMaxSpreadPts=0
+InpComment=DBB-US100-H1

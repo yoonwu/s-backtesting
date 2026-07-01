@@ -1,0 +1,24 @@
+; ============================================================
+; DoubleBB_EA 프리셋 — ④ 골드 단기숏 (XAUUSD M5)
+; 차트: XAUUSD · M5 · 헤징계좌 · 알고리즘 트레이딩 ON
+; 무비용 성과: +47% MDD-3.3% MAR14.1 PO2.91 (승률34%, 비용 최취약)
+; ⚠ 왕복 스프레드 작은 브로커·소액 필수. ⑦롱과 자연 헤지.
+; 로드: EA 속성 → 입력 탭 → [로드] → 이 파일. 랏만 자금 맞게.
+; ============================================================
+InpDir=1
+InpEntryMode=0
+InpSplitCount=4
+InpTPMode=1
+InpSL_x=0.5
+InpTP_x=3.0
+InpMAPeriod=200
+InpUseConfirm=false
+InpConfirmWin=5
+InpExpiryBars=50
+InpLot1=0.01
+InpLot2=0.01
+InpLot3=0.01
+InpLot4=0.01
+InpMagic=990004
+InpMaxSpreadPts=0
+InpComment=DBB-XAU-M5S

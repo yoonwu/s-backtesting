@@ -22,3 +22,4 @@ InpLot4=0.01
 InpMagic=990004
 InpMaxSpreadPts=0
 InpComment=DBB-XAU-M5S
+InpDebugSignals=true

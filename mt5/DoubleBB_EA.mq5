@@ -52,6 +52,7 @@ input double       InpLot4        = 0.01;          // 4차수 랏
 input long         InpMagic       = 990001;        // 매직넘버 (전략마다 고유값!)
 input int          InpMaxSpreadPts= 0;             // 최대 스프레드(포인트, 0=무시)
 input string       InpComment     = "DBB";         // 주문 코멘트
+input bool         InpDebugSignals= false;         // 신호판정 로그 출력
 
 //--- double BB 고정 파라미터
 #define BB1_PERIOD 4
@@ -280,28 +281,49 @@ void OnNewBar(const double &op[], const double &hi[], const double &lo[], const 
      }
 
    // ---- IDLE 상태에서만 새 신호 탐색 ----
+   if(g_state!=ST_IDLE || npos>0 || npend>0)
+     {
+      if(InpDebugSignals)
+         PrintFormat("DBB DEBUG skip | %s %s state=%d pos=%d pend=%d barsSince=%d",
+                     _Symbol, EnumToString((ENUM_TIMEFRAMES)_Period), (int)g_state, npos, npend, g_barsSince);
+     }
    if(g_state==ST_IDLE && npos==0 && npend==0)
      {
       // shift1 = 직전 닫힌 봉
       double u1=DoubleUpper(op,cl,1), u2=DoubleUpper(op,cl,2);
       double l1=DoubleLower(op,cl,1), l2=DoubleLower(op,cl,2);
       bool sig = isShort ? (cl[1]<l1 && cl[2]>=l2) : (cl[1]>u1 && cl[2]<=u2);
+      bool pass=true;
+      double ma=0;
+      if(InpMAPeriod>0)
+        {
+         ma=SMAval(cl,InpMAPeriod,1);
+         pass = isShort ? (cl[1]<ma) : (cl[1]>ma);
+        }
+      double TR=hi[1]-lo[1];
+      if(InpDebugSignals)
+        {
+         if(isShort)
+            PrintFormat("DBB DEBUG short | c1=%.5f l1=%.5f c2=%.5f l2=%.5f sig=%s ma%d=%.5f pass=%s TR=%.5f",
+                        cl[1],l1,cl[2],l2,(sig?"Y":"N"),InpMAPeriod,ma,(pass?"Y":"N"),TR);
+         else
+            PrintFormat("DBB DEBUG long | c1=%.5f u1=%.5f c2=%.5f u2=%.5f sig=%s ma%d=%.5f pass=%s TR=%.5f",
+                        cl[1],u1,cl[2],u2,(sig?"Y":"N"),InpMAPeriod,ma,(pass?"Y":"N"),TR);
+        }
       if(sig)
         {
          // 추세필터
-         bool pass=true;
-         if(InpMAPeriod>0)
-           {
-            double ma=SMAval(cl,InpMAPeriod,1);
-            pass = isShort ? (cl[1]<ma) : (cl[1]>ma);
-           }
-         double TR=hi[1]-lo[1];
          if(pass && TR>0)
            {
             g_brkH=hi[1]; g_brkL=lo[1]; g_brkTR=TR; g_brkClose=cl[1];
+            if(InpDebugSignals)
+               PrintFormat("DBB DEBUG signal accepted | H=%.5f L=%.5f C=%.5f TR=%.5f confirm=%s",
+                           g_brkH,g_brkL,g_brkClose,g_brkTR,(InpUseConfirm?"Y":"N"));
             if(InpUseConfirm){ g_state=ST_WAIT_CONFIRM; g_barsSince=0; }
             else             { PlaceEntryOrders(); }
            }
+         else if(InpDebugSignals)
+            PrintFormat("DBB DEBUG signal blocked | pass=%s TR=%.5f", (pass?"Y":"N"), TR);
         }
      }
   }

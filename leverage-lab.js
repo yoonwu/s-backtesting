@@ -2810,7 +2810,8 @@ function drawRSI(rCurve,holdCurve,log){
   }
   // 변곡더블비 (재정의):
   //  ① 볼밴 확장(찢어진) 상태의 하락DB: 종가<더블비하단 & 밴드폭 W≥expandK×평균W (투매성 하락 인정)
-  //  ② 이후 볼밴 수축 → ③ 4/4 하단이 캔들과 봉마감 재접촉: 저가≤4/4하단+meetK×TR & 종가≥4/4하단
+  //  ② 이후 볼밴 수축 → ③ 4/4 하단이 캔들과 실제 접촉(근처 금지): 몸통접촉(기본)=시가~종가 범위가
+  //     밴드를 포함 & 종가≥밴드 / 꼬리접촉=고가~저가 범위가 밴드를 포함 & 종가≥밴드
   //     & 4/4하단 상승(수축) & 접촉 밴드폭 W≤contractK×DB밴드폭 (추세하락=확장유지는 제외)
   //  ④ RSI higher-low: 접촉 RSI > DB RSI (변곡 확인)
   function detectSignals(bars,lower,upper,bb44Low,rsi,avgW,o){
@@ -2820,9 +2821,13 @@ function drawRSI(rCurve,holdCurve,log){
     for(let i=2;i<bars.length;i++){
       const band=bb44Low[i];
       if(band===null||bb44Low[i-1]===null||W[i]===null)continue;
-      // ③ 접촉: 캔들이 4/4 하단과 봉마감 만남 + 4/4 하단 상승(수축)
-      if(!(bars[i].l<=band+o.meetK*o.tr[i]))continue;     // 저가가 4/4 하단에 닿음
-      if(bars[i].c<band)continue;                          // 봉마감은 밴드 위(만남/거부)
+      // ③ 접촉: 캔들이 4/4 하단과 실제 접촉(근처 아님) + 4/4 하단 상승(수축)
+      const b=bars[i];
+      const bodyLow=Math.min(b.o,b.c), bodyHigh=Math.max(b.o,b.c);
+      const bodyTouched=bodyLow<=band && bodyHigh>=band && b.c>=band;
+      const wickTouched=b.l<=band && b.h>=band && b.c>=band;
+      const touched=o.touchMode==="wick"?wickTouched:bodyTouched;
+      if(!touched)continue;
       if(!(band>bb44Low[i-1]))continue;                    // 4/4 하단 상승 = 수축
       if(o.maArr&&(o.maArr[i]===null||bars[i].c>=o.maArr[i]))continue; // 하락맥락(옵션)
       // ① 직전 윈도우의 '확장 하락DB' + ③ 그 DB 대비 현재 수축
@@ -2951,7 +2956,7 @@ function drawRSI(rCurve,holdCurve,log){
       const expandKs=parseList(el("revdb_expand").value,false,0);
       const contractKs=parseList(el("revdb_contract").value,false,0);
       const dbWin=Math.max(2,+el("revdb_dbwin").value||50);
-      const meetK=Math.max(0,+el("revdb_meet").value||0);
+      const touchMode=(el("revdb_touch").dataset.cur||"body");
       const cooldown=Math.max(0,+el("revdb_cool").value||0);
       const rsiReq=(el("revdb_rsireq").dataset.cur||"off")==="req";
       const slKs=parseList(el("revdb_sl").value,false,0);
@@ -2975,7 +2980,7 @@ function drawRSI(rCurve,holdCurve,log){
         const maArr=maFilter>0?calcSMA(bars.map(b=>b.c),maFilter):null;
         for(const expandK of expandKs){
           for(const contractK of contractKs){
-            const sigs=detectSignals(bars,lower,upper,bb44Low,rsi14,avgW,{expandK,contractK,dbWin,meetK,cooldown,entryMode,maArr,rsiReq,tr});
+            const sigs=detectSignals(bars,lower,upper,bb44Low,rsi14,avgW,{expandK,contractK,dbWin,touchMode,cooldown,entryMode,maArr,rsiReq,tr});
             for(const slK of slKs){
               for(const tpK of tpKs){
                 combo++;
@@ -2989,7 +2994,7 @@ function drawRSI(rCurve,holdCurve,log){
         }
       }
       RESULTS=rows;
-      statusMsg(`완료 — 유효 ${rows.length}개 / 전체 ${total}개 조합 · ${rsiReq?"RSI필수":"RSI무시"} · DB윈도우 ${dbWin}`);
+      statusMsg(`완료 — 유효 ${rows.length}개 / 전체 ${total}개 조합 · 접촉=${touchMode==="wick"?"꼬리":"몸통"} · ${rsiReq?"RSI필수":"RSI무시"} · DB윈도우 ${dbWin}`);
       render();
     }catch(e){errMsg(e.message);statusMsg("");}
     finally{btn.disabled=false;}
@@ -3126,6 +3131,10 @@ function drawRSI(rCurve,holdCurve,log){
       el("revdb_rsireq").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
       el("revdb_rsireq").dataset.cur=b.dataset.r;
     });
+    el("revdb_touch").querySelectorAll("button").forEach(b=>b.onclick=()=>{
+      el("revdb_touch").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+      el("revdb_touch").dataset.cur=b.dataset.t;
+    });
     el("revdb_file").onchange=async e=>{
       const f=e.target.files[0]; if(!f)return;
       try{RAWCACHE.__upload__=parseMT5local(await f.text());RAWCACHE.__uploadName__=f.name.replace(/\.csv$/i,"");}
@@ -3241,8 +3250,10 @@ function drawRSI(rCurve,holdCurve,log){
     }
     return out;
   }
+  // 하락 4/4 lower band는 "근처"가 아니라 실제 접촉이어야 신호. 기본=몸통 접촉.
   function bb44TurnMeetOk(bars,bb44Lower,tr,i,opts){
     if(!bb44Lower||bb44Lower[i]===null)return null;
+    const b=bars[i];
     const band=bb44Lower[i], curTR=tr[i]||0;
     const start=Math.max(1,i-opts.bb44Lookback);
     let minBand=Infinity,minIdx=-1;
@@ -3255,11 +3266,17 @@ function drawRSI(rCurve,holdCurve,log){
     const slope=band-prev;
     const turnedUp=band>minBand&&slope>=curTR*opts.bb44SlopeK;
     if(!turnedUp)return null;
-    const meet=bars[i].l<=band+curTR*opts.bb44MeetK&&bars[i].c>=band-curTR*opts.bb44MeetK;
-    if(!meet)return null;
-    const bodyOk=Math.abs(bars[i].c-bars[i].o)<=curTR*opts.bodyK;
+
+    const bodyLow=Math.min(b.o,b.c), bodyHigh=Math.max(b.o,b.c);
+    const touchMode=opts.bb44TouchMode||"body";
+    const bodyTouched=bodyLow<=band && bodyHigh>=band && b.c>=band;
+    const wickTouched=b.l<=band && b.h>=band && b.c>=band;
+    const touched=touchMode==="wick"?wickTouched:bodyTouched;
+    if(!touched)return null;
+
+    const bodyOk=Math.abs(b.c-b.o)<=curTR*opts.bodyK;
     if(!bodyOk)return null;
-    return {band,slope};
+    return {band,slope,touchMode,bodyTouched,wickTouched};
   }
   function detectExpandedDbReversalSignals(bars,lower,bb44Lower,widthRatio,tr,rsi,rsiMa,opts){
     const sigs=[];
@@ -3455,17 +3472,17 @@ function drawRSI(rCurve,holdCurve,log){
       const rsiGaps=parseList(val("revdbc_rsi_gap","3,5,8"),false,0);
       const pivotRetestKs=parseList(val("revdbc_bandk","0.5,1.0"),false,0);
       const bb44SlopeKs=parseList(val("revdbc_bb44_slope","0,0.1"),false,0);
-      const bb44MeetKs=parseList(val("revdbc_bb44_meet","0.33,0.5"),false,0);
+      const bb44TouchMode=cur("revdbc_touch","body");
       const bb44Lookback=Math.max(1,+val("revdbc_bb44_look","4")||4);
       const bodyKs=parseList(val("revdbc_bodyk","1.0,1.3"),false,0);
       const rsiConfirm=cur("revdbc_rsi_confirm","turn");
       if(!lowBreakKs.length||!boxMinBarsList.length||!slKs.length||!tpKs.length)
         throw new Error("파라미터 값을 하나 이상 입력하세요");
-      if(!expandKs.length||!contractKs.length||!squeezeRatios.length||!rsiFloors.length||!rsiGaps.length||!pivotRetestKs.length||!bb44SlopeKs.length||!bb44MeetKs.length||!bodyKs.length)
+      if(!expandKs.length||!contractKs.length||!squeezeRatios.length||!rsiFloors.length||!rsiGaps.length||!pivotRetestKs.length||!bb44SlopeKs.length||!bodyKs.length)
         throw new Error("확장DB/수축/RSI 파라미터 값을 하나 이상 입력하세요");
       const sources=await loadSources();
       const rows=[];
-      const extra=expandKs.length*contractKs.length*squeezeRatios.length*rsiFloors.length*rsiGaps.length*pivotRetestKs.length*bb44SlopeKs.length*bb44MeetKs.length*bodyKs.length;
+      const extra=expandKs.length*contractKs.length*squeezeRatios.length*rsiFloors.length*rsiGaps.length*pivotRetestKs.length*bb44SlopeKs.length*bodyKs.length;
       const total=sources.length*lowBreakKs.length*boxMinBarsList.length*slKs.length*tpKs.length*extra;
       const maxCombos=250000;
       if(total>maxCombos){
@@ -3492,13 +3509,11 @@ function drawRSI(rCurve,holdCurve,log){
                     for(const rsiGap of rsiGaps){
                       for(const pivotRetestK of pivotRetestKs){
                         for(const bb44SlopeK of bb44SlopeKs){
-                          for(const bb44MeetK of bb44MeetKs){
-                            for(const bodyK of bodyKs){
-                              signalSets.push({
-                                sigs:detectExpandedDbReversalSignals(bars,lower,bb44Lower,widthRatio,tr,rsiArr,rsiMa,{maArr,expandK,contractK,squeezeRatio,minWaitBars,lowBreakK:lbK,pivotRetestK,boxMinBars:bmb,maxWaitBars:maxWait,entryMode,trMode,rsiFloor,rsiGap,bb44Lookback,bb44SlopeK,bb44MeetK,bodyK,rsiConfirm}),
-                                expandK,contractK,squeezeRatio,rsiFloor,rsiGap,pivotRetestK,bb44SlopeK,bb44MeetK,bodyK
-                              });
-                            }
+                          for(const bodyK of bodyKs){
+                            signalSets.push({
+                              sigs:detectExpandedDbReversalSignals(bars,lower,bb44Lower,widthRatio,tr,rsiArr,rsiMa,{maArr,expandK,contractK,squeezeRatio,minWaitBars,lowBreakK:lbK,pivotRetestK,boxMinBars:bmb,maxWaitBars:maxWait,entryMode,trMode,rsiFloor,rsiGap,bb44Lookback,bb44SlopeK,bb44TouchMode,bodyK,rsiConfirm}),
+                              expandK,contractK,squeezeRatio,rsiFloor,rsiGap,pivotRetestK,bb44SlopeK,bodyK
+                            });
                           }
                         }
                       }
@@ -3514,7 +3529,7 @@ function drawRSI(rCurve,holdCurve,log){
                   if(combo%200===0){statusMsg(`${combo}/${total} 조합…`);await new Promise(r=>setTimeout(r,0));}
                   const res=backtest(bars,ss.sigs,slK,tpK,expiryBars);
                   if(res.cnt<minTr)continue;
-                  rows.push({label:src.label,mode,expLookback,expandK:ss.expandK,contractK:ss.contractK,squeezeRatio:ss.squeezeRatio,lbK,bmb,minWaitBars,rsiFloor:ss.rsiFloor,rsiGap:ss.rsiGap,pivotRetestK:ss.pivotRetestK,bb44SlopeK:ss.bb44SlopeK,bb44MeetK:ss.bb44MeetK,bodyK:ss.bodyK,rsiConfirm,trMode,entryMode,slK,tpK,...res});
+                  rows.push({label:src.label,mode,expLookback,expandK:ss.expandK,contractK:ss.contractK,squeezeRatio:ss.squeezeRatio,lbK,bmb,minWaitBars,rsiFloor:ss.rsiFloor,rsiGap:ss.rsiGap,pivotRetestK:ss.pivotRetestK,bb44SlopeK:ss.bb44SlopeK,bb44TouchMode,bodyK:ss.bodyK,rsiConfirm,trMode,entryMode,slK,tpK,...res});
                 }
               }
             }
@@ -3548,10 +3563,10 @@ function drawRSI(rCurve,holdCurve,log){
     const view=sorted.slice(0,CAP);
     const capNote=sorted.length>CAP?` <span class="dimv">· 상위 ${CAP}개만 표시 (전체 ${sorted.length.toLocaleString()}개)</span>`:"";
     function hdr(k,main,sub=""){return`<th class="db-sort revdbc-s" data-k="${k}" style="cursor:pointer"><div class="th-main">${main}${arw(k)}</div>${sub?`<div class="th-sub">${sub}</div>`:""}</th>`;}
-    let html=`<div class="db-best">최상위: <b>${best.label}</b> · 확장DB→수축→하락4/4 만남 · 확장≥${best.expandK} · 수축≤${best.contractK} · 스퀴즈≤${best.squeezeRatio} · 저점K=${best.lbK} · 재터치=${best.pivotRetestK} · RSI갭=${best.rsiGap} · 만남=${best.bb44MeetK} · SL=${best.slK} · TP=${best.tpK} → <span class="pos">${pctStr(best.totalRet)}</span> · MDD ${pctStr(best.mdd)} · MAR ${pf2(best.mar)}${capNote}</div>`;
+    let html=`<div class="db-best">최상위: <b>${best.label}</b> · 확장DB→수축→하락4/4 접촉 · 확장≥${best.expandK} · 수축≤${best.contractK} · 스퀴즈≤${best.squeezeRatio} · 저점K=${best.lbK} · 재터치=${best.pivotRetestK} · RSI갭=${best.rsiGap} · 접촉=${best.bb44TouchMode==="wick"?"꼬리":"몸통"} · SL=${best.slK} · TP=${best.tpK} → <span class="pos">${pctStr(best.totalRet)}</span> · MDD ${pctStr(best.mdd)} · MAR ${pf2(best.mar)}${capNote}</div>`;
     html+=`<div class="ctable-wrap"><table class="ctable"><thead><tr>
       <th><div class="th-main">데이터</div></th>
-      ${hdr("expandK","확장")}${hdr("contractK","수축")}${hdr("squeezeRatio","스퀴즈")}${hdr("lbK","저점K")}${hdr("pivotRetestK","재터치")}${hdr("bmb","횡보")}${hdr("rsiGap","RSI갭")}${hdr("bb44SlopeK","44턴")}${hdr("bb44MeetK","만남")}
+      ${hdr("expandK","확장")}${hdr("contractK","수축")}${hdr("squeezeRatio","스퀴즈")}${hdr("lbK","저점K")}${hdr("pivotRetestK","재터치")}${hdr("bmb","횡보")}${hdr("rsiGap","RSI갭")}${hdr("bb44SlopeK","44턴")}<th><div class="th-main">접촉</div></th>
       ${hdr("slK","SL×TR")}${hdr("tpK","TP×TR")}${hdr("cnt","거래수")}${hdr("winRate","승률")}${hdr("pf","PF")}${hdr("payoff","PO")}
       ${hdr("totalRet","총수익률")}${hdr("mdd","MDD")}${hdr("mar","MAR")}${hdr("maxLossStreak","연패")}${hdr("avgHoldBars","보유봉")}
       <th><div class="th-main">내역</div></th>
@@ -3561,7 +3576,7 @@ function drawRSI(rCurve,holdCurve,log){
         <td class="name mono" style="font-size:12px">${r.label}</td>
         <td class="num">${r.expandK}</td><td class="num">${r.contractK}</td><td class="num">${r.squeezeRatio}</td>
         <td class="num">${r.lbK}</td><td class="num">${r.pivotRetestK}</td><td class="num">${r.bmb}</td>
-        <td class="num">${r.rsiGap}</td><td class="num">${r.bb44SlopeK}</td><td class="num">${r.bb44MeetK}</td>
+        <td class="num">${r.rsiGap}</td><td class="num">${r.bb44SlopeK}</td><td class="num" style="font-size:11px">${r.bb44TouchMode==="wick"?"꼬리":"몸통"}</td>
         <td class="num">${r.slK}</td><td class="num">${r.tpK}</td>
         <td class="num">${r.cnt}</td>
         <td class="num ${numCls(r.winRate,0.55,0)}">${(r.winRate*100).toFixed(0)}%</td>
@@ -3588,7 +3603,7 @@ function drawRSI(rCurve,holdCurve,log){
     const area=el("revdbc_detail_area"); if(!area)return;
     const rsiO=r.trades.filter(t=>t.rsiDiv===true).length;
     const rsiAll=r.trades.filter(t=>t.rsiDiv!==null).length;
-    let html=`<div class="sectitle">거래 내역 · ${r.label} · 확장DB→수축→하락4/4 만남 · 확장≥${r.expandK} 수축≤${r.contractK} 스퀴즈≤${r.squeezeRatio} 저점K=${r.lbK} 재터치=${r.pivotRetestK} RSI갭=${r.rsiGap} 만남=${r.bb44MeetK} SL=${r.slK} TP=${r.tpK} · RSI다이버전스 ${rsiO}/${rsiAll}건</div>
+    let html=`<div class="sectitle">거래 내역 · ${r.label} · 확장DB→수축→하락4/4 접촉 · 확장≥${r.expandK} 수축≤${r.contractK} 스퀴즈≤${r.squeezeRatio} 저점K=${r.lbK} 재터치=${r.pivotRetestK} RSI갭=${r.rsiGap} 접촉=${r.bb44TouchMode==="wick"?"꼬리":"몸통"} SL=${r.slK} TP=${r.tpK} · RSI다이버전스 ${rsiO}/${rsiAll}건</div>
     <div class="ctable-wrap"><table class="ctable"><thead><tr>
       <th><div class="th-main">DB날짜</div></th><th><div class="th-main">신호날짜</div></th>
       <th><div class="th-main">진입가</div></th><th><div class="th-main">청산가</div></th>
@@ -3626,11 +3641,11 @@ function drawRSI(rCurve,holdCurve,log){
     if(!el("revdbc_run"))return;
     renderCsvChecks("revdbc");
     el("revdbc_src").querySelectorAll("button").forEach(b=>b.onclick=()=>setSrcMode(b.dataset.s));
-    ["revdbc_rsi_confirm","revdbc_trmode"].forEach(id=>{
+    ["revdbc_rsi_confirm","revdbc_trmode","revdbc_touch"].forEach(id=>{
       const box=el(id); if(!box)return;
       box.querySelectorAll("button").forEach(b=>b.onclick=()=>{
         box.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
-        box.dataset.cur=b.dataset.m||b.dataset.c;
+        box.dataset.cur=b.dataset.m||b.dataset.c||b.dataset.t;
       });
     });
     el("revdbc_entry").querySelectorAll("button").forEach(b=>b.onclick=()=>{

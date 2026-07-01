@@ -760,15 +760,16 @@
           </div>
         </div>
 
-        <div class="row2">
-          <div class="field"><label>② DB→접촉 최대봉</label>
-            <input id="revdb_dbwin" class="mono" type="number" value="50" min="2" step="1">
-            <div class="hint">하락DB 이후 이 봉 안에서 4/4 재접촉을 찾음.</div>
+        <div class="field"><label>② DB→접촉 최대봉</label>
+          <input id="revdb_dbwin" class="mono" type="number" value="50" min="2" step="1">
+          <div class="hint">하락DB 이후 이 봉 안에서 4/4 재접촉을 찾음.</div>
+        </div>
+
+        <div class="field"><label>4/4 접촉 기준</label>
+          <div class="subtabs" id="revdb_touch" data-cur="body">
+            <button data-t="body" class="on">몸통 접촉</button><button data-t="wick">꼬리 접촉</button>
           </div>
-          <div class="field"><label>접촉 여유 ×TR</label>
-            <input id="revdb_meet" class="mono" value="0">
-            <div class="hint">캔들 저가가 4/4 하단 +여유×TR 안이면 접촉 인정(0=정확히 닿음). 봉마감은 밴드 위.</div>
-          </div>
+          <div class="hint">4/4 하단은 <b>근처면 안 되고 실제로 닿아야</b> 신호. <b>몸통 접촉</b>=캔들 몸통이 밴드를 포함 & 종가≥밴드(기본, 엄격). <b>꼬리 접촉</b>=고가~저가가 밴드를 포함 & 종가≥밴드.</div>
         </div>
 
         <div class="field"><label>RSI higher-low 필터</label>
@@ -910,9 +911,11 @@
             <input id="revdbc_bb44_slope" class="mono" value="0">
             <div class="hint">하락 쪽 4/4 밴드가 저점 이후 가격 쪽으로 꺾여 올라오는 최소 기울기.</div>
           </div>
-          <div class="field"><label>캔들-하락 4/4 만남 여유 ×TR (콤마)</label>
-            <input id="revdbc_bb44_meet" class="mono" value="0.33,0.5">
-            <div class="hint">봉마감 기준 캔들이 하락 4/4 밴드 근처에서 끝나야 합니다.</div>
+          <div class="field"><label>4/4 접촉 기준</label>
+            <div class="subtabs" id="revdbc_touch" data-cur="body">
+              <button data-t="body" class="on">몸통 접촉</button><button data-t="wick">꼬리 접촉</button>
+            </div>
+            <div class="hint">하락 4/4 lower band는 <b>근처면 안 되고 실제로 닿아야</b> 신호. <b>몸통 접촉</b>=캔들 몸통이 밴드를 포함 & 종가≥밴드. <b>꼬리 접촉</b>=고가~저가가 밴드를 포함 & 종가≥밴드. 기본은 몸통(더 엄격).</div>
           </div>
         </div>
 
@@ -1175,6 +1178,6 @@
 
 </div>
 
-<script src="leverage-lab.js?v=20260630m"></script>
+<script src="leverage-lab.js?v=20260630n"></script>
 </body>
 </html>

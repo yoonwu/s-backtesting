@@ -3286,11 +3286,65 @@ function drawRSI(rCurve,holdCurve,log){
     }
     return signals;
   }
-  // 손절/익절 백테스트 없음(탐색모드) — 신호 종가 대비 N봉 뒤 종가 참고 수익률만.
-  function forwardReturn(bars,signalIdx,n){
-    const end=signalIdx+n;
-    if(end>=bars.length)return null;
-    return (bars[end].c-bars[signalIdx].c)/bars[signalIdx].c;
+  // SL/TP 기준 TR: signal=신호봉 TR, seed=seed DB봉 TR, setupMax=seed~신호 사이 최대TR(기본).
+  function getSetupTR(tr,seedIdx,signalIdx,mode){
+    if(mode==="seed")return tr[seedIdx]||tr[signalIdx]||0;
+    if(mode==="signal")return tr[signalIdx]||tr[seedIdx]||0;
+    let mx=0;
+    for(let i=seedIdx;i<=signalIdx;i++)mx=Math.max(mx,tr[i]||0);
+    return mx||tr[signalIdx]||tr[seedIdx]||0;
+  }
+  // 재접촉 신호 → 롱 진입 → SL=pivotLow−slK×TR, TP=진입가+tpK×TR. 동시도달 SL우선, 만료시 종가청산.
+  function backtestSimpleReversalDbLong(bars,signals,tr,opts){
+    const {slK,tpK,expiryBars,trMode,entryMode}=opts;
+    const trades=[];
+    let equity=1,peak=1,maxDD=0,wins=0,sumWin=0,sumLoss=0,activeUntil=-1;
+    for(const sig of signals){
+      const entryIdx=entryMode==="nextOpen"?sig.signalIdx+1:sig.signalIdx;
+      if(entryIdx>=bars.length)continue;
+      if(entryIdx<=activeUntil)continue;
+      const entryPrice=entryMode==="nextOpen"?bars[entryIdx].o:bars[sig.signalIdx].c;
+      const riskTR=getSetupTR(tr,sig.seedIdx,sig.signalIdx,trMode);
+      if(!(riskTR>0))continue;
+      const sl=sig.pivotLow-slK*riskTR;
+      const tp=entryPrice+tpK*riskTR;
+      const expireIdx=Math.min(bars.length-1,entryIdx+expiryBars);
+      let exitIdx=expireIdx, exitPrice=bars[expireIdx].c, exitReason="EXPIRE";
+      for(let i=entryIdx+1;i<=expireIdx;i++){
+        const b=bars[i];
+        if(b.l<=sl){exitIdx=i;exitPrice=sl;exitReason="SL";break;}
+        if(b.h>=tp){exitIdx=i;exitPrice=tp;exitReason="TP";break;}
+      }
+      const ret=(exitPrice-entryPrice)/entryPrice;
+      equity*=1+ret; if(equity>peak)peak=equity;
+      const dd=equity/peak-1; if(dd<maxDD)maxDD=dd;
+      if(ret>0){wins++;sumWin+=ret;}else{sumLoss+=Math.abs(ret);}
+      activeUntil=exitIdx;
+      trades.push({...sig,entryIdx,entryPrice,exitIdx,exitPrice,exitReason,sl,tp,riskTR,ret,won:exitReason==="TP"});
+    }
+    const cnt=trades.length;
+    const losses=cnt-wins;
+    const avgWin=wins?sumWin/wins:0, avgLoss=losses?sumLoss/losses:0;
+    const payoff=avgLoss>0?avgWin/avgLoss:(avgWin>0?Infinity:0);
+    const totalRet=equity-1;
+    const mar=maxDD<0?totalRet/Math.abs(maxDD):(totalRet>0?Infinity:0);
+    return{
+      trades,cnt,winRate:cnt?wins/cnt:0,payoff,totalRet,mdd:maxDD,mar,
+      tpC:trades.filter(t=>t.exitReason==="TP").length,
+      slC:trades.filter(t=>t.exitReason==="SL").length,
+      eodC:trades.filter(t=>t.exitReason==="EXPIRE").length
+    };
+  }
+  // MT5 서버시간 → TradingView 한국시간(KST) 표시 전용. 계산에는 절대 쓰지 않음(표시에만 적용).
+  function formatDisplayTime(rawDate,offsetHours){
+    if(!rawDate)return "-";
+    const normalized=String(rawDate).replace(" ","T");
+    const d=new Date(normalized);
+    if(Number.isNaN(d.getTime()))return String(rawDate);
+    d.setHours(d.getHours()+(offsetHours||0));
+    const yyyy=d.getFullYear(), mm=String(d.getMonth()+1).padStart(2,"0"), dd=String(d.getDate()).padStart(2,"0");
+    const hh=String(d.getHours()).padStart(2,"0"), mi=String(d.getMinutes()).padStart(2,"0");
+    return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
   }
   function parseMT5local(text){
     const lines=text.split(/\r?\n/),out=[];
@@ -3368,15 +3422,20 @@ function drawRSI(rCurve,holdCurve,log){
       const rsiPeriod=Math.max(2,+val("revdbc_rsi_period","14")||14);
       const rsiGaps=parseList(val("revdbc_rsi_gap","3"),false,0);
       const touchMode=cur("revdbc_touch","wick");
-      const fwdN=Math.max(1,+val("revdbc_fwdn","20")||20);
-      if(!expandKs.length||!retestKs.length||!rsiGaps.length)
-        throw new Error("확장DB배수·재접촉여유·RSI갭 값을 하나 이상 입력하세요");
+      const entryMode=cur("revdbc_entry","nextOpen");
+      const trMode=cur("revdbc_trmode","setupMax");
+      const slKs=parseList(el("revdbc_sl").value,false,0);
+      const tpKs=parseList(el("revdbc_tp").value,false,0);
+      const expiryBars=Math.max(1,+el("revdbc_expiry").value||50);
+      const dispOffset=+el("revdbc_dispoff").value||0;
+      if(!expandKs.length||!retestKs.length||!rsiGaps.length||!slKs.length||!tpKs.length)
+        throw new Error("확장DB배수·재접촉여유·RSI갭·손절·익절 값을 하나 이상 입력하세요");
       const sources=await loadSources();
       const rows=[];
-      const total=sources.length*expandKs.length*retestKs.length*rsiGaps.length;
-      const maxCombos=5000;
+      const total=sources.length*expandKs.length*retestKs.length*rsiGaps.length*slKs.length*tpKs.length;
+      const maxCombos=20000;
       if(total>maxCombos)
-        throw new Error(`조합이 ${total.toLocaleString()}개입니다. CSV 선택이나 콤마 값을 줄여서 ${maxCombos}개 이하로 맞춰주세요.`);
+        throw new Error(`조합이 ${total.toLocaleString()}개입니다. CSV 선택이나 콤마 값을 줄여서 ${maxCombos.toLocaleString()}개 이하로 맞춰주세요.`);
       let combo=0;
       for(const src of sources){
         const bars=src.bars;
@@ -3389,25 +3448,22 @@ function drawRSI(rCurve,holdCurve,log){
         for(const expandK of expandKs){
           for(const retestK of retestKs){
             for(const rsiGap of rsiGaps){
-              combo++;
-              if(combo%20===0){statusMsg(`${combo}/${total} 조합…`);await new Promise(r=>setTimeout(r,0));}
               const sigs=detectSimpleReversalDbLong(bars,lower,bb44Lower,widthRatio,tr,rsiArr,{expandK,maxWaitBars:maxWait,retestK,rsiGap,touchMode});
-              for(const s of sigs){
-                rows.push({
-                  label:src.label,expandK,retestK,rsiGap,touchMode,
-                  seedDate:s.seedDate,signalDate:s.signalDate,touchType:s.touchType,
-                  seedLow:s.seedLow,pivotLow:s.pivotLow,signalLow:s.signalLow,
-                  seedRsi:s.seedRsi,minRsi:s.minRsi,signalRsi:s.signalRsi,rsiGapActual:s.rsiGap,
-                  seedWidth:s.seedWidth,signalWidth:s.signalWidth,
-                  fwdRet:forwardReturn(bars,s.signalIdx,fwdN)
-                });
+              for(const slK of slKs){
+                for(const tpK of tpKs){
+                  combo++;
+                  if(combo%20===0){statusMsg(`${combo}/${total} 조합…`);await new Promise(r=>setTimeout(r,0));}
+                  const res=backtestSimpleReversalDbLong(bars,sigs,tr,{slK,tpK,expiryBars,trMode,entryMode});
+                  if(res.cnt<1)continue;
+                  rows.push({label:src.label,expandK,retestK,rsiGap,slK,tpK,dispOffset,...res});
+                }
               }
             }
           }
         }
       }
       RESULTS=rows;
-      statusMsg(`완료 — 신호 ${rows.length}개 검출 / 전체 ${total}개 조합 · 접촉=${touchMode==="wick"?"꼬리":"몸통"}`);
+      statusMsg(`완료 — 유효 ${rows.length}개 / 전체 ${total}개 조합 · 접촉=${touchMode==="wick"?"꼬리":"몸통"} · 표시시간 +${dispOffset}h(계산엔 미적용)`);
       render();
     }catch(e){errMsg(e.message);statusMsg("");}
     finally{btn.disabled=false;}
@@ -3417,10 +3473,11 @@ function drawRSI(rCurve,holdCurve,log){
   function arw(k){return SORT.key===k?(SORT.dir<0?" ▾":" ▴"):"";}
   function numCls(v,good,bad){return v>=good?"hl-good":v<=bad?"hl-bad":"";}
   // 탐색모드: 한 행 = 하나의 검출된 신호(성과표 아님). 정렬해서 RSI다이버 폭·수익참고값으로 직접 확인.
+  // 결과표: 데이터/확장/재접촉/RSI갭/손절/익절/거래수/승률/손익비/총수익/최대낙폭/MAR/청산TP·SL·E + 내역.
   function render(){
     const con=el("revdbc_results");
     if(!RESULTS.length){
-      con.innerHTML=`<div class="placeholder"><div class="big">신호가 검출되지 않았습니다</div><div class="mono">확장DB배수·재접촉여유·RSI갭을 낮추거나 접촉기준을 바꿔보세요</div></div>`;
+      con.innerHTML=`<div class="placeholder"><div class="big">거래가 없습니다</div><div class="mono">확장DB배수·재접촉여유·RSI갭을 낮추거나 만료봉을 늘려보세요</div></div>`;
       return;
     }
     const key=SORT.key, dir=SORT.dir;
@@ -3429,40 +3486,73 @@ function drawRSI(rCurve,holdCurve,log){
       const vb=isFinite(b[key])?b[key]:1e9*Math.sign(dir);
       return(vb-va)*dir;
     });
+    const best=sorted[0];
     const CAP=500;
     const view=sorted.slice(0,CAP);
     const capNote=sorted.length>CAP?` <span class="dimv">· 상위 ${CAP}개만 표시 (전체 ${sorted.length.toLocaleString()}개)</span>`:"";
     function hdr(k,main,sub=""){return`<th class="db-sort revdbc-s" data-k="${k}" style="cursor:pointer"><div class="th-main">${main}${arw(k)}</div>${sub?`<div class="th-sub">${sub}</div>`:""}</th>`;}
-    let html=`<div class="db-best">검출된 신호 <b>${RESULTS.length}</b>개${capNote} — 열 헤더 클릭으로 정렬</div>`;
+    let html=`<div class="db-best">최상위: <b>${best.label}</b> · 확장≥${best.expandK} · 재접촉여유=${best.retestK} · RSI갭=${best.rsiGap} · SL=${best.slK} TP=${best.tpK} → 거래 <b>${best.cnt}</b>건(TP${best.tpC}/SL${best.slC}/만료${best.eodC}) · 승률 ${(best.winRate*100).toFixed(0)}% · 손익비 ${pf2(best.payoff)} · 총수익 ${pctStr(best.totalRet)} · MDD ${pctStr(best.mdd)} · MAR ${pf2(best.mar)}${capNote}</div>`;
     html+=`<div class="ctable-wrap"><table class="ctable"><thead><tr>
       <th><div class="th-main">데이터</div></th>
-      <th><div class="th-main">seed DB</div><div class="th-sub">기준점</div></th>
-      <th><div class="th-main">재접촉</div><div class="th-sub">신호</div></th>
-      <th><div class="th-main">타입</div></th>
-      ${hdr("seedLow","seed low")}${hdr("pivotLow","pivot low")}${hdr("signalLow","signal low")}
-      ${hdr("seedRsi","seed RSI")}${hdr("minRsi","min RSI")}${hdr("signalRsi","signal RSI")}${hdr("rsiGapActual","RSI갭")}
-      ${hdr("seedWidth","seed 폭비")}${hdr("signalWidth","signal 폭비")}${hdr("fwdRet","N봉후 수익(참고)")}
+      ${hdr("expandK","확장")}${hdr("retestK","재접촉")}${hdr("rsiGap","RSI갭")}${hdr("slK","손절")}${hdr("tpK","익절")}
+      ${hdr("cnt","거래수")}${hdr("winRate","승률")}${hdr("payoff","손익비")}${hdr("totalRet","총수익")}${hdr("mdd","최대낙폭")}${hdr("mar","MAR")}
+      <th><div class="th-main">청산</div><div class="th-sub">TP/SL/E</div></th>
+      <th><div class="th-main">내역</div></th>
     </tr></thead><tbody>`;
     view.forEach((r,i)=>{
       html+=`<tr class="${i===0?"db-hot":""}">
         <td class="name mono" style="font-size:12px">${r.label}</td>
-        <td class="name mono" style="font-size:11px">${String(r.seedDate).slice(0,16)}</td>
-        <td class="name mono" style="font-size:11px">${String(r.signalDate).slice(0,16)}</td>
-        <td class="num">${r.touchType}</td>
-        <td class="num mono">${r.seedLow.toFixed(2)}</td><td class="num mono">${r.pivotLow.toFixed(2)}</td><td class="num mono">${r.signalLow.toFixed(2)}</td>
-        <td class="num mono">${r.seedRsi!=null?r.seedRsi.toFixed(1):"-"}</td><td class="num mono">${r.minRsi!=null?r.minRsi.toFixed(1):"-"}</td><td class="num mono">${r.signalRsi!=null?r.signalRsi.toFixed(1):"-"}</td>
-        <td class="num pos">${r.rsiGapActual.toFixed(1)}</td>
-        <td class="num mono">${r.seedWidth!=null?r.seedWidth.toFixed(2):"-"}</td><td class="num mono">${r.signalWidth!=null?r.signalWidth.toFixed(2):"-"}</td>
-        <td class="num ${r.fwdRet==null?"dimv":r.fwdRet>0?"pos":"neg"}">${r.fwdRet==null?"-":pctStr(r.fwdRet)}</td>
+        <td class="num">${r.expandK}</td><td class="num">${r.retestK}</td><td class="num">${r.rsiGap}</td>
+        <td class="num">${r.slK}</td><td class="num">${r.tpK}</td>
+        <td class="num">${r.cnt}</td>
+        <td class="num ${numCls(r.winRate,0.55,0)}">${(r.winRate*100).toFixed(0)}%</td>
+        <td class="num ${numCls(r.payoff,1.2,0.8)}">${pf2(r.payoff)}</td>
+        <td class="num ${r.totalRet>0?"pos":"neg"}">${pctStr(r.totalRet)}</td>
+        <td class="num neg">${pctStr(r.mdd)}</td>
+        <td class="num ${numCls(r.mar,2,0)}">${pf2(r.mar)}</td>
+        <td class="num mono" style="font-size:11px">${r.tpC}/${r.slC}/${r.eodC}</td>
+        <td><button class="revdbc-dtl" data-idx="${i}" style="padding:4px 9px;border:1px solid var(--cyan);background:rgba(8,145,178,.1);color:var(--cyan);border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">▸내역</button></td>
       </tr>`;
     });
-    html+=`</tbody></table></div>`;
+    html+=`</tbody></table></div><div id="revdbc_detail_area" style="margin-top:20px"></div>`;
     con.innerHTML=html;
     con.querySelectorAll(".revdbc-s").forEach(th=>th.onclick=()=>{
       const k=th.dataset.k;
       if(SORT.key===k)SORT.dir*=-1; else{SORT.key=k;SORT.dir=-1;}
       render();
     });
+    con.querySelectorAll(".revdbc-dtl").forEach(b=>b.onclick=()=>showDetail(view[+b.dataset.idx]));
+  }
+  function showDetail(r){
+    const area=el("revdbc_detail_area"); if(!area)return;
+    const off=r.dispOffset||0;
+    let html=`<div class="sectitle">거래 내역 · ${r.label} · 확장≥${r.expandK} 재접촉=${r.retestK} RSI갭=${r.rsiGap} SL=${r.slK} TP=${r.tpK} · 시각=트뷰 KST 기준(서버+${off}h, 표시전용)</div>
+    <div class="ctable-wrap"><table class="ctable"><thead><tr>
+      <th><div class="th-main">seed DB 시간</div></th>
+      <th><div class="th-main">신호 시간</div></th>
+      <th><div class="th-main">타입</div></th>
+      <th><div class="th-main">진입가</div></th><th><div class="th-main">SL</div></th><th><div class="th-main">TP</div></th>
+      <th><div class="th-main">청산가</div></th><th><div class="th-main">결과</div></th><th><div class="th-main">수익률</div></th>
+      <th><div class="th-main">pivotLow</div></th>
+      <th><div class="th-main">seed RSI</div></th><th><div class="th-main">min RSI</div></th><th><div class="th-main">signal RSI</div></th><th><div class="th-main">RSI갭</div></th>
+    </tr></thead><tbody>`;
+    for(const t of r.trades){
+      const res=t.exitReason==="TP"?'<span class="pos">익절</span>':t.exitReason==="SL"?'<span class="neg">손절</span>':'<span class="dimv">만료</span>';
+      html+=`<tr>
+        <td class="name mono" style="font-size:11px">${formatDisplayTime(t.seedDate,off)}</td>
+        <td class="name mono" style="font-size:11px">${formatDisplayTime(t.signalDate,off)}</td>
+        <td class="num">${t.touchType}</td>
+        <td class="num mono">${t.entryPrice.toFixed(2)}</td><td class="num mono">${t.sl.toFixed(2)}</td><td class="num mono">${t.tp.toFixed(2)}</td>
+        <td class="num mono">${t.exitPrice.toFixed(2)}</td><td>${res}</td>
+        <td class="num ${t.ret>0?"pos":"neg"}">${pctStr(t.ret)}</td>
+        <td class="num mono">${t.pivotLow.toFixed(2)}</td>
+        <td class="num mono">${t.seedRsi!=null?t.seedRsi.toFixed(1):"-"}</td><td class="num mono">${t.minRsi!=null?t.minRsi.toFixed(1):"-"}</td><td class="num mono">${t.signalRsi!=null?t.signalRsi.toFixed(1):"-"}</td>
+        <td class="num pos">${t.rsiGap!=null?t.rsiGap.toFixed(1):"-"}</td>
+      </tr>`;
+    }
+    html+=`</tbody></table></div>`;
+    area.innerHTML=html;
+    area.scrollIntoView({behavior:"smooth"});
   }
   function setSrcMode(s){
     el("revdbc_src").dataset.cur=s;
@@ -3476,7 +3566,7 @@ function drawRSI(rCurve,holdCurve,log){
     if(!el("revdbc_run"))return;
     renderCsvChecks("revdbc");
     el("revdbc_src").querySelectorAll("button").forEach(b=>b.onclick=()=>setSrcMode(b.dataset.s));
-    ["revdbc_touch"].forEach(id=>{
+    ["revdbc_touch","revdbc_entry","revdbc_trmode"].forEach(id=>{
       const box=el(id); if(!box)return;
       box.querySelectorAll("button").forEach(b=>b.onclick=()=>{
         box.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));

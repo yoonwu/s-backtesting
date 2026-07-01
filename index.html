@@ -65,18 +65,22 @@
   input:focus,select:focus{outline:none;border-color:var(--amber);box-shadow:0 0 0 3px rgba(16,185,129,.14)}
   select{cursor:pointer}
   select option,select optgroup{background:#ffffff;color:var(--ink)}
-  .csv-checkbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px}
+  .csv-checkbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;flex-wrap:wrap}
   .csv-checkbar label{display:inline-flex;align-items:center;gap:7px;margin:0;color:var(--ink-dim);font-size:11.5px;letter-spacing:0;text-transform:none;cursor:pointer}
   .csv-checkbar input,.csv-check input{width:auto;accent-color:var(--amber)}
-  .csv-actions{display:flex;gap:6px;flex-shrink:0}
+  .csv-actions{display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap}
   .csv-actions button{padding:4px 8px;border:1px solid var(--border);background:var(--input-bg);color:var(--ink-dim);border-radius:6px;font-size:11px;cursor:pointer}
   .csv-actions button:hover{border-color:var(--amber);color:var(--amber)}
+  .csv-actions .csv-sep{width:1px;align-self:stretch;background:var(--border);margin:0 2px}
   .csv-checklist{max-height:260px;overflow:auto;background:var(--input-bg);border:1px solid var(--border);border-radius:10px;margin-bottom:7px}
-  .csv-check{display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--grid);font-family:"JetBrains Mono",monospace;font-size:12px;line-height:1.25;cursor:pointer}
+  .csv-check{display:flex;align-items:center;gap:9px;padding:9px 10px;border-bottom:1px solid var(--grid);font-family:"JetBrains Mono",monospace;font-size:12px;line-height:1.25;cursor:pointer;transition:background .1s}
   .csv-check:last-child{border-bottom:none}
-  .csv-check:hover{background:rgba(16,185,129,.07)}
+  .csv-check:hover{background:rgba(16,185,129,.09)}
+  .csv-check input{transform:scale(1.25);cursor:pointer;flex-shrink:0}
   .csv-check .csv-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .csv-check input:checked + .csv-name{color:var(--amber-soft)}
+  .csv-check input:checked + .csv-name{color:var(--amber-soft);font-weight:700}
+  .csv-check.csv-check-on{background:rgba(16,185,129,.12)}
+  .csv-check.csv-check-on:hover{background:rgba(16,185,129,.16)}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
   .suffix{position:relative}
@@ -713,8 +717,12 @@
             <div class="csv-checkbar">
               <label><input id="revdb_csv_all" type="checkbox"> 전체선택</label>
               <div class="csv-actions">
-                <button type="button" id="revdb_csv_gold">골드 선택</button>
-                <button type="button" id="revdb_csv_us100">나스닥 선택</button>
+                <button type="button" id="revdb_csv_gold">골드</button>
+                <button type="button" id="revdb_csv_us100">나스닥</button>
+                <span class="csv-sep"></span>
+                <button type="button" id="revdb_csv_min">분봉만</button>
+                <button type="button" id="revdb_csv_hour">시간봉만</button>
+                <span class="csv-sep"></span>
                 <button type="button" id="revdb_csv_clear">선택해제</button>
               </div>
             </div>
@@ -792,12 +800,12 @@
 
         <div class="row2">
           <div class="field"><label>손절폭 ×TR (콤마)</label>
-            <input id="revdb_sl" class="mono" value="0.5,1.0,1.5">
-            <div class="hint">SL = 기준저점(DB~접촉 최저) − 손절×TR</div>
+            <input id="revdb_sl" class="mono" value="0.5,1.0,1.5,2.0,2.5,3.0,3.5">
+            <div class="hint">SL = 기준저점(DB~접촉 최저) − 손절×TR. 변곡은 길게 먹는 게 핵심이라 최대 3.5까지 스윕.</div>
           </div>
           <div class="field"><label>익절폭 ×TR (콤마)</label>
-            <input id="revdb_tp" class="mono" value="1.5,2.0,3.0">
-            <div class="hint">TP = 진입가 + 익절×TR</div>
+            <input id="revdb_tp" class="mono" value="1.5,2.0,3.0,4.0,5.0,6.0">
+            <div class="hint">TP = 진입가 + 익절×TR. 최대 6까지 스윕(추세 오래 태우기 검증).</div>
           </div>
         </div>
         <div class="row2">
@@ -836,8 +844,12 @@
             <div class="csv-checkbar">
               <label><input id="revdbc_csv_all" type="checkbox"> 전체선택</label>
               <div class="csv-actions">
-                <button type="button" id="revdbc_csv_gold">골드 선택</button>
-                <button type="button" id="revdbc_csv_us100">나스닥 선택</button>
+                <button type="button" id="revdbc_csv_gold">골드</button>
+                <button type="button" id="revdbc_csv_us100">나스닥</button>
+                <span class="csv-sep"></span>
+                <button type="button" id="revdbc_csv_min">분봉만</button>
+                <button type="button" id="revdbc_csv_hour">시간봉만</button>
+                <span class="csv-sep"></span>
                 <button type="button" id="revdbc_csv_clear">선택해제</button>
               </div>
             </div>
@@ -915,12 +927,12 @@
 
         <div class="row2">
           <div class="field"><label>손절폭 ×TR (콤마)</label>
-            <input id="revdbc_sl" class="mono" value="0.5,1.0,1.5,2.0">
-            <div class="hint">SL = pivotLow(seed~재접촉 최저가) − 손절×TR</div>
+            <input id="revdbc_sl" class="mono" value="0.5,1.0,1.5,2.0,2.5,3.0,3.5">
+            <div class="hint">SL = pivotLow(seed~재접촉 최저가) − 손절×TR. 변곡은 길게 먹는 게 핵심이라 최대 3.5까지 스윕.</div>
           </div>
           <div class="field"><label>익절폭 ×TR (콤마)</label>
-            <input id="revdbc_tp" class="mono" value="1.0,1.5,2.0,3.0">
-            <div class="hint">TP = 진입가 + 익절×TR</div>
+            <input id="revdbc_tp" class="mono" value="1.0,1.5,2.0,3.0,4.0,5.0,6.0">
+            <div class="hint">TP = 진입가 + 익절×TR. 최대 6까지 스윕(추세 오래 태우기 검증).</div>
           </div>
         </div>
 
@@ -1127,6 +1139,6 @@
 
 </div>
 
-<script src="leverage-lab.js?v=20260630q"></script>
+<script src="leverage-lab.js?v=20260630r"></script>
 </body>
 </html>

@@ -891,26 +891,54 @@
           </div>
         </div>
 
-        <div class="row2">
-          <div class="field"><label>4/4 접촉 기준</label>
-            <div class="subtabs" id="revdbc_touch" data-cur="wick">
-              <button data-t="body">몸통 접촉</button><button data-t="wick" class="on">꼬리 접촉</button>
-            </div>
-            <div class="hint">DB/4-4 재접촉은 <b>근처면 안 되고 실제로 닿아야</b> 함. <b>꼬리 접촉</b>(기본)=고가~저가가 밴드를 포함. <b>몸통 접촉</b>=시가~종가 범위가 밴드를 포함(더 엄격, 실전에서 거의 안 나옴).</div>
+        <div class="field"><label>4/4 접촉 기준</label>
+          <div class="subtabs" id="revdbc_touch" data-cur="wick">
+            <button data-t="body">몸통 접촉</button><button data-t="wick" class="on">꼬리 접촉</button>
           </div>
-          <div class="field"><label>이후 N봉 참고 수익률</label>
-            <input id="revdbc_fwdn" class="mono" type="number" value="20" min="1" step="1">
-            <div class="hint">아직 SL/TP 백테스트 아님 — 신호 종가 대비 N봉 뒤 종가 수익률만 참고용으로 표시.</div>
+          <div class="hint">DB/4-4 재접촉은 <b>근처면 안 되고 실제로 닿아야</b> 함. <b>꼬리 접촉</b>(기본)=고가~저가가 밴드를 포함. <b>몸통 접촉</b>=시가~종가 범위가 밴드를 포함(더 엄격, 실전에서 거의 안 나옴).</div>
+        </div>
+
+        <div class="note"><b>3단계 백테스트</b> · 재접촉 신호에서 롱 진입 → SL=기준저점(seed~재접촉 최저가)−손절×TR, TP=진입가+익절×TR → SL/TP 중 먼저 닿는 쪽으로 청산(동시 도달 시 SL 우선), 만료 시 종가 청산.</div>
+
+        <div class="row2">
+          <div class="field"><label>진입 방식</label>
+            <div class="subtabs" id="revdbc_entry" data-cur="nextOpen">
+              <button data-m="close">신호봉 종가</button><button data-m="nextOpen" class="on">다음봉 시가</button>
+            </div>
+          </div>
+          <div class="field"><label>손절/익절 TR 기준</label>
+            <div class="subtabs" id="revdbc_trmode" data-cur="setupMax">
+              <button data-m="signal">신호봉 TR</button><button data-m="seed">seed DB TR</button><button data-m="setupMax" class="on">셋업 최대TR</button>
+            </div>
           </div>
         </div>
 
-        <button class="runbtn" id="revdbc_run">▶ 신호 검출 돌리기</button>
+        <div class="row2">
+          <div class="field"><label>손절폭 ×TR (콤마)</label>
+            <input id="revdbc_sl" class="mono" value="0.5,1.0,1.5,2.0">
+            <div class="hint">SL = pivotLow(seed~재접촉 최저가) − 손절×TR</div>
+          </div>
+          <div class="field"><label>익절폭 ×TR (콤마)</label>
+            <input id="revdbc_tp" class="mono" value="1.0,1.5,2.0,3.0">
+            <div class="hint">TP = 진입가 + 익절×TR</div>
+          </div>
+        </div>
+
+        <div class="row2">
+          <div class="field"><label>미체결 만료 (봉)</label><input id="revdbc_expiry" class="mono" type="number" value="50" min="1" step="1"></div>
+          <div class="field"><label>표시 시간 보정 (시간)</label>
+            <input id="revdbc_dispoff" class="mono" type="number" value="7" step="1">
+            <div class="hint">MT5 서버시간 → TradingView 한국시간(KST) 표시 전용 보정. <b>계산에는 영향 없음</b>, 결과표/상세표 시각 표시에만 적용.</div>
+          </div>
+        </div>
+
+        <button class="runbtn" id="revdbc_run">▶ 신호+백테스트 돌리기</button>
         <div class="err" id="revdbc_err"></div>
         <div class="mono" id="revdbc_status" style="font-size:11px;color:var(--ink-faint);margin-top:8px;line-height:1.5"></div>
-        <div class="note"><b>탐색 모드</b> · 손절/익절 성과표가 아니라 <b>타점이 실제로 잡히는지 확인하는 신호 검출표</b>입니다. 결과에서 seed DB 날짜·재접촉 날짜·재접촉 타입(DB/4-4)·RSI 다이버전스 폭을 직접 확인하세요.</div>
+        <div class="note"><b>확인 순서</b> · MAR보다 먼저 <b>거래수</b>와 <b>SL/TP 비율</b>(청산 TP/SL/E 컬럼)부터 보세요. 표본이 너무 적거나 SL 편중이면 다른 지표는 의미가 약함.</div>
       </section>
       <section id="revdbc_results">
-        <div class="placeholder"><div class="big">조건을 설정하고 <span class="amb">신호 검출 돌리기</span></div><div class="mono" style="font-size:12px">찢는 DB(seed) → 대기 → DB/4-4 재접촉 → RSI 다이버 확인</div></div>
+        <div class="placeholder"><div class="big">조건을 설정하고 <span class="amb">신호+백테스트 돌리기</span></div><div class="mono" style="font-size:12px">찢는 DB(seed) → 대기 → DB/4-4 재접촉 → RSI 다이버 → 롱 진입 → SL/TP 백테스트</div></div>
       </section>
     </div>
   </div>
@@ -1099,6 +1127,6 @@
 
 </div>
 
-<script src="leverage-lab.js?v=20260630p"></script>
+<script src="leverage-lab.js?v=20260630q"></script>
 </body>
 </html>

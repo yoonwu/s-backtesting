@@ -19,7 +19,7 @@
 //|   · 손절·익절 동시 = 손절 우선. 동시 1포지션.                      |
 //+------------------------------------------------------------------+
 #property copyright "LEVERAGE LAB"
-#property version   "1.05"
+#property version   "1.06"
 #property strict
 
 #include <Trade/Trade.mqh>
@@ -236,17 +236,20 @@ void PlaceEntryOrders()
       g_orderPrices[k]=p;
       double lot=(k<4)?lotsArr[k]:lotsArr[3];
       bool ok;
+      // 백테스터는 롱 b.low<=주문가 / 숏 b.high>=주문가면 즉시 체결 → 리밋(되돌림 대기) 아니면
+      // "즉시 진입"이 맞음. 현재가 반대편(스탑 자리) 주문은 스탑으로 걸면 백테와 달리 미체결로
+      // 흘러가므로(돌파봉 꼬리까지 되돌아와야 체결) 봉마감 즉시 시장가로 진입해 백테 패리티 유지.
       if(isShort)
         {
-         // 숏: 현재가보다 위면 SellLimit, 아래면 SellStop
+         // 숏: 현재가보다 위(되돌림 자리)면 SellLimit, 아래면 시장가 즉시매도
          if(p >= bid) ok=g_trade.SellLimit(lot,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
-         else         ok=g_trade.SellStop (lot,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
+         else         ok=g_trade.Sell     (lot,_Symbol,0.0,0,0,InpComment);
         }
       else
         {
-         // 롱: 현재가보다 아래면 BuyLimit, 위면 BuyStop
+         // 롱: 현재가보다 아래(되돌림 자리)면 BuyLimit, 위면 시장가 즉시매수
          if(p <= ask) ok=g_trade.BuyLimit(lot,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
-         else         ok=g_trade.BuyStop (lot,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
+         else         ok=g_trade.Buy     (lot,_Symbol,0.0,0,0,InpComment);
         }
       if(!ok) PrintFormat("주문 실패 차수%d @%.*f (%s)",k,dig,p,g_trade.ResultRetcodeDescription());
       else    okCount++;

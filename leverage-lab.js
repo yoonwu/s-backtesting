@@ -3225,7 +3225,7 @@ function drawRSI(rCurve,holdCurve,log){
     return{bb44Lower,doubleLower,widthRatio};
   }
   function calcRiskTR(tr,anchorIdx,signalIdx,trMode){
-    if(trMode==="anchor")return tr[anchorIdx]||tr[signalIdx]||0;
+    if(trMode==="anchor"||trMode==="seed")return tr[anchorIdx]||tr[signalIdx]||0;
     if(trMode==="setupMax"){
       let mx=0;
       for(let i=Math.max(0,anchorIdx);i<=signalIdx;i++)mx=Math.max(mx,tr[i]||0);
@@ -3233,89 +3233,84 @@ function drawRSI(rCurve,holdCurve,log){
     }
     return tr[signalIdx]||0;
   }
-  function downDbFlags(bars,lower){
-    const out=new Array(bars.length).fill(false);
-    for(let i=1;i<bars.length;i++){
-      if(lower[i]===null||lower[i-1]===null)continue;
-      out[i]=bars[i].c<lower[i]&&bars[i-1].c>=lower[i-1];
+  function candleTouchesBand(b,band,mode){
+    if(band===null||!isFinite(band))return false;
+    if(mode==="body"){
+      const lo=Math.min(b.o,b.c), hi=Math.max(b.o,b.c);
+      return lo<=band&&hi>=band;
     }
-    return out;
+    return b.l<=band&&b.h>=band;
   }
-  function bb44TurnMeetOk(bars,bb44Lower,tr,i,opts){
-    if(!bb44Lower||bb44Lower[i]===null)return null;
-    const band=bb44Lower[i], curTR=tr[i]||0;
-    const start=Math.max(1,i-opts.bb44Lookback);
-    let minBand=Infinity,minIdx=-1;
-    for(let j=start;j<=i;j++){
-      if(bb44Lower[j]!==null&&bb44Lower[j]<minBand){minBand=bb44Lower[j];minIdx=j;}
-    }
-    if(minIdx<0||minIdx>=i)return null;
-    const prev=bb44Lower[i-1];
-    if(prev===null)return null;
-    const slope=band-prev;
-    const turnedUp=band>minBand&&slope>=curTR*opts.bb44SlopeK;
-    if(!turnedUp)return null;
-    const meet=bars[i].l<=band+curTR*opts.bb44MeetK&&bars[i].c>=band-curTR*opts.bb44MeetK;
-    if(!meet)return null;
-    const bodyOk=Math.abs(bars[i].c-bars[i].o)<=curTR*opts.bodyK;
-    if(!bodyOk)return null;
-    return {band,slope};
+  function isDownDbSeed(bars,lower,i){
+    if(i<1||lower[i]===null)return false;
+    const closedBelow=bars[i].c<lower[i];
+    const crossed=lower[i-1]!==null&&bars[i-1].c>=lower[i-1]&&bars[i].c<lower[i];
+    return closedBelow||crossed;
   }
   function detectExpandedDbReversalSignals(bars,lower,bb44Lower,widthRatio,tr,rsi,rsiMa,opts){
     const sigs=[];
-    const dbFlags=downDbFlags(bars,lower);
     const n=bars.length;
     let nextAllowed=0;
-    for(let dbIdx=2;dbIdx<n-1;dbIdx++){
-      if(dbIdx<nextAllowed)continue;
-      if(!dbFlags[dbIdx])continue;
-      if(lower[dbIdx]===null||rsi[dbIdx]===null||widthRatio[dbIdx]===null)continue;
-      if(widthRatio[dbIdx]<opts.expandK)continue;
-      if(opts.maArr&&(opts.maArr[dbIdx]===null||bars[dbIdx].c>=opts.maArr[dbIdx]))continue;
+    for(let seedIdx=2;seedIdx<n-1;seedIdx++){
+      if(seedIdx<nextAllowed)continue;
+      if(!isDownDbSeed(bars,lower,seedIdx))continue;
+      if(lower[seedIdx]===null||rsi[seedIdx]===null||widthRatio[seedIdx]===null)continue;
+      if(widthRatio[seedIdx]<opts.expandK)continue;
+      if(opts.maArr&&(opts.maArr[seedIdx]===null||bars[seedIdx].c>=opts.maArr[seedIdx]))continue;
 
-      const dbLow=bars[dbIdx].l;
-      const dbTR=tr[dbIdx]||0;
-      const end=Math.min(n-2,dbIdx+opts.maxWaitBars);
-      let pivotLow=dbLow,pivotIdx=dbIdx;
+      const seedLow=bars[seedIdx].l;
+      const seedTR=tr[seedIdx]||0;
+      const end=Math.min(n-2,seedIdx+opts.maxWaitBars);
+      let pivotLow=seedLow,pivotIdx=seedIdx;
+      let minRsi=rsi[seedIdx],minRsiIdx=seedIdx;
       let failed=false;
 
-      for(let i=dbIdx+1;i<=end;i++){
-        if(bars[i].l<pivotLow){pivotLow=bars[i].l;pivotIdx=i;}
-        const refTR=Math.max(dbTR,tr[i]||0);
-        if(pivotLow<dbLow-refTR*opts.lowBreakK){failed=true;break;}
-        if(i<dbIdx+opts.minWaitBars)continue;
-        if(i-pivotIdx<opts.boxMinBars)continue;
-        if(rsi[i]===null||widthRatio[i]===null)continue;
+      for(let i=seedIdx+1;i<=end;i++){
+        const b=bars[i];
+        if(b.l<pivotLow){pivotLow=b.l;pivotIdx=i;}
+        if(rsi[i]!==null&&rsi[i]<minRsi){minRsi=rsi[i];minRsiIdx=i;}
 
-        const squeezed=widthRatio[i]<=widthRatio[dbIdx]*opts.contractK||widthRatio[i]<=opts.squeezeRatio;
-        if(!squeezed)continue;
-        const nearPivot=bars[i].l<=pivotLow+refTR*opts.pivotRetestK;
-        if(!nearPivot)continue;
-        const bb44=bb44TurnMeetOk(bars,bb44Lower,tr,i,opts);
-        if(!bb44)continue;
+        if(i-pivotIdx>opts.maxDivBars){failed=true;break;}
+        if(rsi[i]===null)continue;
 
-        let minRsi=Infinity,minRsiIdx=-1;
-        for(let j=dbIdx;j<=i;j++){
-          if(rsi[j]!==null&&rsi[j]<minRsi){minRsi=rsi[j];minRsiIdx=j;}
+        const refTR=Math.max(seedTR,tr[i]||0);
+        const body=Math.abs(b.c-b.o);
+        const range=b.h-b.l;
+        if(refTR>0&&(body>refTR*opts.maxSignalBodyTR||range>refTR*opts.maxSignalRangeTR)){
+          const resetByGap=rsi[i]>=minRsi+opts.rsiResetGap;
+          const resetByLevel=rsi[i]>=opts.rsiResetLevel;
+          if(resetByGap||resetByLevel){failed=true;break;}
+          continue;
         }
-        if(minRsiIdx<0||minRsi>opts.rsiFloor)continue;
-        const rsiDiv=rsi[i]>=minRsi+opts.rsiGap;
-        if(!rsiDiv)continue;
-        const turnUp=rsi[i]>rsi[i-1]&&(rsi[i-1]===null||i<3||rsi[i-1]<=rsi[i-2]||bars[i].c>bars[i-1].c);
-        const maRecover=rsiMa&&rsiMa[i]!==null&&rsi[i]>=rsiMa[i]&&(rsiMa[i-1]===null||rsi[i-1]===null||rsi[i-1]<rsiMa[i-1]||rsi[i]>rsi[i-1]);
-        if(opts.rsiConfirm==="turn"&&!turnUp)continue;
-        if(opts.rsiConfirm==="ma"&&!maRecover)continue;
-        const entryIdx=opts.entryMode==="nextOpen"?i+1:i;
-        if(entryIdx>=n)continue;
-        const entryPrice=opts.entryMode==="nextOpen"?bars[entryIdx].o:bars[i].c;
-        sigs.push({
-          mode:"expandedDbReversal",dbIdx,pivotIdx,signalIdx:i,entryIdx,entryPrice,pivotLow,
-          rsiDiv:true,dbCount:1,anchorRsi:minRsi,signalRsi:rsi[i],rsiMa:rsiMa?rsiMa[i]:null,
-          bb44Lower:bb44.band,bb44Slope:bb44.slope,dbWidth:widthRatio[dbIdx],sigWidth:widthRatio[i],
-          contraction:widthRatio[i]/widthRatio[dbIdx],riskTR:calcRiskTR(tr,pivotIdx,i,opts.trMode)
-        });
-        nextAllowed=i+Math.max(1,opts.boxMinBars);
-        break;
+
+        const dl=lower[i], b44=bb44Lower?bb44Lower[i]:null;
+        const touchedDouble=dl!==null&&candleTouchesBand(b,dl,opts.touchMode);
+        const closedBelowDouble=dl!==null&&b.c<dl;
+        const touched44=b44!==null&&candleTouchesBand(b,b44,opts.touchMode);
+        const touchType=(closedBelowDouble||touchedDouble)?"DB":(touched44?"4-4":null);
+
+        if(touchType){
+          const priceRetest=b.l<=pivotLow+refTR*opts.retestK;
+          const rsiDiv=rsi[i]>=minRsi+opts.rsiGap;
+          if(priceRetest&&rsiDiv){
+            const entryIdx=opts.entryMode==="nextOpen"?i+1:i;
+            if(entryIdx>=n)continue;
+            const entryPrice=opts.entryMode==="nextOpen"?bars[entryIdx].o:bars[i].c;
+            sigs.push({
+              mode:"simpleReversalDb",touchType,seedIdx,dbIdx:seedIdx,pivotIdx,minRsiIdx,signalIdx:i,entryIdx,entryPrice,pivotLow,
+              seedLow,signalLow:b.l,rsiDiv:true,dbCount:1,anchorRsi:minRsi,seedRsi:rsi[seedIdx],signalRsi:rsi[i],
+              rsiMa:rsiMa?rsiMa[i]:null,bb44Lower:b44,dbWidth:widthRatio[seedIdx],sigWidth:widthRatio[i],
+              contraction:widthRatio[i]!=null&&widthRatio[seedIdx]?widthRatio[i]/widthRatio[seedIdx]:null,
+              riskTR:calcRiskTR(tr,seedIdx,i,opts.trMode)
+            });
+            nextAllowed=i+1;
+            break;
+          }
+        }
+
+        const resetByGap=rsi[i]>=minRsi+opts.rsiResetGap;
+        const resetByLevel=rsi[i]>=opts.rsiResetLevel;
+        if(resetByGap||resetByLevel){failed=true;break;}
       }
       if(failed)continue;
     }
@@ -3346,8 +3341,11 @@ function drawRSI(rCurve,holdCurve,log){
       if(ret>0){wins++;sumWin+=ret;lossStreak=0;}else{sumLoss+=Math.abs(ret);lossStreak++;maxLossStreak=Math.max(maxLossStreak,lossStreak);}
       activeUntil=exitIdx;
       trades.push({
-        mode:sig.mode,date:bars[signalIdx].date||bars[signalIdx].day,entryPrice,exitPrice:exitPx,sl,tp,ret,
+        mode:sig.mode,date:bars[signalIdx].date||bars[signalIdx].day,
+        entryDate:bars[entryIdx].date||bars[entryIdx].day,exitDate:bars[exitIdx].date||bars[exitIdx].day,
+        entryPrice,exitPrice:exitPx,sl,tp,ret,
         won:exitReason==="TP",exitReason,rsiDiv:sig.rsiDiv,dbCount:sig.dbCount||0,
+        touchType:sig.touchType,pivotLow:sig.pivotLow,signalLow:sig.signalLow,
         anchorRsi:sig.anchorRsi,signalRsi:sig.signalRsi,riskTR:sigTR,holdBars:exitIdx-entryIdx
         ,bb44Lower:sig.bb44Lower,bb44Slope:sig.bb44Slope,dbDate:sig.dbIdx!=null?(bars[sig.dbIdx].date||bars[sig.dbIdx].day):null,
         dbWidth:sig.dbWidth,sigWidth:sig.sigWidth,contraction:sig.contraction
@@ -3433,12 +3431,9 @@ function drawRSI(rCurve,holdCurve,log){
     errMsg(""); RESULTS=[];
     const btn=el("revdbc_run"); btn.disabled=true;
     try{
-      const mode="expandedDbReversal";
+      const mode="simpleReversalDb";
       const maFilter=Math.max(0,+el("revdbc_ma").value||0);
-      const lowBreakKs=parseList(el("revdbc_lbk").value,false,0);
-      const boxMinBarsList=parseList(el("revdbc_bmb").value,true,1);
       const maxWait=Math.max(5,+el("revdbc_wait").value||50);
-      const minWaitBars=Math.max(1,+val("revdbc_minwait","2")||2);
       const slKs=parseList(el("revdbc_sl").value,false,0);
       const tpKs=parseList(el("revdbc_tp").value,false,0);
       const expiryBars=Math.max(1,+el("revdbc_expiry").value||50);
@@ -3447,30 +3442,22 @@ function drawRSI(rCurve,holdCurve,log){
       const trMode=cur("revdbc_trmode","setupMax");
       const expLookback=Math.max(20,+val("revdbc_dblook","80")||80);
       const expandKs=parseList(val("revdbc_expand","1.3,1.5"),false,0);
-      const contractKs=parseList(val("revdbc_contract","0.65,0.8"),false,0);
-      const squeezeRatios=parseList(val("revdbc_squeeze","1.15"),false,0);
       const rsiPeriod=Math.max(2,+val("revdbc_rsi_period","14")||14);
       const rsiMaLen=Math.max(2,+val("revdbc_rsi_ma","14")||14);
-      const rsiFloors=parseList(val("revdbc_rsi_floor","30,35,40"),false,0);
-      const rsiGaps=parseList(val("revdbc_rsi_gap","3,5,8"),false,0);
-      const pivotRetestKs=parseList(val("revdbc_bandk","0.5,1.0"),false,0);
-      const bb44SlopeKs=parseList(val("revdbc_bb44_slope","0,0.1"),false,0);
-      const bb44MeetKs=parseList(val("revdbc_bb44_meet","0.33,0.5"),false,0);
-      const bb44Lookback=Math.max(1,+val("revdbc_bb44_look","4")||4);
-      const bodyKs=parseList(val("revdbc_bodyk","1.0,1.3"),false,0);
-      const rsiConfirm=cur("revdbc_rsi_confirm","turn");
-      if(!lowBreakKs.length||!boxMinBarsList.length||!slKs.length||!tpKs.length)
+      const rsiGaps=parseList(val("revdbc_rsi_gap","3,5"),false,0);
+      const retestKs=parseList(val("revdbc_bandk","0.5,1.0"),false,0);
+      const rsiResetGap=Math.max(0,+val("revdbc_reset_gap","20")||20);
+      const rsiResetLevel=Math.max(1,+val("revdbc_reset_level","50")||50);
+      const maxDivBars=Math.max(1,+val("revdbc_maxdiv","24")||24);
+      const maxSignalBodyTR=Math.max(0.1,+val("revdbc_bodyk","1.2")||1.2);
+      const maxSignalRangeTR=Math.max(0.1,+val("revdbc_rangek","2.0")||2.0);
+      const displayOffsetHours=+val("revdbc_offset","7")||0;
+      const touchMode=cur("revdbc_touch","wick");
+      if(!slKs.length||!tpKs.length||!expandKs.length||!rsiGaps.length||!retestKs.length)
         throw new Error("파라미터 값을 하나 이상 입력하세요");
-      if(!expandKs.length||!contractKs.length||!squeezeRatios.length||!rsiFloors.length||!rsiGaps.length||!pivotRetestKs.length||!bb44SlopeKs.length||!bb44MeetKs.length||!bodyKs.length)
-        throw new Error("확장DB/수축/RSI 파라미터 값을 하나 이상 입력하세요");
       const sources=await loadSources();
       const rows=[];
-      const extra=expandKs.length*contractKs.length*squeezeRatios.length*rsiFloors.length*rsiGaps.length*pivotRetestKs.length*bb44SlopeKs.length*bb44MeetKs.length*bodyKs.length;
-      const total=sources.length*lowBreakKs.length*boxMinBarsList.length*slKs.length*tpKs.length*extra;
-      const maxCombos=250000;
-      if(total>maxCombos){
-        throw new Error(`조합이 ${total.toLocaleString()}개입니다. 너무 큽니다. CSV 선택이나 콤마 파라미터를 줄여서 ${maxCombos.toLocaleString()}개 이하로 맞춰주세요.`);
-      }
+      const total=sources.length*expandKs.length*rsiGaps.length*retestKs.length*slKs.length*tpKs.length;
       let combo=0;
       for(const src of sources){
         const bars=src.bars;
@@ -3482,39 +3469,17 @@ function drawRSI(rCurve,holdCurve,log){
         const rsiArr=calcRSI(bars,rsiPeriod);
         const rsiMa=calcNullableSMA(rsiArr,rsiMaLen);
         const maArr=maFilter>0?calcSMA(bars.map(b=>b.c),maFilter):null;
-        for(const lbK of lowBreakKs){
-          for(const bmb of boxMinBarsList){
-            const signalSets=[];
-            for(const expandK of expandKs){
-              for(const contractK of contractKs){
-                for(const squeezeRatio of squeezeRatios){
-                  for(const rsiFloor of rsiFloors){
-                    for(const rsiGap of rsiGaps){
-                      for(const pivotRetestK of pivotRetestKs){
-                        for(const bb44SlopeK of bb44SlopeKs){
-                          for(const bb44MeetK of bb44MeetKs){
-                            for(const bodyK of bodyKs){
-                              signalSets.push({
-                                sigs:detectExpandedDbReversalSignals(bars,lower,bb44Lower,widthRatio,tr,rsiArr,rsiMa,{maArr,expandK,contractK,squeezeRatio,minWaitBars,lowBreakK:lbK,pivotRetestK,boxMinBars:bmb,maxWaitBars:maxWait,entryMode,trMode,rsiFloor,rsiGap,bb44Lookback,bb44SlopeK,bb44MeetK,bodyK,rsiConfirm}),
-                                expandK,contractK,squeezeRatio,rsiFloor,rsiGap,pivotRetestK,bb44SlopeK,bb44MeetK,bodyK
-                              });
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-            for(const ss of signalSets){
+        for(const expandK of expandKs){
+          for(const rsiGap of rsiGaps){
+            for(const retestK of retestKs){
+              const sigs=detectExpandedDbReversalSignals(bars,lower,bb44Lower,widthRatio,tr,rsiArr,rsiMa,{maArr,expandK,maxWaitBars:maxWait,entryMode,trMode,rsiGap,retestK,touchMode,rsiResetGap,rsiResetLevel,maxDivBars,maxSignalBodyTR,maxSignalRangeTR});
               for(const slK of slKs){
                 for(const tpK of tpKs){
                   combo++;
                   if(combo%200===0){statusMsg(`${combo}/${total} 조합…`);await new Promise(r=>setTimeout(r,0));}
-                  const res=backtest(bars,ss.sigs,slK,tpK,expiryBars);
+                  const res=backtest(bars,sigs,slK,tpK,expiryBars);
                   if(res.cnt<minTr)continue;
-                  rows.push({label:src.label,mode,expLookback,expandK:ss.expandK,contractK:ss.contractK,squeezeRatio:ss.squeezeRatio,lbK,bmb,minWaitBars,rsiFloor:ss.rsiFloor,rsiGap:ss.rsiGap,pivotRetestK:ss.pivotRetestK,bb44SlopeK:ss.bb44SlopeK,bb44MeetK:ss.bb44MeetK,bodyK:ss.bodyK,rsiConfirm,trMode,entryMode,slK,tpK,...res});
+                  rows.push({label:src.label,mode,expLookback,expandK,rsiGap,retestK,touchMode,rsiResetGap,rsiResetLevel,maxDivBars,maxSignalBodyTR,maxSignalRangeTR,displayOffsetHours,trMode,entryMode,slK,tpK,...res});
                 }
               }
             }
@@ -3531,6 +3496,14 @@ function drawRSI(rCurve,holdCurve,log){
   function pf2(x){return x===Infinity?"∞":x.toFixed(2);}
   function arw(k){return SORT.key===k?(SORT.dir<0?" ▾":" ▴"):"";}
   function numCls(v,good,bad){return v>=good?"hl-good":v<=bad?"hl-bad":"";}
+  function displayTime(raw,offsetHours){
+    if(!raw)return"-";
+    const d=new Date(String(raw).replace(" ","T"));
+    if(Number.isNaN(d.getTime()))return String(raw).slice(0,16);
+    d.setHours(d.getHours()+(+offsetHours||0));
+    const p=n=>String(n).padStart(2,"0");
+    return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
   function render(){
     const con=el("revdbc_results");
     if(!RESULTS.length){
@@ -3548,10 +3521,10 @@ function drawRSI(rCurve,holdCurve,log){
     const view=sorted.slice(0,CAP);
     const capNote=sorted.length>CAP?` <span class="dimv">· 상위 ${CAP}개만 표시 (전체 ${sorted.length.toLocaleString()}개)</span>`:"";
     function hdr(k,main,sub=""){return`<th class="db-sort revdbc-s" data-k="${k}" style="cursor:pointer"><div class="th-main">${main}${arw(k)}</div>${sub?`<div class="th-sub">${sub}</div>`:""}</th>`;}
-    let html=`<div class="db-best">최상위: <b>${best.label}</b> · 확장DB→수축→하락4/4 만남 · 확장≥${best.expandK} · 수축≤${best.contractK} · 스퀴즈≤${best.squeezeRatio} · 저점K=${best.lbK} · 재터치=${best.pivotRetestK} · RSI갭=${best.rsiGap} · 만남=${best.bb44MeetK} · SL=${best.slK} · TP=${best.tpK} → <span class="pos">${pctStr(best.totalRet)}</span> · MDD ${pctStr(best.mdd)} · MAR ${pf2(best.mar)}${capNote}</div>`;
+    let html=`<div class="db-best">최상위: <b>${best.label}</b> · 확장 하락DB → DB/4-4 재접촉 → RSI 다이버 · 확장≥${best.expandK} · 재접촉≤${best.retestK}TR · RSI갭≥${best.rsiGap} · 리셋 ${best.rsiResetLevel}/${best.rsiResetGap} · SL=${best.slK} · TP=${best.tpK} → <span class="pos">${pctStr(best.totalRet)}</span> · MDD ${pctStr(best.mdd)} · MAR ${pf2(best.mar)}${capNote}</div>`;
     html+=`<div class="ctable-wrap"><table class="ctable"><thead><tr>
       <th><div class="th-main">데이터</div></th>
-      ${hdr("expandK","확장")}${hdr("contractK","수축")}${hdr("squeezeRatio","스퀴즈")}${hdr("lbK","저점K")}${hdr("pivotRetestK","재터치")}${hdr("bmb","횡보")}${hdr("rsiGap","RSI갭")}${hdr("bb44SlopeK","44턴")}${hdr("bb44MeetK","만남")}
+      ${hdr("expandK","확장")}${hdr("retestK","재접촉")}${hdr("rsiGap","RSI갭")}${hdr("rsiResetLevel","RSI리셋")}${hdr("maxDivBars","최대거리")}${hdr("maxSignalBodyTR","몸통")}${hdr("maxSignalRangeTR","봉길이")}
       ${hdr("slK","SL×TR")}${hdr("tpK","TP×TR")}${hdr("cnt","거래수")}${hdr("winRate","승률")}${hdr("pf","PF")}${hdr("payoff","PO")}
       ${hdr("totalRet","총수익률")}${hdr("mdd","MDD")}${hdr("mar","MAR")}${hdr("maxLossStreak","연패")}${hdr("avgHoldBars","보유봉")}
       <th><div class="th-main">내역</div></th>
@@ -3559,9 +3532,8 @@ function drawRSI(rCurve,holdCurve,log){
     view.forEach((r,i)=>{
       html+=`<tr class="${i===0?"db-hot":""}">
         <td class="name mono" style="font-size:12px">${r.label}</td>
-        <td class="num">${r.expandK}</td><td class="num">${r.contractK}</td><td class="num">${r.squeezeRatio}</td>
-        <td class="num">${r.lbK}</td><td class="num">${r.pivotRetestK}</td><td class="num">${r.bmb}</td>
-        <td class="num">${r.rsiGap}</td><td class="num">${r.bb44SlopeK}</td><td class="num">${r.bb44MeetK}</td>
+        <td class="num">${r.expandK}</td><td class="num">${r.retestK}</td><td class="num">${r.rsiGap}</td>
+        <td class="num">${r.rsiResetLevel}</td><td class="num">${r.maxDivBars}</td><td class="num">${r.maxSignalBodyTR}</td><td class="num">${r.maxSignalRangeTR}</td>
         <td class="num">${r.slK}</td><td class="num">${r.tpK}</td>
         <td class="num">${r.cnt}</td>
         <td class="num ${numCls(r.winRate,0.55,0)}">${(r.winRate*100).toFixed(0)}%</td>
@@ -3588,26 +3560,30 @@ function drawRSI(rCurve,holdCurve,log){
     const area=el("revdbc_detail_area"); if(!area)return;
     const rsiO=r.trades.filter(t=>t.rsiDiv===true).length;
     const rsiAll=r.trades.filter(t=>t.rsiDiv!==null).length;
-    let html=`<div class="sectitle">거래 내역 · ${r.label} · 확장DB→수축→하락4/4 만남 · 확장≥${r.expandK} 수축≤${r.contractK} 스퀴즈≤${r.squeezeRatio} 저점K=${r.lbK} 재터치=${r.pivotRetestK} RSI갭=${r.rsiGap} 만남=${r.bb44MeetK} SL=${r.slK} TP=${r.tpK} · RSI다이버전스 ${rsiO}/${rsiAll}건</div>
+    let html=`<div class="sectitle">거래 내역 · ${r.label} · 확장DB→DB/4-4 재접촉→RSI다이버 · 확장≥${r.expandK} 재접촉≤${r.retestK}TR RSI갭≥${r.rsiGap} 리셋=${r.rsiResetLevel}/${r.rsiResetGap} SL=${r.slK} TP=${r.tpK} · RSI다이버전스 ${rsiO}/${rsiAll}건 · 시간 +${r.displayOffsetHours}h 표시</div>
     <div class="ctable-wrap"><table class="ctable"><thead><tr>
-      <th><div class="th-main">DB날짜</div></th><th><div class="th-main">신호날짜</div></th>
-      <th><div class="th-main">진입가</div></th><th><div class="th-main">청산가</div></th>
+      <th><div class="th-main">Seed DB</div></th><th><div class="th-main">신호</div></th><th><div class="th-main">진입</div></th><th><div class="th-main">청산</div></th>
+      <th><div class="th-main">타입</div></th><th><div class="th-main">진입가</div></th><th><div class="th-main">청산가</div></th>
       <th><div class="th-main">SL</div></th><th><div class="th-main">TP</div></th>
       <th><div class="th-main">수익률</div></th><th><div class="th-main">결과</div></th><th><div class="th-main">폭</div><div class="th-sub">DB→신호</div></th>
-      <th><div class="th-main">RSI</div><div class="th-sub">anchor→signal</div></th><th><div class="th-main">44밴드</div><div class="th-sub">값/기울기</div></th><th><div class="th-main">TR</div></th>
+      <th><div class="th-main">RSI</div><div class="th-sub">min→signal</div></th><th><div class="th-main">저점</div><div class="th-sub">pivot/signal</div></th><th><div class="th-main">TR</div></th>
     </tr></thead><tbody>`;
     for(const t of r.trades){
       const res=t.exitReason==="TP"?'<span class="pos">익절</span>':t.exitReason==="SL"?'<span class="neg">손절</span>':'<span class="dimv">만료</span>';
       const rsiTxt=t.anchorRsi!=null&&t.signalRsi!=null?`${t.anchorRsi.toFixed(1)}→${t.signalRsi.toFixed(1)}`:"-";
       const widthTxt=t.dbWidth!=null&&t.sigWidth!=null?`${t.dbWidth.toFixed(2)}→${t.sigWidth.toFixed(2)}`:"-";
+      const lowTxt=t.pivotLow!=null&&t.signalLow!=null?`${t.pivotLow.toFixed(2)} / ${t.signalLow.toFixed(2)}`:"-";
       html+=`<tr>
-        <td class="name mono" style="font-size:11px">${t.dbDate?String(t.dbDate).slice(0,16):"-"}</td>
-        <td class="name mono" style="font-size:11px">${String(t.date).slice(0,16)}</td>
+        <td class="name mono" style="font-size:11px">${displayTime(t.dbDate,r.displayOffsetHours)}</td>
+        <td class="name mono" style="font-size:11px">${displayTime(t.date,r.displayOffsetHours)}</td>
+        <td class="name mono" style="font-size:11px">${displayTime(t.entryDate,r.displayOffsetHours)}</td>
+        <td class="name mono" style="font-size:11px">${displayTime(t.exitDate,r.displayOffsetHours)}</td>
+        <td class="num mono">${t.touchType||"-"}</td>
         <td class="num mono">${t.entryPrice.toFixed(2)}</td><td class="num mono">${t.exitPrice.toFixed(2)}</td>
         <td class="num mono">${t.sl.toFixed(2)}</td><td class="num mono">${t.tp.toFixed(2)}</td>
         <td class="num ${t.ret>0?"pos":"neg"}">${pctStr(t.ret)}</td>
         <td>${res}</td><td class="num mono">${widthTxt}</td>
-        <td class="num mono">${rsiTxt}</td><td class="num mono">${t.bb44Lower!=null?t.bb44Lower.toFixed(2):"-"} / ${t.bb44Slope!=null?t.bb44Slope.toFixed(2):"-"}</td><td class="num mono">${t.riskTR?t.riskTR.toFixed(2):"-"}</td>
+        <td class="num mono">${rsiTxt}</td><td class="num mono">${lowTxt}</td><td class="num mono">${t.riskTR?t.riskTR.toFixed(2):"-"}</td>
       </tr>`;
     }
     html+=`</tbody></table></div>`;
@@ -3626,7 +3602,7 @@ function drawRSI(rCurve,holdCurve,log){
     if(!el("revdbc_run"))return;
     renderCsvChecks("revdbc");
     el("revdbc_src").querySelectorAll("button").forEach(b=>b.onclick=()=>setSrcMode(b.dataset.s));
-    ["revdbc_rsi_confirm","revdbc_trmode"].forEach(id=>{
+    ["revdbc_rsi_confirm","revdbc_trmode","revdbc_touch"].forEach(id=>{
       const box=el(id); if(!box)return;
       box.querySelectorAll("button").forEach(b=>b.onclick=()=>{
         box.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));

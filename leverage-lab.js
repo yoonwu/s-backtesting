@@ -145,6 +145,7 @@ const csvLabel = cf => `${cf.sym} · ${cf.tf} (${cf.file})`;
 function renderCsvChecks(prefix, defaultIdx){
   const list=$("#"+prefix+"_csv_list"), all=$("#"+prefix+"_csv_all"), clear=$("#"+prefix+"_csv_clear");
   const gold=$("#"+prefix+"_csv_gold"), us100=$("#"+prefix+"_csv_us100");
+  const minBtn=$("#"+prefix+"_csv_min"), hourBtn=$("#"+prefix+"_csv_hour");
   if(!list||!all)return;
   list.innerHTML=CSV_FILES.map((cf,i)=>`
     <label class="csv-check">
@@ -152,23 +153,33 @@ function renderCsvChecks(prefix, defaultIdx){
       <span class="csv-name">${csvLabel(cf)}</span>
     </label>`).join("");
   const boxes=()=>Array.from(list.querySelectorAll('input[type="checkbox"]'));
+  const paintAll=()=>{
+    boxes().forEach(b=>{ const row=b.closest(".csv-check"); if(row) row.classList.toggle("csv-check-on", b.checked); });
+  };
   const sync=()=>{
     const bs=boxes(), n=bs.filter(b=>b.checked).length;
     all.checked=bs.length>0 && n===bs.length;
     all.indeterminate=n>0 && n<bs.length;
+    paintAll();
   };
   boxes().forEach(b=>b.onchange=sync);
-  all.onchange=()=>{ boxes().forEach(b=>{b.checked=all.checked;}); all.indeterminate=false; };
+  all.onchange=()=>{ boxes().forEach(b=>{b.checked=all.checked;}); all.indeterminate=false; paintAll(); };
   const selectKind=kind=>{
     boxes().forEach(b=>{
       const cf=CSV_FILES[+b.dataset.idx];
-      const hay=`${cf?.sym||""} ${cf?.file||""}`.toUpperCase();
-      b.checked = kind==="gold" ? (hay.includes("XAUUSD")||hay.includes("GOLD")) : hay.includes("US100");
+      if(!cf){b.checked=false;return;}
+      const hay=`${cf.sym} ${cf.file}`.toUpperCase();
+      if(kind==="gold")b.checked=hay.includes("XAUUSD")||hay.includes("GOLD");
+      else if(kind==="us100")b.checked=hay.includes("US100");
+      else if(kind==="min")b.checked=/^M\d+$/.test(cf.tf);
+      else if(kind==="hour")b.checked=/^H\d+$/.test(cf.tf);
     });
     sync();
   };
   if(gold)gold.onclick=()=>selectKind("gold");
   if(us100)us100.onclick=()=>selectKind("us100");
+  if(minBtn)minBtn.onclick=()=>selectKind("min");
+  if(hourBtn)hourBtn.onclick=()=>selectKind("hour");
   if(clear)clear.onclick=()=>{ boxes().forEach(b=>{b.checked=false;}); sync(); };
   sync();
 }

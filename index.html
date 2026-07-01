@@ -825,8 +825,8 @@
   <div class="tabpane" id="pane-revdbc" hidden>
     <div class="grid">
       <section class="card">
-        <h2>변곡더블비-코덱스 백테스트</h2>
-        <div class="intro"><b>변곡더블비-코덱스</b>(Codex 버전) · <b>찢어진 볼밴에서 나온 하락 더블비</b>를 먼저 seed로 잡고, 이후 볼밴이 수축되면서 <b>하락 4/4 밴드</b>가 가격으로 올라와 캔들과 봉마감으로 만나는 변곡 자리를 RSI higher low와 함께 잡습니다.</div>
+        <h2>변곡더블비-코덱스 (탐색모드)</h2>
+        <div class="intro"><b>변곡더블비-코덱스</b> · <b>단순 버전</b>: 찢어진 볼밴에서 나온 하락DB를 <b>기준점(seed)</b>으로만 저장 — 그 자체는 신호 아님. 이후 다시 <b>DB 또는 4/4 원비에 재접촉</b>하면서 <b>RSI 다이버전스</b>가 나오는 자리만 잡습니다. 손절/익절 백테스트 없이 <b>타점이 실제로 잡히는지 확인하는 신호 검출표</b>입니다.</div>
 
         <div class="field"><label>데이터 소스</label>
           <div class="subtabs" id="revdbc_src" data-cur="stored">
@@ -862,137 +862,58 @@
           <select id="revdbc_tf"><option value="5m">5분봉</option><option value="10m">10분봉 (5분 합성)</option><option value="1h">1시간봉</option><option value="1d">일봉</option></select>
         </div>
 
-        <div class="field"><label>장기이평 필터 (봉, 0=없음)</label>
-          <input id="revdbc_ma" class="mono" type="number" value="0" min="0" step="1">
-          <div class="hint">0이면 필터 없음. 예) 120 → 하락DB 발생 시 가격이 120SMA 아래일 때만 후보 등록.</div>
-        </div>
-
-        <div class="note"><b>진입 기준</b> · 수축 상태의 DB는 버리고, <b>확장 상태에서 터진 하락DB만</b> 시작점으로 씁니다. 진입은 그 뒤 가격이 더 못 밀고 수축될 때 <b>하락 4/4 밴드와 캔들이 봉마감으로 만나는 자리</b>입니다.</div>
+        <div class="note"><b>1단계 seed</b> · 찢어진(확장) 볼밴 상태에서 나온 하락 더블비만 기준점으로 등록(수축 중 DB는 버림). <b>2단계 재접촉</b> · seed 이후 최대대기봉 안에서 DB 또는 4/4 원비에 다시 <b>실제 접촉</b>(근처X)하고, <b>가격은 seed 저점 근처인데 RSI는 seed보다 높으면</b>(다이버전스) 신호로 잡음.</div>
 
         <div class="row2">
           <div class="field"><label>볼밴 확장 평균 기간 (봉)</label><input id="revdbc_dblook" class="mono" type="number" value="80" min="20" step="5"></div>
-          <div class="field"><label>확장DB 배수 (콤마)</label><input id="revdbc_expand" class="mono" value="1.3,1.5"></div>
-        </div>
-
-        <div class="row2">
-          <div class="field"><label>수축 배수: 신호폭 ÷ DB폭 (콤마)</label>
-            <input id="revdbc_contract" class="mono" value="0.65,0.8">
-            <div class="hint">DB 때 찢어진 폭보다 신호 시점 폭이 이 비율 이하로 줄어야 합니다.</div>
-          </div>
-          <div class="field"><label>현재 스퀴즈 상한 (콤마)</label>
-            <input id="revdbc_squeeze" class="mono" value="1.15">
-            <div class="hint">현재 볼밴폭 ÷ 평균폭. DB 대비 수축 또는 이 값 이하이면 수축으로 인정.</div>
+          <div class="field"><label>확장DB 배수 (콤마)</label>
+            <input id="revdbc_expand" class="mono" value="1.3">
+            <div class="hint">seed 시점 볼밴폭 ÷ 평균폭 ≥ 이 값. 기본 1.3.</div>
           </div>
         </div>
 
         <div class="row2">
-          <div class="field"><label>RSI 기간 / RSI MA</label>
-            <div class="row2" style="grid-template-columns:1fr 1fr;gap:8px">
-              <input id="revdbc_rsi_period" class="mono" type="number" value="14" min="2" step="1">
-              <input id="revdbc_rsi_ma" class="mono" type="number" value="14" min="2" step="1">
-            </div>
+          <div class="field"><label>최대 대기 봉 수</label>
+            <input id="revdbc_wait" class="mono" type="number" value="80" min="5" step="5">
+            <div class="hint">seed 이후 이 봉 안에 재접촉+RSI다이버가 없으면 폐기.</div>
           </div>
-          <div class="field"><label>RSI 저점 상한 (콤마)</label><input id="revdbc_rsi_floor" class="mono" value="35,40"></div>
+          <div class="field"><label>재접촉 여유 ×TR (콤마)</label>
+            <input id="revdbc_retestk" class="mono" value="0.5">
+            <div class="hint">재접촉봉 저가가 seed 이후 최저점(pivotLow) + 여유×TR 안이어야 함. 기본 0.5.</div>
+          </div>
         </div>
 
         <div class="row2">
+          <div class="field"><label>RSI 기간</label><input id="revdbc_rsi_period" class="mono" type="number" value="14" min="2" step="1"></div>
           <div class="field"><label>RSI 다이버전스 최소폭 (콤마)</label>
-            <input id="revdbc_rsi_gap" class="mono" value="3,5">
-            <div class="hint">현재 RSI가 기준 저점 RSI보다 이 값 이상 높아야 합니다.</div>
-          </div>
-          <div class="field"><label>PivotLow 재터치 여유 ×TR (콤마)</label>
-            <input id="revdbc_bandk" class="mono" value="0.5,1.0">
-            <div class="hint">신호봉 저가가 DB 이후 만들어진 저점 근처에 있어야 합니다. 너무 위에서 뜬 신호는 제외.</div>
+            <input id="revdbc_rsi_gap" class="mono" value="3">
+            <div class="hint">재접촉 RSI ≥ (seed~재접촉 사이 최저RSI) + 이 값. 기본 3.</div>
           </div>
         </div>
 
         <div class="row2">
-          <div class="field"><label>하락 4/4 밴드 턴 강도 ×TR (콤마)</label>
-            <input id="revdbc_bb44_slope" class="mono" value="0">
-            <div class="hint">하락 쪽 4/4 밴드가 저점 이후 가격 쪽으로 꺾여 올라오는 최소 기울기.</div>
-          </div>
           <div class="field"><label>4/4 접촉 기준</label>
             <div class="subtabs" id="revdbc_touch" data-cur="wick">
               <button data-t="body">몸통 접촉</button><button data-t="wick" class="on">꼬리 접촉</button>
             </div>
-            <div class="hint">하락 4/4 lower band는 <b>근처면 안 되고 실제로 닿아야</b> 신호. <b>꼬리 접촉</b>(기본)=고가~저가가 밴드를 포함 & 종가≥밴드 — 저가로 찍고 몸통은 위에서 마감하는 지지반등형. <b>몸통 접촉</b>=시가~종가 범위가 밴드를 포함 & 종가≥밴드(밴드가 시가기준이라 가격에 뒤처져 실전에서 거의 발생 안 함).</div>
+            <div class="hint">DB/4-4 재접촉은 <b>근처면 안 되고 실제로 닿아야</b> 함. <b>꼬리 접촉</b>(기본)=고가~저가가 밴드를 포함. <b>몸통 접촉</b>=시가~종가 범위가 밴드를 포함(더 엄격, 실전에서 거의 안 나옴).</div>
+          </div>
+          <div class="field"><label>이후 N봉 참고 수익률</label>
+            <input id="revdbc_fwdn" class="mono" type="number" value="20" min="1" step="1">
+            <div class="hint">아직 SL/TP 백테스트 아님 — 신호 종가 대비 N봉 뒤 종가 수익률만 참고용으로 표시.</div>
           </div>
         </div>
 
-        <div class="row2">
-          <div class="field"><label>하락 4/4 턴 확인 범위 (봉)</label><input id="revdbc_bb44_look" class="mono" type="number" value="4" min="1" step="1"></div>
-          <div class="field"><label>신호봉 최대 몸통 ×TR (콤마)</label>
-            <input id="revdbc_bodyk" class="mono" value="1.0,1.3">
-            <div class="hint">돌파 지속 장대봉은 제외하고, 옆으로 기는 봉/약상승·약하락 봉만 남깁니다.</div>
-          </div>
-        </div>
-
-        <div class="field"><label>RSI 확인 방식</label>
-          <div class="subtabs" id="revdbc_rsi_confirm" data-cur="turn">
-            <button data-c="turn" class="on">RSI 턴</button><button data-c="ma">RSI MA 회복</button><button data-c="div">다이버전스만</button>
-          </div>
-        </div>
-
-        <div class="field"><label>DB 이후 최소 대기 봉 수</label>
-          <input id="revdbc_minwait" class="mono" type="number" value="2" min="1" step="1">
-          <div class="hint">하락DB 직후 바로 받지 않고, 최소 이 봉 수 이후부터 수축/4-4 만남을 확인합니다.</div>
-        </div>
-
-        <div class="row2">
-          <div class="field"><label>DB저점 추가훼손 허용 ×TR (콤마)</label>
-            <input id="revdbc_lbk" class="mono" value="0.5,1.0">
-            <div class="hint">DB 저점보다 이 값 이상 더 밀리면 그 DB seed는 실패로 폐기합니다.</div>
-          </div>
-          <div class="field"><label>저점 이후 최소 횡보 봉 수 (콤마)</label>
-            <input id="revdbc_bmb" class="mono" value="3,5">
-            <div class="hint">pivotLow 이후 이 봉 이상 횡보해야 유효</div>
-          </div>
-        </div>
-
-        <div class="field"><label>최대 대기 봉 수</label>
-          <input id="revdbc_wait" class="mono" type="number" value="50" min="5" step="5">
-          <div class="hint">확장 하락DB 이후 이 봉 안에 수축 + 하락 4/4 만남이 없으면 폐기.</div>
-        </div>
-
-        <div class="field"><label>진입 방식</label>
-          <div class="subtabs" id="revdbc_entry" data-cur="nextOpen">
-            <button data-m="close">신호봉 종가</button><button data-m="nextOpen" class="on">다음봉 시가</button>
-          </div>
-        </div>
-
-        <div class="field"><label>손절/익절 TR 기준</label>
-          <div class="subtabs" id="revdbc_trmode" data-cur="setupMax">
-            <button data-m="signal">신호봉 TR</button><button data-m="anchor">기준저점 TR</button><button data-m="setupMax" class="on">셋업 최대TR</button>
-          </div>
-        </div>
-
-        <div class="row2">
-          <div class="field"><label>손절폭 ×TR (콤마)</label>
-            <input id="revdbc_sl" class="mono" value="1.0,1.5,2.0">
-            <div class="hint">SL = pivotLow − 손절×TR(신호봉)</div>
-          </div>
-          <div class="field"><label>익절폭 ×TR (콤마)</label>
-            <input id="revdbc_tp" class="mono" value="1.0,1.5,2.0">
-            <div class="hint">TP = 진입가 + 익절×TR(신호봉)</div>
-          </div>
-        </div>
-        <div class="row2">
-          <div class="field"><label>미체결 만료 (봉)</label><input id="revdbc_expiry" class="mono" type="number" value="50" min="1" step="1"></div>
-          <div class="field"><label>최소 거래수 필터</label><input id="revdbc_min" class="mono" type="number" value="5" min="0" step="1"></div>
-        </div>
-
-        <button class="runbtn" id="revdbc_run">▶ 변곡더블비 돌리기</button>
+        <button class="runbtn" id="revdbc_run">▶ 신호 검출 돌리기</button>
         <div class="err" id="revdbc_err"></div>
         <div class="mono" id="revdbc_status" style="font-size:11px;color:var(--ink-faint);margin-top:8px;line-height:1.5"></div>
-        <div class="note"><b>로직</b> · 확장된 볼밴에서 하락 더블비 발생 → 그 DB를 seed로 저장 → 이후 가격이 DB 저점을 크게 훼손하지 못하고 옆으로 기는 동안 볼밴폭이 수축 → <b>하락 4/4 밴드가 가격 쪽으로 뾰족하게 올라와 캔들과 봉마감으로 만남</b> → RSI higher low + 선택한 RSI 확인 → 반전 롱 진입. 손절=pivotLow−손절×TR, 익절=진입가+익절×TR. 동시 1포지션, 손절 우선, 수수료·스프레드 미반영.</div>
+        <div class="note"><b>탐색 모드</b> · 손절/익절 성과표가 아니라 <b>타점이 실제로 잡히는지 확인하는 신호 검출표</b>입니다. 결과에서 seed DB 날짜·재접촉 날짜·재접촉 타입(DB/4-4)·RSI 다이버전스 폭을 직접 확인하세요.</div>
       </section>
       <section id="revdbc_results">
-        <div class="placeholder"><div class="big">조건을 설정하고 <span class="amb">변곡더블비 돌리기</span></div><div class="mono" style="font-size:12px">확장 하락DB → 볼밴 수축 → 하락 4/4 만남 → RSI 변곡 → 반전 롱</div></div>
+        <div class="placeholder"><div class="big">조건을 설정하고 <span class="amb">신호 검출 돌리기</span></div><div class="mono" style="font-size:12px">찢는 DB(seed) → 대기 → DB/4-4 재접촉 → RSI 다이버 확인</div></div>
       </section>
     </div>
   </div>
-
-  <!-- =================== TAB: BREAKOUT THEN MA120 =================== -->
 
   <!-- =================== TAB: BREAKOUT THEN MA120 =================== -->
   <div class="tabpane" id="pane-break120" hidden>
@@ -1178,6 +1099,6 @@
 
 </div>
 
-<script src="leverage-lab.js?v=20260630o"></script>
+<script src="leverage-lab.js?v=20260630p"></script>
 </body>
 </html>

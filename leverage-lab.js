@@ -4012,3 +4012,368 @@ function drawRSI(rCurve,holdCurve,log){
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init); else init();
 })();
 //__CHUNK_END__
+
+/* ===== 변곡더블비 EMA 확인형 v1 (revdbe) — 더블바텀 + EMA 추세확인, 롱 전용 =====
+ * ① 1차 저점: 저가<BB하단(20,2)
+ * ② 반등: 이후 종가>EMA5 최소 1회
+ * ③ 2차 저점: |2차-1차|<=ATR*near, 종가>BB하단, (옵션)이탈강도 약화
+ * ④ 확인: 종가>EMA13 && EMA5>EMA8 → 다음봉 시가 매수
+ * ⑤ SL=2차저점-ATR*slAtr, TP=고정R / BB중심 / BB상단. 지표는 R(리스크) 기준.
+ */
+(function(){
+  const el=id=>document.getElementById(id);
+  function ema(arr,period){
+    const out=new Array(arr.length).fill(null), k=2/(period+1); let seed=0;
+    for(let i=0;i<arr.length;i++){
+      if(i<period-1){seed+=arr[i];continue;}
+      if(i===period-1){seed+=arr[i];out[i]=seed/period;continue;}
+      out[i]=arr[i]*k+out[i-1]*(1-k);
+    }
+    return out;
+  }
+  function bbands(close,period,mult){
+    const mid=new Array(close.length).fill(null),up=new Array(close.length).fill(null),lo=new Array(close.length).fill(null);
+    for(let i=period-1;i<close.length;i++){
+      let s=0; for(let k=0;k<period;k++)s+=close[i-k];
+      const m=s/period; let v=0;
+      for(let k=0;k<period;k++){const d=close[i-k]-m;v+=d*d;}
+      const sd=Math.sqrt(v/period);
+      mid[i]=m; up[i]=m+mult*sd; lo[i]=m-mult*sd;
+    }
+    return{mid,up,lo};
+  }
+  function atr(bars,period){
+    const out=new Array(bars.length).fill(null), tr=new Array(bars.length).fill(0);
+    for(let i=0;i<bars.length;i++){
+      tr[i]=i===0?bars[i].h-bars[i].l:Math.max(bars[i].h-bars[i].l,Math.abs(bars[i].h-bars[i-1].c),Math.abs(bars[i].l-bars[i-1].c));
+    }
+    let seed=0;
+    for(let i=0;i<bars.length;i++){
+      if(i<period){seed+=tr[i];if(i===period-1)out[i]=seed/period;continue;}
+      out[i]=(out[i-1]*(period-1)+tr[i])/period;
+    }
+    return out;
+  }
+  function swingLows(bars,w){
+    const idx=[];
+    for(let i=w;i<bars.length-w;i++){
+      let isLow=true;
+      for(let k=1;k<=w;k++)if(bars[i-k].l<bars[i].l||bars[i+k].l<bars[i].l){isLow=false;break;}
+      if(isLow)idx.push(i);
+    }
+    return idx;
+  }
+  // 백테스트 (롱) — R기준 결과. opts: {N,near,slAtr,tpMode,tpR,weaker,swingW,maxHold,entryMode}
+  function backtest(bars,ind,lows,opts){
+    const {N,near,slAtr,tpMode,tpR,weaker,maxHold,entryMode}=opts;
+    const {e5,e8,e13,B,A}=ind;
+    const pen=i=>(B.lo[i]==null?-1:B.lo[i]-bars[i].l);
+    const trades=[]; let lastExit=-1;
+    for(let a=0;a<lows.length;a++){
+      const L1=lows[a];
+      if(B.lo[L1]==null||A[L1]==null)continue;
+      if(!(bars[L1].l<B.lo[L1]))continue;
+      for(let b=a+1;b<lows.length;b++){
+        const L2=lows[b];
+        if(L2-L1>N)break;
+        if(B.lo[L2]==null||A[L2]==null)continue;
+        let reb=false;
+        for(let j=L1+1;j<L2;j++){if(e5[j]!=null&&bars[j].c>e5[j]){reb=true;break;}}
+        if(!reb)continue;
+        if(Math.abs(bars[L2].l-bars[L1].l)>A[L2]*near)continue;
+        if(!(bars[L2].c>B.lo[L2]))continue;
+        if(weaker&&!(pen(L2)<pen(L1)))continue;
+        let conf=-1;
+        for(let i=L2;i<=Math.min(bars.length-2,L2+N);i++){
+          if(e13[i]==null||e8[i]==null)continue;
+          if(bars[i].c>e13[i]&&e5[i]>e8[i]){conf=i;break;}
+        }
+        if(conf<0)continue;
+        const entryIdx=entryMode==="nextOpen"?conf+1:conf;
+        if(entryIdx<=lastExit)break;
+        if(entryIdx>=bars.length)break;
+        const entry=entryMode==="nextOpen"?bars[entryIdx].o:bars[conf].c;
+        const stop=bars[L2].l-A[L2]*slAtr;
+        const risk=entry-stop;
+        if(risk<=0)break;
+        let tp;
+        if(tpMode==="R")tp=entry+risk*tpR;
+        else if(tpMode==="mid")tp=B.mid[conf];
+        else tp=B.up[conf];
+        if(tp==null||tp<=entry)break;
+        const end=Math.min(bars.length,entryIdx+maxHold);
+        let exit=null,exitIdx=null,reason=null,R=null;
+        for(let i=entryIdx;i<end;i++){
+          if(bars[i].l<=stop){exit=stop;exitIdx=i;reason="SL";R=(stop-entry)/risk;break;}
+          if(bars[i].h>=tp){exit=tp;exitIdx=i;reason="TP";R=(tp-entry)/risk;break;}
+        }
+        if(exit==null){exitIdx=Math.min(bars.length-1,entryIdx+maxHold-1);exit=bars[exitIdx].c;reason="HOLD";R=(exit-entry)/risk;}
+        trades.push({L1,L2,conf,entryIdx,exitIdx,entry,stop,tp,exit,reason,R,
+          d1:bars[L1].date,d2:bars[L2].date,de:bars[entryIdx].date,dx:bars[exitIdx].date,
+          low1:bars[L1].l,low2:bars[L2].l});
+        lastExit=exitIdx;
+        break;
+      }
+    }
+    return trades;
+  }
+  function stats(trades){
+    const n=trades.length; if(!n)return{n:0};
+    const wins=trades.filter(t=>t.R>0);
+    const totR=trades.reduce((s,t)=>s+t.R,0);
+    const gW=wins.reduce((s,t)=>s+t.R,0), gL=-trades.filter(t=>t.R<=0).reduce((s,t)=>s+t.R,0);
+    let eq=0,peak=0,mdd=0;
+    for(const t of trades){eq+=t.R;if(eq>peak)peak=eq;if(eq-peak<mdd)mdd=eq-peak;}
+    return{n,winRate:wins.length/n,totR,expc:totR/n,pf:gL>0?gW/gL:(gW>0?Infinity:0),
+      mddR:mdd,mar:mdd<0?totR/-mdd:(totR>0?Infinity:0),
+      avgWin:wins.length?gW/wins.length:0,avgLoss:(n-wins.length)?gL/(n-wins.length):0,
+      tpC:trades.filter(t=>t.reason==="TP").length,slC:trades.filter(t=>t.reason==="SL").length,
+      holdC:trades.filter(t=>t.reason==="HOLD").length};
+  }
+  function buildInd(bars){
+    const close=bars.map(b=>b.c);
+    return{e5:ema(close,5),e8:ema(close,8),e13:ema(close,13),B:bbands(close,20,2),A:atr(bars,14)};
+  }
+  function formatDisplayTime(rawDate,offsetHours){
+    if(!rawDate)return "-";
+    const d=new Date(String(rawDate).replace(" ","T"));
+    if(Number.isNaN(d.getTime()))return String(rawDate);
+    d.setHours(d.getHours()+(offsetHours||0));
+    const p=x=>String(x).padStart(2,"0");
+    return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+  function parseMT5local(text){
+    const lines=text.split(/\r?\n/),out=[];
+    const start=/date|open|time/i.test(lines[0]||"")?1:0;
+    for(let i=start;i<lines.length;i++){
+      const ln=lines[i].trim(); if(!ln)continue;
+      const p=ln.split(/[\t,;]+/); if(p.length<5)continue;
+      const d=p[0].replace(/\./g,"-").replace(/\//g,"-").slice(0,10);
+      const hasT=/:/.test(p[1]||""); const oi=hasT?2:1;
+      const o=+p[oi],h=+p[oi+1],l=+p[oi+2],c=+p[oi+3];
+      if(!isFinite(o)||!isFinite(h)||!isFinite(l)||!isFinite(c)||c<=0)continue;
+      out.push({day:d,date:d+" "+(hasT?p[1]:"00:00:00"),o,h,l,c});
+    }
+    if(out.length<2)throw new Error("CSV에서 유효한 OHLC 행을 못 찾음");
+    return out;
+  }
+  // 앞부분 일봉 구간 제거(인트라데이 시작점부터). Daily 파일은 전부 00:00:00이라 무변.
+  function stripLeadingDaily(bars){
+    let start=0;
+    for(let i=0;i<bars.length;i++){const t=(bars[i].date||"").slice(11);if(t&&t!=="00:00:00"){start=i;break;}}
+    return start>0?bars.slice(start):bars;
+  }
+  function groupByDay(bars){const m={},order=[];for(const b of bars){if(!m[b.day]){m[b.day]=[];order.push(b.day);}m[b.day].push(b);}return{m,order};}
+  function aggBars(g){let h=-Infinity,l=Infinity;for(const x of g){if(x.h>h)h=x.h;if(x.l<l)l=x.l;}return{day:g[0].day,date:g[0].date,o:g[0].o,h,l,c:g[g.length-1].c};}
+  function intradayOnly(bars){const{m}=groupByDay(bars);return bars.filter(b=>m[b.day].length>1);}
+  function resampleN(bars,nn){const{m,order}=groupByDay(bars);const out=[];for(const d of order){const a=m[d];for(let k=0;k<a.length;k+=nn)out.push(aggBars(a.slice(k,k+nn)));}return out;}
+  function resampleDaily(bars){const{m,order}=groupByDay(bars);return order.map(d=>aggBars(m[d]));}
+  function buildTF(raw,tf){
+    if(tf==="5m")return intradayOnly(raw);
+    if(tf==="10m")return resampleN(intradayOnly(raw),2);
+    if(tf==="1h")return resampleN(intradayOnly(raw),12);
+    return resampleDaily(raw);
+  }
+  let RAWCACHE={}, RESULTS=[], SORT={key:"mar",dir:-1};
+  function parseList(str,minV){return String(str).split(/[,\s]+/).map(x=>+x).filter(x=>isFinite(x)&&x>=(minV||0));}
+  function cur(id,fb){const x=el(id);return x?(x.dataset.cur||fb):fb;}
+  function errMsg(m){el("revdbe_err").textContent=m||"";}
+  function statusMsg(m){el("revdbe_status").textContent=m||"";}
+  async function loadSources(){
+    const src=el("revdbe_src").dataset.cur;
+    if(src==="upload"){
+      if(!RAWCACHE.__upload__)throw new Error("CSV 파일을 먼저 선택하세요");
+      return[{label:RAWCACHE.__uploadName__||"업로드",bars:stripLeadingDaily(buildTF(RAWCACHE.__upload__,el("revdbe_tf").value))}];
+    }
+    if(src==="yahoo"){
+      const sym=el("revdbe_sym").value.trim(); if(!sym)throw new Error("야후 티커를 입력하세요");
+      const from=el("revdbe_from").value,to=el("revdbe_to").value;
+      statusMsg(`야후 ${sym} 불러오는 중…`);
+      const u=`${PROXY}/?yahoo=${encodeURIComponent(sym)}&from=${from}&to=${to}&interval=5m`;
+      const r=await fetch(u); const j=await r.json();
+      if(!r.ok||!j.data)throw new Error(j.error||"프록시 오류 "+r.status);
+      const raw=j.data.map(x=>({day:String(x.date).slice(0,10),date:String(x.date),o:+x.o,h:+x.h,l:+x.l,c:+x.c}));
+      return[{label:sym,bars:stripLeadingDaily(buildTF(raw,el("revdbe_tf").value))}];
+    }
+    const picks=selectedCsvFiles("revdbe");
+    if(!picks.length)throw new Error("백테스트할 저장 CSV를 1개 이상 체크하세요");
+    const out=[];
+    for(const cf of picks){
+      if(!RAWCACHE[cf.file]){
+        statusMsg(`${cf.sym} ${cf.tf} 불러오는 중…`);
+        const r=await fetch(cf.file,{cache:"force-cache"});
+        if(!r.ok)throw new Error(`${cf.file} 못 찾음(404)`);
+        let parsed=parseMT5local(await r.text());
+        if(cf.raw)parsed=intradayOnly(parsed);
+        RAWCACHE[cf.file]=stripLeadingDaily(parsed);
+      }
+      out.push({label:`${cf.sym}·${cf.tf}`,file:cf.file,bars:RAWCACHE[cf.file]});
+    }
+    return out;
+  }
+  async function run(){
+    errMsg(""); RESULTS=[];
+    const btn=el("revdbe_run"); btn.disabled=true;
+    try{
+      const N=Math.max(5,+el("revdbe_n").value||30);
+      const swingW=Math.max(1,+el("revdbe_sw").value||2);
+      const near=Math.max(0.1,+el("revdbe_near").value||1.0);
+      const maxHold=Math.max(5,+el("revdbe_hold").value||60);
+      const weaker=cur("revdbe_weaker","on")==="on";
+      const entryMode=cur("revdbe_entry","nextOpen");
+      const tpMode=cur("revdbe_tpmode","R");
+      const slAtrs=parseList(el("revdbe_sl").value,0);
+      let tpRs=parseList(el("revdbe_tp").value,0);
+      const dispOffset=+el("revdbe_dispoff").value||0;
+      if(!slAtrs.length)throw new Error("손절 ×ATR 값을 하나 이상 입력하세요");
+      if(tpMode==="R"&&!tpRs.length)throw new Error("고정R 모드는 익절 ×리스크 값이 필요합니다");
+      if(tpMode!=="R")tpRs=[tpRs[0]||0]; // BB중심/상단은 tpR 무의미 → 1개로 축소
+      const sources=await loadSources();
+      const rows=[];
+      let combo=0, total=sources.length*slAtrs.length*tpRs.length;
+      for(const s of sources){
+        const bars=s.bars;
+        if(bars.length<60)continue;
+        const ind=buildInd(bars);
+        const lows=swingLows(bars,swingW);
+        // 전/후반 강건성용
+        const mid=Math.floor(bars.length/2);
+        const barsA=bars.slice(0,mid), barsB=bars.slice(mid);
+        const indA=buildInd(barsA), lowsA=swingLows(barsA,swingW);
+        const indB=buildInd(barsB), lowsB=swingLows(barsB,swingW);
+        for(const slAtr of slAtrs){
+          for(const tpR of tpRs){
+            combo++;
+            if(combo%8===0){statusMsg(`${combo}/${total} 조합…`);await new Promise(r=>setTimeout(r,0));}
+            const o={N,near,slAtr,tpMode,tpR,weaker,swingW,maxHold,entryMode};
+            const st=stats(backtest(bars,ind,lows,o));
+            if(!st.n)continue;
+            const sA=stats(backtest(barsA,indA,lowsA,o));
+            const sB=stats(backtest(barsB,indB,lowsB,o));
+            const robust=sA.n&&sB.n&&sA.expc>0&&sB.expc>0;
+            rows.push({label:s.label,slAtr,tpR,tpMode,dispOffset,...st,
+              hA:sA,hB:sB,robust,_trades:backtest(bars,ind,lows,o)});
+          }
+        }
+      }
+      RESULTS=rows;
+      statusMsg(`완료 — 유효 ${rows.length}개 조합 · TP모드=${tpMode} · 약화필터=${weaker?"ON":"OFF"} · 표시+${dispOffset}h · R기준(비용 미반영)`);
+      render();
+    }catch(e){errMsg(e.message);statusMsg("");}
+    finally{btn.disabled=false;}
+  }
+  function rn(x,d=2){return(x==null||!isFinite(x))?(x===Infinity?"∞":"-"):x.toFixed(d);}
+  function arw(k){return SORT.key===k?(SORT.dir<0?" ▾":" ▴"):"";}
+  function numCls(v,good,bad){return v>=good?"hl-good":v<=bad?"hl-bad":"";}
+  function render(){
+    const con=el("revdbe_results");
+    if(!RESULTS.length){
+      con.innerHTML=`<div class="placeholder"><div class="big">거래가 없습니다</div><div class="mono">근접도(ATR)를 키우거나 약화필터를 끄거나 N을 늘려보세요</div></div>`;
+      return;
+    }
+    const key=SORT.key,dir=SORT.dir;
+    const sorted=[...RESULTS].sort((a,b)=>{
+      const va=isFinite(a[key])?a[key]:1e9*Math.sign(dir), vb=isFinite(b[key])?b[key]:1e9*Math.sign(dir);
+      return(vb-va)*dir;
+    });
+    const best=sorted[0], CAP=500, view=sorted.slice(0,CAP);
+    const tpLbl=m=>m==="R"?"고정R":m==="mid"?"BB중심":"BB상단";
+    const capNote=sorted.length>CAP?` <span class="dimv">· 상위 ${CAP}개만</span>`:"";
+    function hdr(k,main,sub=""){return`<th class="revdbe-s" data-k="${k}" style="cursor:pointer"><div class="th-main">${main}${arw(k)}</div>${sub?`<div class="th-sub">${sub}</div>`:""}</th>`;}
+    let html=`<div class="db-best">최상위: <b>${best.label}</b> · ${tpLbl(best.tpMode)} · 손절ATR=${best.slAtr}${best.tpMode==="R"?` tpR=${best.tpR}`:""} → 거래 <b>${best.n}</b>건(TP${best.tpC}/SL${best.slC}/만료${best.holdC}) · 승률 ${(best.winRate*100).toFixed(0)}% · 기대값 <b>${rn(best.expc)}R</b> · PF ${rn(best.pf)} · 총 ${rn(best.totR,1)}R · MDD ${rn(best.mddR,1)}R · MAR ${rn(best.mar)} · 강건성 ${best.robust?'<span class="pos">✔전·후반+</span>':'<span class="neg">✘</span>'}${capNote}</div>`;
+    html+=`<div class="ctable-wrap"><table class="ctable"><thead><tr>
+      <th><div class="th-main">데이터</div></th>
+      ${hdr("slAtr","손절ATR")}${hdr("tpR","tpR")}
+      ${hdr("n","거래수")}${hdr("winRate","승률")}${hdr("expc","기대값R")}${hdr("pf","PF")}${hdr("totR","총R")}${hdr("mddR","MDD R")}${hdr("mar","MAR")}
+      <th><div class="th-main">청산</div><div class="th-sub">TP/SL/만료</div></th>
+      <th><div class="th-main">전반</div><div class="th-sub">exp·PF</div></th>
+      <th><div class="th-main">후반</div><div class="th-sub">exp·PF</div></th>
+      <th><div class="th-main">강건</div></th>
+      <th><div class="th-main">내역</div></th>
+    </tr></thead><tbody>`;
+    const hf=h=>h&&h.n?`${rn(h.expc)}·${rn(h.pf)}`:"n0";
+    view.forEach((r,i)=>{
+      html+=`<tr class="${i===0?"db-hot":""}">
+        <td class="name mono" style="font-size:12px">${r.label}</td>
+        <td class="num">${r.slAtr}</td><td class="num">${r.tpMode==="R"?r.tpR:"-"}</td>
+        <td class="num">${r.n}</td>
+        <td class="num ${numCls(r.winRate,0.55,0)}">${(r.winRate*100).toFixed(0)}%</td>
+        <td class="num ${numCls(r.expc,0.1,0)}">${rn(r.expc)}</td>
+        <td class="num ${numCls(r.pf,1.2,1.0)}">${rn(r.pf)}</td>
+        <td class="num ${r.totR>0?"pos":"neg"}">${rn(r.totR,1)}</td>
+        <td class="num neg">${rn(r.mddR,1)}</td>
+        <td class="num ${numCls(r.mar,2,0)}">${rn(r.mar)}</td>
+        <td class="num mono" style="font-size:11px">${r.tpC}/${r.slC}/${r.holdC}</td>
+        <td class="num mono" style="font-size:11px">${hf(r.hA)}</td>
+        <td class="num mono" style="font-size:11px">${hf(r.hB)}</td>
+        <td class="num">${r.robust?'<span class="pos">✔</span>':'<span class="dimv">·</span>'}</td>
+        <td><button class="revdbe-dtl" data-idx="${i}" style="padding:4px 9px;border:1px solid var(--cyan);background:rgba(8,145,178,.1);color:var(--cyan);border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">▸내역</button></td>
+      </tr>`;
+    });
+    html+=`</tbody></table></div><div id="revdbe_detail_area" style="margin-top:20px"></div>`;
+    con.innerHTML=html;
+    con.querySelectorAll(".revdbe-s").forEach(th=>th.onclick=()=>{
+      const k=th.dataset.k;
+      if(SORT.key===k)SORT.dir*=-1; else{SORT.key=k;SORT.dir=-1;}
+      render();
+    });
+    con.querySelectorAll(".revdbe-dtl").forEach(b=>b.onclick=()=>showDetail(view[+b.dataset.idx]));
+  }
+  function showDetail(r){
+    const area=el("revdbe_detail_area"); if(!area)return;
+    const off=r.dispOffset||0, tpLbl=r.tpMode==="R"?`고정R×${r.tpR}`:r.tpMode==="mid"?"BB중심":"BB상단";
+    let html=`<div class="sectitle">거래 내역 · ${r.label} · 손절ATR=${r.slAtr} · TP=${tpLbl} · 시각=KST(서버+${off}h, 표시전용)</div>
+    <div class="ctable-wrap"><table class="ctable"><thead><tr>
+      <th><div class="th-main">1차저점</div></th><th><div class="th-main">2차저점</div></th><th><div class="th-main">진입시각</div></th>
+      <th><div class="th-main">진입가</div></th><th><div class="th-main">SL</div></th><th><div class="th-main">TP</div></th>
+      <th><div class="th-main">청산시각</div></th><th><div class="th-main">청산가</div></th><th><div class="th-main">결과</div></th><th><div class="th-main">R</div></th>
+      <th><div class="th-main">1차저가</div></th><th><div class="th-main">2차저가</div></th>
+    </tr></thead><tbody>`;
+    for(const t of r._trades){
+      const res=t.reason==="TP"?'<span class="pos">익절</span>':t.reason==="SL"?'<span class="neg">손절</span>':'<span class="dimv">만료</span>';
+      html+=`<tr>
+        <td class="name mono" style="font-size:11px">${formatDisplayTime(t.d1,off)}</td>
+        <td class="name mono" style="font-size:11px">${formatDisplayTime(t.d2,off)}</td>
+        <td class="name mono" style="font-size:11px">${formatDisplayTime(t.de,off)}</td>
+        <td class="num mono">${t.entry.toFixed(2)}</td><td class="num mono">${t.stop.toFixed(2)}</td><td class="num mono">${t.tp.toFixed(2)}</td>
+        <td class="name mono" style="font-size:11px">${formatDisplayTime(t.dx,off)}</td>
+        <td class="num mono">${t.exit.toFixed(2)}</td><td>${res}</td>
+        <td class="num ${t.R>0?"pos":"neg"}">${rn(t.R)}</td>
+        <td class="num mono">${t.low1.toFixed(2)}</td><td class="num mono">${t.low2.toFixed(2)}</td>
+      </tr>`;
+    }
+    html+=`</tbody></table></div>`;
+    area.innerHTML=html;
+    area.scrollIntoView({behavior:"smooth"});
+  }
+  function setSrcMode(s){
+    el("revdbe_src").dataset.cur=s;
+    el("revdbe_src").querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.s===s));
+    el("revdbe_storedRow").style.display=s==="stored"?"":"none";
+    el("revdbe_uploadRow").style.display=s==="upload"?"":"none";
+    el("revdbe_yahooRow").style.display=s==="yahoo"?"":"none";
+    el("revdbe_tfrow").style.display=s==="stored"?"none":"";
+  }
+  function init(){
+    if(!el("revdbe_run"))return;
+    renderCsvChecks("revdbe");
+    el("revdbe_src").querySelectorAll("button").forEach(b=>b.onclick=()=>setSrcMode(b.dataset.s));
+    ["revdbe_weaker","revdbe_entry","revdbe_tpmode"].forEach(id=>{
+      const box=el(id); if(!box)return;
+      box.querySelectorAll("button").forEach(b=>b.onclick=()=>{
+        box.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+        box.dataset.cur=b.dataset.m;
+      });
+    });
+    el("revdbe_file").onchange=async e=>{
+      const f=e.target.files[0]; if(!f)return;
+      try{RAWCACHE.__upload__=parseMT5local(await f.text());RAWCACHE.__uploadName__=f.name.replace(/\.csv$/i,"");}
+      catch(ex){errMsg("⚠ "+ex.message);}
+    };
+    el("revdbe_reload").onclick=()=>{RAWCACHE={};statusMsg("캐시 비움");};
+    el("revdbe_from").value=(()=>{const d=new Date();d.setDate(d.getDate()-730);return d.toISOString().slice(0,10);})();
+    el("revdbe_to").value=today();
+    el("revdbe_run").onclick=run;
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init); else init();
+})();

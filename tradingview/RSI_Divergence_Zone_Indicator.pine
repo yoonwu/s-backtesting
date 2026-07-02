@@ -1,0 +1,172 @@
+//@version=5
+// ============================================================================
+// RSI 다이버전스 자리 (변곡 눌림바닥) — 인디케이터 버전
+// 확정 조합(XAU H2): SR+BB · 캔들 트리거 · RR2.5 · RSI14 · k3 (기본값)
+// US100 H2용: 자리=BB만 · RSI9 · k3 권장
+//
+// 주문 없이 신호·가상 포지션만 표시:
+//  보라 라인 = P1→P2 다이버전스 · "다이버+자리" 라벨 = 자리 통과 셋업
+//  보라 배경 = 트리거 대기 구간 · ▲트리거 = 진입 신호(다음봉 시가)
+//  빨강/초록 라인 = 가상 SL/TP · SL/TP/만료 마커 = 가상 청산
+// 알림: "셋업(다이버+자리)" / "트리거(다음봉 시가 진입)" 두 개 제공
+// ============================================================================
+indicator("RSI 다이버전스 자리 [S-BT] 인디케이터", overlay=true,
+     max_lines_count=500, max_labels_count=500)
+
+// ---------- 입력 ----------
+rsiLen   = input.int(14,  "RSI 기간",                minval=2,  group="다이버전스")
+kBars    = input.int(3,   "스윙 피벗 k봉",           minval=1,  group="다이버전스")
+maxGap   = input.int(60,  "피벗 최대 간격(봉)",       minval=5,  group="다이버전스")
+useSR    = input.bool(true,  "S/R (과거 피벗 레벨)",  group="자리 필터 (선택 전부 충족)")
+useBB    = input.bool(true,  "볼린저(20,2σ) 이탈",    group="자리 필터 (선택 전부 충족)")
+useFIB   = input.bool(false, "피보 되돌림(38.2/50/61.8)", group="자리 필터 (선택 전부 충족)")
+tolATR   = input.float(0.5, "자리 허용오차 ×ATR14",   step=0.1, group="자리 필터 (선택 전부 충족)")
+srLb     = input.int(250, "S/R 룩백(봉)",            group="자리 필터 (선택 전부 충족)")
+fibLb    = input.int(120, "피보 룩백(봉)",            group="자리 필터 (선택 전부 충족)")
+trigMode = input.string("캔들", "트리거", options=["캔들","MACD","캔들+MACD"], group="진입/청산")
+trigW    = input.int(10,  "트리거 대기(봉)",          minval=1,  group="진입/청산")
+rrMult   = input.float(2.5, "손익비 RR",             step=0.5,  group="진입/청산")
+maxHold  = input.int(300, "최대 보유(봉)",            group="진입/청산")
+showBB   = input.bool(true, "BB 하단 표시",           group="표시")
+
+// ---------- 지표 ----------
+rsiV  = ta.rsi(close, rsiLen)
+atrV  = ta.atr(14)
+basis = ta.sma(close, 20)
+dev   = 2.0 * ta.stdev(close, 20)
+bbLo  = basis - dev
+[macdL, macdS, macdH] = ta.macd(close, 12, 26, 9)
+macdX = ta.crossover(macdL, macdS)
+fibHi = ta.highest(high, fibLb)
+fibLo = ta.lowest(low, fibLb)
+plo   = ta.pivotlow(low, kBars, kBars)
+phi   = ta.pivothigh(high, kBars, kBars)
+
+// ---------- 상태 ----------
+var pivBarA = array.new_int()
+var pivValA = array.new_float()
+var float p1Low = na
+var int   p1Bar = na
+var float p1Rsi = na
+var int   waitUntil = -1
+var bool  inPos = false
+var bool  pendingEntry = false
+var float stopP  = na
+var float tpP    = na
+var float entryP = na
+var int   entryBar = na
+
+// 이번 봉 신호 플래그
+bool setupNew   = false
+bool sigTrigger = false
+bool sigEntry   = false
+bool sigWin     = false
+bool sigLoss    = false
+bool sigExpire  = false
+
+// ---------- ① 대기 중 진입 체결 (트리거 다음봉 시가) ----------
+if pendingEntry
+    pendingEntry := false
+    if open > stopP
+        inPos := true
+        entryP := open
+        entryBar := bar_index
+        tpP := entryP + rrMult * (entryP - stopP)
+        sigEntry := true
+    else
+        stopP := na    // 갭으로 손절가 아래 시가 → 스킵
+
+// ---------- ② 가상 포지션 청산 체크 (진입봉 포함, SL 우선=보수적) ----------
+if inPos
+    if low <= stopP
+        sigLoss := true
+        inPos := false
+    else if high >= tpP
+        sigWin := true
+        inPos := false
+    else if bar_index - entryBar >= maxHold
+        sigExpire := true
+        inPos := false
+
+// ---------- ③ 다이버전스 + 자리 판정 (피벗 확정봉) ----------
+if not na(plo)
+    p2Bar = bar_index - kBars
+    p2Low = plo
+    p2Rsi = rsiV[kBars]
+    okGap = not na(p1Low) and p2Bar - p1Bar <= maxGap and p2Bar - p1Bar > kBars
+    okDiv = okGap and p2Low < p1Low and p2Rsi > p1Rsi
+    if okDiv
+        tol = tolATR * atrV[kBars]
+        srOK = not useSR
+        if useSR and array.size(pivBarA) > 0
+            for i = 0 to array.size(pivBarA) - 1
+                pb = array.get(pivBarA, i)
+                if pb >= p1Bar
+                    break
+                if pb >= p2Bar - srLb and math.abs(array.get(pivValA, i) - p2Low) <= tol
+                    srOK := true
+                    break
+        bbOK = not useBB or (not na(bbLo[kBars]) and low[kBars] <= bbLo[kBars])
+        fibOK = not useFIB
+        if useFIB
+            hh = fibHi[kBars + 1]
+            ll = fibLo[kBars + 1]
+            rng = hh - ll
+            if rng > 0
+                f382 = math.abs(p2Low - (hh - 0.382 * rng)) <= tol
+                f500 = math.abs(p2Low - (hh - 0.500 * rng)) <= tol
+                f618 = math.abs(p2Low - (hh - 0.618 * rng)) <= tol
+                fibOK := f382 or f500 or f618
+        if srOK and bbOK and fibOK
+            waitUntil := bar_index + trigW
+            setupNew := true
+            line.new(p1Bar, p1Low, p2Bar, p2Low, color=color.purple, width=2)
+            label.new(p2Bar, p2Low, "다이버+자리", style=label.style_label_up,
+                 color=color.new(color.purple, 20), textcolor=color.white, size=size.small)
+    p1Low := p2Low
+    p1Bar := p2Bar
+    p1Rsi := p2Rsi
+
+if not na(plo)
+    array.push(pivBarA, bar_index - kBars)
+    array.push(pivValA, plo)
+if not na(phi)
+    array.push(pivBarA, bar_index - kBars)
+    array.push(pivValA, phi)
+while array.size(pivBarA) > 0 and array.get(pivBarA, 0) < bar_index - srLb - 200
+    array.shift(pivBarA)
+    array.shift(pivValA)
+
+// ---------- ④ 트리거 (대기 구간 내 첫 발생) ----------
+trigCandle = close > open and close > high[1]
+trigOK = trigMode == "캔들" ? trigCandle : trigMode == "MACD" ? macdX : (trigCandle and macdL > macdS)
+armed  = waitUntil >= 0 and bar_index <= waitUntil and not inPos and not pendingEntry
+
+if armed and trigOK and close > low
+    pendingEntry := true
+    stopP := low          // SL = 트리거봉 저가
+    sigTrigger := true
+    waitUntil := -1
+
+// ---------- 표시 ----------
+plot(showBB ? bbLo : na, "BB 하단", color=color.new(color.blue, 60))
+showLv = inPos or pendingEntry
+plot(showLv ? stopP : na, "SL(가상)", color=color.red,   style=plot.style_linebr, linewidth=2)
+plot(inPos  ? tpP   : na, "TP(가상)", color=color.green, style=plot.style_linebr, linewidth=2)
+plot(inPos  ? entryP: na, "진입가(가상)", color=color.gray, style=plot.style_linebr)
+bgcolor(waitUntil >= 0 and bar_index <= waitUntil and not inPos and not pendingEntry
+     ? color.new(color.purple, 90) : na, title="트리거 대기 구간")
+plotshape(sigTrigger, "트리거", shape.triangleup, location.belowbar,
+     color=color.green, size=size.small, text="트리거")
+plotshape(sigEntry, "진입", shape.circle, location.belowbar,
+     color=color.new(color.black, 0), size=size.tiny, text="진입")
+plotshape(sigWin, "익절", shape.labeldown, location.abovebar,
+     color=color.green, textcolor=color.white, size=size.small, text="TP")
+plotshape(sigLoss, "손절", shape.labeldown, location.abovebar,
+     color=color.red, textcolor=color.white, size=size.small, text="SL")
+plotshape(sigExpire, "만료", shape.labeldown, location.abovebar,
+     color=color.gray, textcolor=color.white, size=size.small, text="만료")
+
+// ---------- 알림 ----------
+alertcondition(setupNew,   "셋업 (다이버+자리)", "RSI 다이버전스 + 자리 확인 — 트리거 감시 시작 ({{ticker}} {{interval}})")
+alertcondition(sigTrigger, "트리거 (진입 신호)", "다이버전스 트리거 발생 — 다음봉 시가 롱, SL=트리거봉 저가 ({{ticker}} {{interval}})")

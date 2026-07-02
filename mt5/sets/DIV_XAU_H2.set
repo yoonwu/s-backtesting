@@ -1,0 +1,30 @@
+; ============================================================
+; RSI_Divergence_EA 프리셋 — 다이버전스 골드 스윙롱 (XAUUSD H2)
+; 차트: XAUUSD · H2 · 헤징계좌 · 알고리즘 트레이딩 ON
+; 무비용 성과: 2년 22거래 · 승률 64% · 평균R +1.23 · PF 4.38
+;              1%리스크 환산 +30% MDD-2% (능선 8/8칸 검증)
+; 신호 월 1회 수준(연 11회)은 정상 — 저빈도 스윙 슬롯.
+; ⑥ 더블비 골드 H2 롱과 같은 슬롯이므로 동시 운용 시 비중 관리.
+; 로드: EA 속성 → 입력 탭 → [로드] → 이 파일.
+; ============================================================
+InpDir=0
+InpRsiPeriod=14
+InpKBars=3
+InpMaxGap=60
+InpUseSR=true
+InpUseBB=true
+InpUseFIB=false
+InpTolATR=0.5
+InpSRLookback=250
+InpFibLookback=120
+InpTrigger=0
+InpTrigWindow=10
+InpRR=2.5
+InpMaxHold=300
+InpLot=0.01
+InpRiskPct=0.0
+InpMagic=880101
+InpMaxSpreadPts=0
+InpComment=DIV-XAU-H2
+InpExpectedSymbol=XAUUSD
+InpExpectedTF=16386

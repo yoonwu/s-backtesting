@@ -107,9 +107,12 @@ if not na(plo)
 if not na(phi)
     array.push(pivBarA, bar_index - kBars)
     array.push(pivValA, phi)
-while array.size(pivBarA) > 0 and array.get(pivBarA, 0) < bar_index - srLb - 200
-    array.shift(pivBarA)
-    array.shift(pivValA)
+while array.size(pivBarA) > 0
+    if array.get(pivBarA, 0) < bar_index - srLb - 200
+        array.shift(pivBarA)
+        array.shift(pivValA)
+    else
+        break
 
 // ---------- 트리거 → 진입 ----------
 var float stopP    = na

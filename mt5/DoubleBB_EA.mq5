@@ -19,7 +19,7 @@
 //|   · 손절·익절 동시 = 손절 우선. 동시 1포지션.                      |
 //+------------------------------------------------------------------+
 #property copyright "LEVERAGE LAB"
-#property version   "1.00"
+#property version   "1.05"
 #property strict
 
 #include <Trade/Trade.mqh>
@@ -45,10 +45,16 @@ input int          InpConfirmWin  = 5;             // 컨펌 윈도우(봉)
 input int          InpExpiryBars  = 50;            // 미체결 만료(봉) — 체결 전까지만 적용
 
 input group "=== 자금 / 실행 ==="
-input double       InpLotPerEntry = 0.01;          // 분할 1차수당 랏 (고정랏)
+input double       InpLot1        = 0.01;          // 1차수 랏
+input double       InpLot2        = 0.01;          // 2차수 랏
+input double       InpLot3        = 0.01;          // 3차수 랏
+input double       InpLot4        = 0.01;          // 4차수 랏
 input long         InpMagic       = 990001;        // 매직넘버 (전략마다 고유값!)
 input int          InpMaxSpreadPts= 0;             // 최대 스프레드(포인트, 0=무시)
 input string       InpComment     = "DBB";         // 주문 코멘트
+input string       InpExpectedSymbol = "";         // 차트 종목 접두어 가드(예: XAUUSD, US100)
+input ENUM_TIMEFRAMES InpExpectedTF = PERIOD_CURRENT; // 차트 타임프레임 가드(PERIOD_CURRENT=끄기)
+input bool         InpDebugSignals= false;         // 신호판정 로그 출력
 
 //--- double BB 고정 파라미터
 #define BB1_PERIOD 4
@@ -74,6 +80,17 @@ int OnInit()
    g_trade.SetTypeFillingBySymbol(_Symbol);
    g_trade.SetDeviationInPoints(20);
    if(InpSplitCount<1){ Print("InpSplitCount must be >=1"); return(INIT_PARAMETERS_INCORRECT); }
+   if(StringLen(InpExpectedSymbol)>0 && StringFind(_Symbol,InpExpectedSymbol)!=0)
+     {
+      PrintFormat("DoubleBB_EA chart mismatch: expected symbol prefix %s, got %s", InpExpectedSymbol, _Symbol);
+      return(INIT_PARAMETERS_INCORRECT);
+     }
+   if(InpExpectedTF!=PERIOD_CURRENT && _Period!=InpExpectedTF)
+     {
+      PrintFormat("DoubleBB_EA chart mismatch: expected TF %s, got %s",
+                  EnumToString(InpExpectedTF), EnumToString((ENUM_TIMEFRAMES)_Period));
+      return(INIT_PARAMETERS_INCORRECT);
+     }
    if(!AccountInfoInteger(ACCOUNT_TRADE_ALLOWED))
       Print("경고: 이 계좌에서 자동매매가 허용되지 않음(또는 알고리즘 트레이딩 OFF).");
    if((ENUM_ACCOUNT_MARGIN_MODE)AccountInfoInteger(ACCOUNT_MARGIN_MODE)!=ACCOUNT_MARGIN_MODE_RETAIL_HEDGING)
@@ -176,6 +193,13 @@ void ResetIdle()
 //+------------------------------------------------------------------+
 void PlaceEntryOrders()
   {
+   // ---- 거래모드 방어: 청산전용·거래중지 심볼은 신규주문 불가 ----
+   ENUM_SYMBOL_TRADE_MODE tmode=(ENUM_SYMBOL_TRADE_MODE)SymbolInfoInteger(_Symbol,SYMBOL_TRADE_MODE);
+   if(tmode==SYMBOL_TRADE_MODE_DISABLED || tmode==SYMBOL_TRADE_MODE_CLOSEONLY)
+     {
+      PrintFormat("주문 차단: %s 거래모드=%s → 신규진입 불가. IDLE 유지.",_Symbol,EnumToString(tmode));
+      return;
+     }
    bool isShort=(InpDir==DIR_SHORT);
    int  N=InpSplitCount;
    ArrayResize(g_orderPrices,0);
@@ -200,20 +224,35 @@ void PlaceEntryOrders()
    for(int k=1;k<N;k++) extreme = isShort ? MathMax(extreme,prices[k]) : MathMin(extreme,prices[k]);
    g_SL = isShort ? extreme + InpSL_x*g_brkTR : extreme - InpSL_x*g_brkTR;
 
+   double lotsArr[4]; lotsArr[0]=InpLot1; lotsArr[1]=InpLot2; lotsArr[2]=InpLot3; lotsArr[3]=InpLot4;
    int    dig = (int)SymbolInfoInteger(_Symbol,SYMBOL_DIGITS);
+   double ask = SymbolInfoDouble(_Symbol,SYMBOL_ASK);
+   double bid = SymbolInfoDouble(_Symbol,SYMBOL_BID);
    ArrayResize(g_orderPrices,N);
+   int okCount=0;
    for(int k=0;k<N;k++)
      {
       double p=NormalizeDouble(prices[k],dig);
       g_orderPrices[k]=p;
-      // 롱=BUY LIMIT(현재가 아래), 숏=SELL LIMIT(현재가 위) 가정.
-      // 가격이 이미 지나간 차수는 시장가 근접 → 지정가 거부될 수 있으니 스킵 보호.
+      double lot=(k<4)?lotsArr[k]:lotsArr[3];
       bool ok;
-      if(isShort) ok=g_trade.SellLimit(InpLotPerEntry,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
-      else        ok=g_trade.BuyLimit (InpLotPerEntry,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
+      if(isShort)
+        {
+         // 숏: 현재가보다 위면 SellLimit, 아래면 SellStop
+         if(p >= bid) ok=g_trade.SellLimit(lot,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
+         else         ok=g_trade.SellStop (lot,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
+        }
+      else
+        {
+         // 롱: 현재가보다 아래면 BuyLimit, 위면 BuyStop
+         if(p <= ask) ok=g_trade.BuyLimit(lot,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
+         else         ok=g_trade.BuyStop (lot,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
+        }
       if(!ok) PrintFormat("주문 실패 차수%d @%.*f (%s)",k,dig,p,g_trade.ResultRetcodeDescription());
+      else    okCount++;
      }
-   g_state=ST_ENTERING; g_barsSince=0;
+   if(okCount>0){ g_state=ST_ENTERING; g_barsSince=0; }
+   else         { Print("전체 주문 실패 → IDLE 복귀"); ResetIdle(); }
   }
 
 //+------------------------------------------------------------------+
@@ -255,28 +294,49 @@ void OnNewBar(const double &op[], const double &hi[], const double &lo[], const 
      }
 
    // ---- IDLE 상태에서만 새 신호 탐색 ----
+   if(g_state!=ST_IDLE || npos>0 || npend>0)
+     {
+      if(InpDebugSignals)
+         PrintFormat("DBB DEBUG skip | %s %s state=%d pos=%d pend=%d barsSince=%d",
+                     _Symbol, EnumToString((ENUM_TIMEFRAMES)_Period), (int)g_state, npos, npend, g_barsSince);
+     }
    if(g_state==ST_IDLE && npos==0 && npend==0)
      {
       // shift1 = 직전 닫힌 봉
       double u1=DoubleUpper(op,cl,1), u2=DoubleUpper(op,cl,2);
       double l1=DoubleLower(op,cl,1), l2=DoubleLower(op,cl,2);
       bool sig = isShort ? (cl[1]<l1 && cl[2]>=l2) : (cl[1]>u1 && cl[2]<=u2);
+      bool pass=true;
+      double ma=0;
+      if(InpMAPeriod>0)
+        {
+         ma=SMAval(cl,InpMAPeriod,1);
+         pass = isShort ? (cl[1]<ma) : (cl[1]>ma);
+        }
+      double TR=hi[1]-lo[1];
+      if(InpDebugSignals)
+        {
+         if(isShort)
+            PrintFormat("DBB DEBUG short | c1=%.5f l1=%.5f c2=%.5f l2=%.5f sig=%s ma%d=%.5f pass=%s TR=%.5f",
+                        cl[1],l1,cl[2],l2,(sig?"Y":"N"),InpMAPeriod,ma,(pass?"Y":"N"),TR);
+         else
+            PrintFormat("DBB DEBUG long | c1=%.5f u1=%.5f c2=%.5f u2=%.5f sig=%s ma%d=%.5f pass=%s TR=%.5f",
+                        cl[1],u1,cl[2],u2,(sig?"Y":"N"),InpMAPeriod,ma,(pass?"Y":"N"),TR);
+        }
       if(sig)
         {
          // 추세필터
-         bool pass=true;
-         if(InpMAPeriod>0)
-           {
-            double ma=SMAval(cl,InpMAPeriod,1);
-            pass = isShort ? (cl[1]<ma) : (cl[1]>ma);
-           }
-         double TR=hi[1]-lo[1];
          if(pass && TR>0)
            {
             g_brkH=hi[1]; g_brkL=lo[1]; g_brkTR=TR; g_brkClose=cl[1];
+            if(InpDebugSignals)
+               PrintFormat("DBB DEBUG signal accepted | H=%.5f L=%.5f C=%.5f TR=%.5f confirm=%s",
+                           g_brkH,g_brkL,g_brkClose,g_brkTR,(InpUseConfirm?"Y":"N"));
             if(InpUseConfirm){ g_state=ST_WAIT_CONFIRM; g_barsSince=0; }
             else             { PlaceEntryOrders(); }
            }
+         else if(InpDebugSignals)
+            PrintFormat("DBB DEBUG signal blocked | pass=%s TR=%.5f", (pass?"Y":"N"), TR);
         }
      }
   }
@@ -289,6 +349,7 @@ void ManageExit()
    double avg=0, vol=0;
    int npos=CountMyPositions(avg,vol);
    if(npos==0) return;
+   if(g_SL<=0 || g_brkTR<=0) return;   // 상태 유실(EA 재시작) 시: 브로커측 SL/TP가 보호. 가상청산 보류.
    bool isShort=(InpDir==DIR_SHORT);
    double bid=SymbolInfoDouble(_Symbol,SYMBOL_BID);
    double ask=SymbolInfoDouble(_Symbol,SYMBOL_ASK);
@@ -311,13 +372,56 @@ void ManageExit()
   }
 
 //+------------------------------------------------------------------+
+//| 매 틱: 보유 포지션에 브로커측 SL/TP 부착·갱신                      |
+//|  - 손절: 체결 즉시 g_SL 부착(고정)                                |
+//|  - 익절: 평단(TP_AVG)이면 체결 추가될 때마다 자동 갱신            |
+//|  EA/PC가 꺼져도 브로커가 SL/TP를 잡아줌(가상청산의 백업).         |
+//+------------------------------------------------------------------+
+void ApplyBrokerStops()
+  {
+   if(g_SL<=0 || g_brkTR<=0) return;          // 상태 없으면 기존 브로커 SL/TP 유지
+   double avg=0, vol=0;
+   int npos=CountMyPositions(avg,vol);
+   if(npos==0) return;
+   bool isShort=(InpDir==DIR_SHORT);
+   int    dig  =(int)SymbolInfoInteger(_Symbol,SYMBOL_DIGITS);
+   double point=SymbolInfoDouble(_Symbol,SYMBOL_POINT);
+   double stops=(double)SymbolInfoInteger(_Symbol,SYMBOL_TRADE_STOPS_LEVEL)*point;
+   double bid  =SymbolInfoDouble(_Symbol,SYMBOL_BID);
+   double ask  =SymbolInfoDouble(_Symbol,SYMBOL_ASK);
+
+   double tp;
+   if(InpTPMode==TP_AVG) tp = isShort ? avg - InpTP_x*g_brkTR : avg + InpTP_x*g_brkTR;
+   else                  tp = isShort ? g_brkL - InpTP_x*g_brkTR : g_brkH + InpTP_x*g_brkTR;
+   double sl=NormalizeDouble(g_SL,dig);
+   tp=NormalizeDouble(tp,dig);
+
+   // 스톱레벨 안쪽이면 이번 틱 보류(주문 거부 방지) — 그동안은 가상청산이 백업
+   if(isShort){ if(sl-ask < stops || bid-tp < stops) return; }
+   else       { if(bid-sl < stops || tp-ask < stops) return; }
+
+   double tol=point;
+   for(int i=PositionsTotal()-1;i>=0;i--)
+     {
+      ulong tkt=PositionGetTicket(i);
+      if(tkt==0) continue;
+      if(PositionGetString(POSITION_SYMBOL)!=_Symbol) continue;
+      if(PositionGetInteger(POSITION_MAGIC)!=InpMagic) continue;
+      double curSL=PositionGetDouble(POSITION_SL);
+      double curTP=PositionGetDouble(POSITION_TP);
+      if(MathAbs(curSL-sl)>tol || MathAbs(curTP-tp)>tol)
+         g_trade.PositionModify(tkt,sl,tp);
+     }
+  }
+
+//+------------------------------------------------------------------+
 void OnTick()
   {
    // 스프레드 필터
    if(InpMaxSpreadPts>0)
      {
       long sp=SymbolInfoInteger(_Symbol,SYMBOL_SPREAD);
-      if(sp>InpMaxSpreadPts) { ManageExit(); return; }  // 청산 감시는 유지
+      if(sp>InpMaxSpreadPts) { ApplyBrokerStops(); ManageExit(); return; }  // 청산 감시는 유지
      }
 
    // 새 봉 감지
@@ -338,7 +442,8 @@ void OnTick()
         }
      }
 
-   // 매 틱 SL/TP 감시 (인트라바 트리거)
+   // 매 틱: 브로커측 SL/TP 부착·갱신 + 가상청산 백업
+   ApplyBrokerStops();
    ManageExit();
   }
 //+------------------------------------------------------------------+

@@ -1,0 +1,27 @@
+; ============================================================
+; MA_Pullback_EA 프리셋 — ★스윙 US100 H4 (확정 ②)
+; 차트: US100.x · H4 · 헤징계좌 · 알고리즘 트레이딩 ON
+; 무비용 성과: +27.2% PF2.69*(이격1.0% 한정, 진짜 1.2~2.7) — 비중 작게
+; 로드: EA 속성 → 입력 탭 → [로드] → 이 파일 선택
+; ⚠ 3분할이라 InpLot1~3 사용(InpLot4 무시). 자금 맞게 조정.
+; ============================================================
+InpDir=0
+InpMAPeriod=200
+InpGapPct=1.0
+InpSplitCount=3
+InpSL_x=1.0
+InpTP_x=2.0
+InpTRHours=12
+InpNewsHours=24
+InpNewsMult=3.0
+InpTouchWaitH=168
+InpExpiryBars=240
+InpLot1=0.01
+InpLot2=0.01
+InpLot3=0.01
+InpLot4=0.01
+InpMagic=880004
+InpMaxSpreadPts=0
+InpComment=MAPB-US100-H4
+InpExpectedSymbol=US100
+InpExpectedTF=16388

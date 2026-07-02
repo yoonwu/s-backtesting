@@ -1,0 +1,157 @@
+//@version=5
+// ============================================================================
+// RSI 다이버전스 자리 (변곡 눌림바닥) — s-backtesting divergence 전략 포팅
+// 확정 조합(XAU H2): SR+BB · 캔들 트리거 · RR2.5 · RSI14 · k3 (기본값)
+// US100 H2용: 자리=BB만 · RSI9 · k3 권장 (입력값으로 변경)
+//
+// 로직 (divergence/gridsearch.py 와 동일):
+//  ① 스윙 피벗저점: 좌우 k봉 최저가, k봉 뒤 확정 (리페인트 없음)
+//  ② 다이버전스: 가격 저점↓ + RSI 저점↑ (연속 피벗 쌍, 간격 k+1~60봉)
+//  ③ 자리(선택 전부 충족): S/R=과거 피벗 레벨 ±오차×ATR14 /
+//     BB=볼린저(20,2σ) 하단 이탈 / FIB=최근 120봉 38.2·50·61.8% ±오차
+//  ④ 트리거: 확정봉부터 10봉 내 캔들(양봉+종가>직전고가) 첫 발생
+//  ⑤ 다음봉 시가 진입 · SL=트리거봉 저가 · TP=진입가+RR×리스크 · 300봉 만료
+//
+// 주의: MT5(서버시간)와 TradingView(거래소/UTC)의 H2 봉 경계가 달라
+//       신호가 1봉 안팎 이동할 수 있음. 같은 봉에서 SL·TP 동시 도달 시
+//       백테스트 엔진은 SL 우선(보수적), TV는 자체 추정 — 미세 차이 가능.
+// ============================================================================
+strategy("RSI 다이버전스 자리 [S-BT]", overlay=true, pyramiding=0,
+     initial_capital=10000, currency=currency.USD,
+     default_qty_type=strategy.fixed, default_qty_value=1,
+     max_lines_count=500, max_labels_count=500, calc_on_every_tick=false)
+
+// ---------- 입력 ----------
+rsiLen   = input.int(14,  "RSI 기간",                minval=2,  group="다이버전스")
+kBars    = input.int(3,   "스윙 피벗 k봉",           minval=1,  group="다이버전스")
+maxGap   = input.int(60,  "피벗 최대 간격(봉)",       minval=5,  group="다이버전스")
+useSR    = input.bool(true,  "S/R (과거 피벗 레벨)",  group="자리 필터 (선택 전부 충족)")
+useBB    = input.bool(true,  "볼린저(20,2σ) 이탈",    group="자리 필터 (선택 전부 충족)")
+useFIB   = input.bool(false, "피보 되돌림(38.2/50/61.8)", group="자리 필터 (선택 전부 충족)")
+tolATR   = input.float(0.5, "자리 허용오차 ×ATR14",   step=0.1, group="자리 필터 (선택 전부 충족)")
+srLb     = input.int(250, "S/R 룩백(봉)",            group="자리 필터 (선택 전부 충족)")
+fibLb    = input.int(120, "피보 룩백(봉)",            group="자리 필터 (선택 전부 충족)")
+trigMode = input.string("캔들", "트리거", options=["캔들","MACD","캔들+MACD"], group="진입/청산")
+trigW    = input.int(10,  "트리거 대기(봉)",          minval=1,  group="진입/청산")
+rrMult   = input.float(2.5, "손익비 RR",             step=0.5,  group="진입/청산")
+maxHold  = input.int(300, "최대 보유(봉)",            group="진입/청산")
+riskPct  = input.float(1.0, "리스크 %/트레이드",      step=0.5,  group="진입/청산")
+
+// ---------- 지표 (매 봉 무조건 계산) ----------
+rsiV  = ta.rsi(close, rsiLen)
+atrV  = ta.atr(14)
+basis = ta.sma(close, 20)
+dev   = 2.0 * ta.stdev(close, 20)
+bbLo  = basis - dev
+[macdL, macdS, macdH] = ta.macd(close, 12, 26, 9)
+macdX = ta.crossover(macdL, macdS)
+fibHi = ta.highest(high, fibLb)
+fibLo = ta.lowest(low, fibLb)
+plo   = ta.pivotlow(low, kBars, kBars)    // 확정 시 피벗저점 가격 (kBars봉 지연)
+phi   = ta.pivothigh(high, kBars, kBars)
+
+// ---------- 상태 ----------
+var pivBarA = array.new_int()      // S/R 레벨: 피벗 고·저 전부
+var pivValA = array.new_float()
+var float p1Low = na               // 직전 피벗저점
+var int   p1Bar = na
+var float p1Rsi = na
+var int   waitUntil = -1           // 트리거 대기 마감 봉
+
+// ---------- 다이버전스 + 자리 판정 (피벗 확정봉에서) ----------
+if not na(plo)
+    p2Bar = bar_index - kBars
+    p2Low = plo
+    p2Rsi = rsiV[kBars]
+    okGap = not na(p1Low) and p2Bar - p1Bar <= maxGap and p2Bar - p1Bar > kBars
+    okDiv = okGap and p2Low < p1Low and p2Rsi > p1Rsi
+    if okDiv
+        tol = tolATR * atrV[kBars]
+        // S/R: p1 이전 피벗 레벨과 tol 이내 (p2 기준 srLb봉 내)
+        srOK = not useSR
+        if useSR and array.size(pivBarA) > 0
+            for i = 0 to array.size(pivBarA) - 1
+                pb = array.get(pivBarA, i)
+                if pb >= p1Bar
+                    break
+                if pb >= p2Bar - srLb and math.abs(array.get(pivValA, i) - p2Low) <= tol
+                    srOK := true
+                    break
+        // BB: 피벗봉 저가가 밴드 하단 이탈
+        bbOK = not useBB or (not na(bbLo[kBars]) and low[kBars] <= bbLo[kBars])
+        // FIB: p2 직전 fibLb봉 레인지 되돌림 레벨 근접
+        fibOK = not useFIB
+        if useFIB
+            hh = fibHi[kBars + 1]
+            ll = fibLo[kBars + 1]
+            rng = hh - ll
+            if rng > 0
+                f382 = math.abs(p2Low - (hh - 0.382 * rng)) <= tol
+                f500 = math.abs(p2Low - (hh - 0.500 * rng)) <= tol
+                f618 = math.abs(p2Low - (hh - 0.618 * rng)) <= tol
+                fibOK := f382 or f500 or f618
+        if srOK and bbOK and fibOK
+            waitUntil := bar_index + trigW
+            line.new(p1Bar, p1Low, p2Bar, p2Low, color=color.purple, width=2)
+            label.new(p2Bar, p2Low, "다이버+자리", style=label.style_label_up,
+                 color=color.new(color.purple, 20), textcolor=color.white, size=size.small)
+    // p1 갱신 (다이버전스 여부와 무관하게 항상 직전 피벗저점)
+    p1Low := p2Low
+    p1Bar := p2Bar
+    p1Rsi := p2Rsi
+
+// 피벗 레벨 배열 추가(판정 후) + 오래된 것 제거
+if not na(plo)
+    array.push(pivBarA, bar_index - kBars)
+    array.push(pivValA, plo)
+if not na(phi)
+    array.push(pivBarA, bar_index - kBars)
+    array.push(pivValA, phi)
+while array.size(pivBarA) > 0 and array.get(pivBarA, 0) < bar_index - srLb - 200
+    array.shift(pivBarA)
+    array.shift(pivValA)
+
+// ---------- 트리거 → 진입 ----------
+var float stopP    = na
+var float tpP      = na
+var int   entryBar = na
+
+trigCandle = close > open and close > high[1]
+trigOK = trigMode == "캔들" ? trigCandle : trigMode == "MACD" ? macdX : (trigCandle and macdL > macdS)
+armed  = waitUntil >= 0 and bar_index <= waitUntil and strategy.position_size == 0
+
+if armed and trigOK
+    riskDist = close - low            // 근사(실체결·SL은 아래에서 확정)
+    if riskDist > 0
+        stopP := low                  // SL = 트리거봉 저가
+        qty = strategy.equity * riskPct / 100 / riskDist
+        strategy.entry("Long", strategy.long, qty=qty)
+        waitUntil := -1
+        label.new(bar_index, high, "트리거 ▲", style=label.style_label_down,
+             color=color.new(color.green, 10), textcolor=color.white, size=size.small)
+        alert("RSI 다이버전스 트리거 — 다음봉 시가 롱 진입, SL=" + str.tostring(low, format.mintick),
+             alert.freq_once_per_bar_close)
+
+// 진입 체결 직후: 실제 평단으로 TP 확정
+justFilled = strategy.position_size > 0 and strategy.position_size[1] == 0
+if justFilled
+    entryBar := bar_index
+    if strategy.position_avg_price <= stopP        // 갭으로 손절가 아래 체결 → 정리
+        tpP := na
+        strategy.close("Long", comment="갭스킵")
+    else
+        tpP := strategy.position_avg_price + rrMult * (strategy.position_avg_price - stopP)
+
+// 청산 주문 + 만료
+if strategy.position_size > 0
+    if not na(tpP)
+        strategy.exit("X", "Long", stop=stopP, limit=tpP)
+    if not na(entryBar) and bar_index - entryBar >= maxHold
+        strategy.close("Long", comment="만료")
+
+// ---------- 표시 ----------
+plot(bbLo, "BB 하단", color=color.new(color.blue, 60))
+plot(strategy.position_size > 0 ? stopP : na, "SL", color=color.red,   style=plot.style_linebr, linewidth=2)
+plot(strategy.position_size > 0 ? tpP   : na, "TP", color=color.green, style=plot.style_linebr, linewidth=2)
+bgcolor(waitUntil >= 0 and bar_index <= waitUntil and strategy.position_size == 0
+     ? color.new(color.purple, 90) : na, title="트리거 대기 구간")

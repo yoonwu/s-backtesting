@@ -1374,6 +1374,30 @@
           </div>
         </div>
 
+        <div class="row2">
+          <div class="field"><label>다이버 타입</label>
+            <div class="subtabs" id="dvl_divtype" data-cur="reg">
+              <button data-m="reg" class="on">정다이버</button><button data-m="hidden">히든</button><button data-m="choch">CHoCH</button>
+            </div>
+            <div class="hint">히든=가격 저점↑·RSI 저점↓(추세 눌림) / CHoCH=상위TF 다이버→현재TF 구조 돌파(자리·트리거·오차 무시).</div>
+          </div>
+          <div class="field"><label>추세 MA 게이트 (콤마, 0=없음)</label>
+            <input id="dvl_ma" class="mono" value="0">
+            <div class="hint">피벗봉 종가가 롱=MA 위 / 숏=MA 아래일 때만 셋업 인정. 히든+200 권장. CHoCH엔 미적용.</div>
+          </div>
+        </div>
+
+        <div class="row2" id="dvl_chochrow" style="display:none">
+          <div class="field"><label>상위TF 배수 (콤마)</label>
+            <input id="dvl_htf" class="mono" value="8">
+            <div class="hint">현재 CSV 봉을 m개씩 합성한 상위TF에서 정다이버 탐지 (M15×8=H2).</div>
+          </div>
+          <div class="field"><label>CHoCH 창 (봉)</label>
+            <input id="dvl_chochwin" class="mono" type="number" value="80" min="10" step="10">
+            <div class="hint">상위TF 다이버 확정 후 이 봉수 안에서 피벗고점(저점) 돌파 대기.</div>
+          </div>
+        </div>
+
         <div class="field"><label>자리 필터 (선택 전부 충족 = 컨플루언스 AND)</label>
           <div class="csv-checkbar" style="margin:0">
             <label><input id="dvl_zone_sr" type="checkbox" checked> S/R</label>
@@ -1577,7 +1601,7 @@
 
 </div>
 
-<script src="leverage-lab.js?v=20260702a"></script>
+<script src="leverage-lab.js?v=20260702b"></script>
 <script>
 /* ============ 다이버전스 탭: 사전 계산된 그리드서치 결과 뷰어 ============ */
 (function(){

@@ -249,6 +249,7 @@
       <button data-tab="revema">변곡DB EMA<span class="sub">Reversal EMA</span></button>
       <button data-tab="trsig">변곡신호<span class="sub">Structural Reversal</span></button>
       <button data-tab="break120">120선 눌림목<span class="sub">MA120-Pullback</span></button>
+      <button data-tab="diverge">다이버전스<span class="sub">RSI Divergence</span></button>
       <button data-tab="paper">가상매매<span class="sub">Paper Lot</span></button>
       <button data-tab="saved">⭐ 저장된 전략 <span class="badge" id="tab_saved_badge"></span><span class="sub">Saved</span></button>
       <button data-tab="board">비교 보드 <span class="badge" id="tab_board_badge"></span><span class="sub">Board</span></button>
@@ -1323,6 +1324,66 @@
   </div>
 
   <!-- =================== TAB: PAPER TRADE (가상매매) =================== -->
+  <!-- =================== TAB: RSI DIVERGENCE (다이버전스) =================== -->
+  <div class="tabpane" id="pane-diverge" hidden>
+    <section class="card" style="margin-top:26px">
+      <h2>RSI 다이버전스 (변곡) — 336조합 전수조사</h2>
+      <div class="intro">
+        <b>가격 저점↓ + RSI 저점↑</b>(스윙 피벗 k봉 확정, 룩어헤드 방지) 다이버전스를 <b>자리 필터</b>(S/R·볼린저·피보 컨플루언스)에서 잡고,
+        <b>트리거</b>(캔들 장악형 / MACD 크로스 / 둘 다)로 진입. 손절=트리거봉 극값 · 익절 1.5R/2.5R · 보수적 체결(SL·TP 동시=SL, 갭손절=시가) · 동시 1포지션.<br>
+        데이터: <b>US100·XAUUSD 2024-07~2026-06</b> × M15/M30/H1/H2/H4 = 10데이터셋 · <b>비용 미반영</b> · 오프라인 파이썬(<span class="mono">divergence/gridsearch.py</span>) 사전 계산 결과.
+      </div>
+      <div class="note" style="margin-top:10px">
+        <b>핵심 결론</b> — ① 합산 상위 골격: <b>롱 · FIB 포함 자리 · MACD 관여 트리거 · 2.5R · k=5</b> (EA필터 통과 66/336)
+        ② 336조합 전체 평균은 음수 → 다이버전스 단독 엣지 없음, <b>자리+컨펌 조합 선별이 전부</b>
+        ③ 숏은 전반 열세(평균 PF 0.83), 예외는 US100 H1 숏 SR+BB
+        ④ ⚠️ 비용·워크포워드 미검증 = <b>관찰 단계</b> (자동매매 후보 등재 아님).
+      </div>
+    </section>
+
+    <section class="card" style="margin-top:26px">
+      <h2>능선(이웃 8칸) 검증 통과 후보</h2>
+      <div class="intro">rsi(9/14) × k(3/5) × rr(1.5/2.5) 이웃 칸이 함께 양수여야 과최적화가 아님 — 통과 3개.</div>
+      <div class="ytable-wrap"><table class="ytable">
+        <thead><tr><th>후보</th><th>설정(최고 셀)</th><th>능선</th><th>거래</th><th>승률</th><th>평균R</th><th>PF</th><th>전반R</th><th>후반R</th><th>비고</th></tr></thead>
+        <tbody>
+          <tr><td>★ XAU H2 롱</td><td class="mono">SR+BB · 캔들 · 2.5R · rsi14 · k3</td><td>8/8칸 +</td><td>22</td><td>63.6%</td><td>+1.227</td><td>4.38</td><td>+1.63</td><td>+1.00</td><td>더블비 ⑥과 같은 슬롯 — 골드 H2 롱 엣지 교차 증거. 연 11회로 표본 얇음</td></tr>
+          <tr><td>XAU M30 롱</td><td class="mono">BB · 캔들+MACD · 2.5R · rsi14 · k5</td><td>k5 4/4칸 +</td><td>73</td><td>42.5%</td><td>+0.485</td><td>1.84</td><td>+0.58</td><td>+0.35</td><td>표본·능선 균형 최고 — 비용 검증 1순위</td></tr>
+          <tr><td>US100 H1 숏</td><td class="mono">SR+BB · 캔들+MACD · 2.5R · rsi9 · k5</td><td>k5 4/4칸 +</td><td>37</td><td>40.5%</td><td>+0.419</td><td>1.70</td><td>+0.33</td><td>+0.53</td><td>상승장 2년 내내 + → 헤지 후보. k3은 전멸(능선 좁음)</td></tr>
+        </tbody>
+      </table></div>
+      <div class="note">반쪽 능선(보류): US100 M15 롱 SR+BB·MACD — rr2.5+k5만 양수(53거래 +0.45/PF1.77), 이웃 칸 후반 음수.</div>
+    </section>
+
+    <section class="card" style="margin-top:26px">
+      <h2>336조합 합산 결과 <span class="badge" id="dv_agg_count"></span></h2>
+      <div class="intro">전 데이터셋 트레이드 합산. 헤더 클릭으로 정렬 · 아래 필터로 좁히기.</div>
+      <div class="subtabs" id="dv_filters" style="margin-bottom:12px">
+        <button data-f="ea" class="on">EA필터(거래≥30·전후반+)</button>
+        <button data-f="long">롱만</button>
+        <button data-f="short">숏만</button>
+        <button data-f="all">전체 336</button>
+      </div>
+      <div id="dv_agg_body" class="ytable-wrap"><div class="note">불러오는 중…</div></div>
+    </section>
+
+    <section class="card" style="margin-top:26px">
+      <h2>데이터셋별 상세 <span class="badge" id="dv_ds_count"></span></h2>
+      <div class="intro">조합 × 종목/TF 3,360행. 종목·TF 선택 후 헤더 클릭으로 정렬.</div>
+      <div class="subtabs" id="dv_ds_sym" style="margin-bottom:8px">
+        <button data-v="" class="on">전체 종목</button><button data-v="US100">US100</button><button data-v="XAUUSD">XAUUSD</button>
+      </div>
+      <div class="subtabs" id="dv_ds_tf" style="margin-bottom:12px">
+        <button data-v="" class="on">전체 TF</button><button data-v="M15">M15</button><button data-v="M30">M30</button><button data-v="H1">H1</button><button data-v="H2">H2</button><button data-v="H4">H4</button>
+      </div>
+      <div class="note" style="margin:0 0 10px;padding:0;border:none">기본 필터: 거래≥20 · 전/후반 모두 + (아래 버튼으로 해제)</div>
+      <div class="subtabs" id="dv_ds_ea" style="margin-bottom:12px">
+        <button data-v="1" class="on">견고 필터 ON</button><button data-v="0">전체 보기</button>
+      </div>
+      <div id="dv_ds_body" class="ytable-wrap"><div class="note">불러오는 중…</div></div>
+    </section>
+  </div>
+
   <div class="tabpane" id="pane-paper" hidden>
     <div class="grid">
       <section class="card">
@@ -1418,5 +1479,109 @@
 </div>
 
 <script src="leverage-lab.js?v=20260701b"></script>
+<script>
+/* ============ 다이버전스 탭: 사전 계산된 그리드서치 결과 뷰어 ============ */
+(function(){
+  const $=s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
+  let AGG=null, DS=null, aggSort={k:"avg_r",d:-1}, dsSort={k:"avg_r",d:-1}, aggFilter="ea", dsSym="", dsTf="", dsEa="1";
+
+  function parseCsv(text){
+    const lines=text.trim().split(/\r?\n/), head=lines[0].split(",");
+    return lines.slice(1).map(l=>{
+      const c=l.split(","), o={};
+      head.forEach((h,i)=>{ const v=c[i]; o[h]=(v===""||v===undefined)?null:(v==="inf"?Infinity:(isNaN(v)?v:+v)); });
+      return o;
+    });
+  }
+  const fmt={
+    pct:v=>v==null?"–":(v*100).toFixed(1)+"%",
+    r3:v=>v==null?"–":(v>0?"+":"")+v.toFixed(3),
+    r2:v=>v==null?"–":(v>0?"+":"")+v.toFixed(2),
+    pf:v=>v==null?"–":(v===Infinity||v==="inf"||v>99?"∞":(+v).toFixed(2)),
+    int:v=>v==null?"0":String(v)
+  };
+  const col=v=>v==null?"":(v>0?' style="color:var(--green,#0a7d4f)"':(v<0?' style="color:var(--red,#c0392b)"':""));
+
+  function table(rows, cols, sort, onSort, cap){
+    let capped=false;
+    if(cap && rows.length>cap){ rows=rows.slice(0,cap); capped=true; }
+    let h='<table class="ytable"><thead><tr>';
+    cols.forEach(c=>{ h+=`<th data-k="${c.k}" style="cursor:pointer">${c.t}${sort.k===c.k?(sort.d<0?" ▼":" ▲"):""}</th>`; });
+    h+='</tr></thead><tbody>';
+    rows.forEach(r=>{
+      h+='<tr>';
+      cols.forEach(c=>{
+        const v=r[c.k], txt=c.f?fmt[c.f](v):(v==null?"–":v);
+        h+=`<td${c.f==="r3"||c.f==="r2"?col(v):""}>${txt}</td>`;
+      });
+      h+='</tr>';
+    });
+    h+='</tbody></table>';
+    if(capped) h+=`<div class="note">상위 ${cap}행만 표시 — 필터로 좁혀주세요.</div>`;
+    const el=document.createElement("div"); el.innerHTML=h;
+    el.querySelectorAll("th").forEach(th=>th.onclick=()=>onSort(th.dataset.k));
+    return el;
+  }
+  const bySort=s=>(a,b)=>{
+    const x=a[s.k], y=b[s.k];
+    if(x==null&&y==null)return 0; if(x==null)return 1; if(y==null)return -1;
+    return (x<y?-1:x>y?1:0)*s.d;
+  };
+
+  const AGG_COLS=[
+    {k:"direction",t:"방향"},{k:"zone",t:"자리"},{k:"trigger",t:"트리거"},{k:"rr",t:"RR"},{k:"rsi",t:"RSI"},{k:"k",t:"k"},
+    {k:"trades",t:"거래",f:"int"},{k:"winrate",t:"승률",f:"pct"},{k:"avg_r",t:"평균R",f:"r3"},{k:"sum_r",t:"합계R",f:"r2"},
+    {k:"pf",t:"PF",f:"pf"},{k:"h1_avg_r",t:"전반R",f:"r3"},{k:"h2_avg_r",t:"후반R",f:"r3"},{k:"pos_datasets",t:"+셋",f:"int"}
+  ];
+  const DS_COLS=[{k:"symbol",t:"종목"},{k:"tf",t:"TF"}].concat(AGG_COLS.filter(c=>c.k!=="pos_datasets"));
+
+  function renderAgg(){
+    if(!AGG) return;
+    let rows=AGG.slice();
+    if(aggFilter==="ea") rows=rows.filter(r=>r.trades>=30&&r.h1_avg_r>0&&r.h2_avg_r>0);
+    else if(aggFilter==="long") rows=rows.filter(r=>r.direction==="long");
+    else if(aggFilter==="short") rows=rows.filter(r=>r.direction==="short");
+    rows.sort(bySort(aggSort));
+    $("#dv_agg_count").textContent=rows.length+"개";
+    const el=table(rows,AGG_COLS,aggSort,k=>{aggSort=aggSort.k===k?{k,d:-aggSort.d}:{k,d:-1};renderAgg();});
+    const box=$("#dv_agg_body"); box.innerHTML=""; box.appendChild(el);
+  }
+  function renderDs(){
+    if(!DS) return;
+    let rows=DS.filter(r=>r.trades>0);
+    if(dsSym) rows=rows.filter(r=>r.symbol===dsSym);
+    if(dsTf) rows=rows.filter(r=>r.tf===dsTf);
+    if(dsEa==="1") rows=rows.filter(r=>r.trades>=20&&r.h1_avg_r>0&&r.h2_avg_r>0);
+    rows.sort(bySort(dsSort));
+    $("#dv_ds_count").textContent=rows.length+"행";
+    const el=table(rows,DS_COLS,dsSort,k=>{dsSort=dsSort.k===k?{k,d:-dsSort.d}:{k,d:-1};renderDs();},400);
+    const box=$("#dv_ds_body"); box.innerHTML=""; box.appendChild(el);
+  }
+
+  function subtabs(id, set){
+    $$("#"+id+" button").forEach(b=>b.onclick=()=>{
+      $$("#"+id+" button").forEach(x=>x.classList.toggle("on",x===b));
+      set(b.dataset.f!==undefined?b.dataset.f:b.dataset.v);
+    });
+  }
+  subtabs("dv_filters",v=>{aggFilter=v;renderAgg();});
+  subtabs("dv_ds_sym",v=>{dsSym=v;renderDs();});
+  subtabs("dv_ds_tf",v=>{dsTf=v;renderDs();});
+  subtabs("dv_ds_ea",v=>{dsEa=v;renderDs();});
+
+  let loaded=false;
+  function load(){
+    if(loaded) return; loaded=true;
+    fetch("divergence/results/grid_results_agg.csv").then(r=>{if(!r.ok)throw 0;return r.text()})
+      .then(t=>{AGG=parseCsv(t);renderAgg();})
+      .catch(()=>{$("#dv_agg_body").innerHTML='<div class="note">divergence/results/grid_results_agg.csv 를 불러오지 못했습니다.</div>';});
+    fetch("divergence/results/grid_results_by_dataset.csv").then(r=>{if(!r.ok)throw 0;return r.text()})
+      .then(t=>{DS=parseCsv(t);renderDs();})
+      .catch(()=>{$("#dv_ds_body").innerHTML='<div class="note">divergence/results/grid_results_by_dataset.csv 를 불러오지 못했습니다.</div>';});
+  }
+  const btn=document.querySelector('#tabbar button[data-tab="diverge"]');
+  if(btn) btn.addEventListener("click",load);
+})();
+</script>
 </body>
 </html>

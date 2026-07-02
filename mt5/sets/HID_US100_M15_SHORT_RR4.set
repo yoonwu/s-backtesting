@@ -1,0 +1,34 @@
+; ============================================================
+; RSI_Divergence_EA v1.10 프리셋 — 히든 나스닥 숏 RR4 (US100 M15)
+; 차트: US100 · M15 · 헤징계좌 · 알고리즘 트레이딩 ON
+; 로직: 히든 다이버 숏(가격 고점↓+RSI 고점↑) + S/R+BB 자리 · k5(굵은 스윙)
+;       + 음봉 캔들 트리거 · SL=트리거봉 고가 · TP=4R · MA게이트 없음
+; 성과(2년): 41거래 · 승률 41% · 평균R +1.04 · PF 2.77 · 1%리스크 +51%/MDD-5.9%
+;            분기 8/8(전 전략 유일) · 랜덤 24/30 · 0.05% 비용에도 +0.53R/PF 1.60
+; 역할: 라인업의 유일한 나스닥 숏 — 하락 전환 시 수익 가속하는 헤지축.
+; ※ 기존 880103(HID_US100_M15_SHORT, k3·RR2.5)의 상위 호환 — 둘 중 하나만 운용.
+; 로드: EA 속성 → 입력 탭 → [로드] → 이 파일.
+; ============================================================
+InpDir=1
+InpDivType=1
+InpMAPeriod=0
+InpRsiPeriod=14
+InpKBars=5
+InpMaxGap=60
+InpUseSR=true
+InpUseBB=true
+InpUseFIB=false
+InpTolATR=0.5
+InpSRLookback=250
+InpFibLookback=120
+InpTrigger=0
+InpTrigWindow=10
+InpRR=4.0
+InpMaxHold=300
+InpLot=0.01
+InpRiskPct=0.0
+InpMagic=880105
+InpMaxSpreadPts=0
+InpComment=HID-US100-M15-S4
+InpExpectedSymbol=US100
+InpExpectedTF=15

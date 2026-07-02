@@ -1,0 +1,35 @@
+; ============================================================
+; RSI_Divergence_EA v1.10 프리셋 — 히든 나스닥 눌림롱 (US100 M30)
+; 차트: US100 · M30 · 헤징계좌 · 알고리즘 트레이딩 ON
+; 로직: 히든 다이버(가격 저점↑+RSI 저점↓) + 종가>MA200 + S/R 자리
+;       + 캔들+MACD 트리거 · SL=트리거봉 저가 · TP=4R
+; 성과(2년): 62거래 · 승률 40% · 평균R +0.93 · PF 2.55 · 1%리스크 +74%/MDD-7%
+;            분기 7/8 · 랜덤3개월 26/30 · 왕복 0.05% 비용에도 +0.46R/PF 1.53
+; ⚠ RR4 특성상 5~6연패가 정상 범위 — 비중 설계에 반영.
+; ⚠ 120선 눌림목 US100 M30 슬롯과 같은 국면(나스닥 M30 눌림 매수)
+;    — 동시 운용 시 두 슬롯 합산 리스크로 관리.
+; 로드: EA 속성 → 입력 탭 → [로드] → 이 파일.
+; ============================================================
+InpDir=0
+InpDivType=1
+InpMAPeriod=200
+InpRsiPeriod=14
+InpKBars=3
+InpMaxGap=60
+InpUseSR=true
+InpUseBB=false
+InpUseFIB=false
+InpTolATR=0.5
+InpSRLookback=250
+InpFibLookback=120
+InpTrigger=2
+InpTrigWindow=10
+InpRR=4.0
+InpMaxHold=300
+InpLot=0.01
+InpRiskPct=0.0
+InpMagic=880104
+InpMaxSpreadPts=0
+InpComment=HID-US100-M30-L
+InpExpectedSymbol=US100
+InpExpectedTF=30

@@ -250,6 +250,7 @@
       <button data-tab="trsig">변곡신호<span class="sub">Structural Reversal</span></button>
       <button data-tab="break120">120선 눌림목<span class="sub">MA120-Pullback</span></button>
       <button data-tab="diverge">다이버전스<span class="sub">RSI Divergence</span></button>
+      <button data-tab="autofilter">자동매매필터<span class="sub">Strategy Filter</span></button>
       <button data-tab="paper">가상매매<span class="sub">Paper Lot</span></button>
       <button data-tab="saved">⭐ 저장된 전략 <span class="badge" id="tab_saved_badge"></span><span class="sub">Saved</span></button>
       <button data-tab="board">비교 보드 <span class="badge" id="tab_board_badge"></span><span class="sub">Board</span></button>
@@ -1507,6 +1508,32 @@
     </section>
   </div>
 
+  <!-- =================== TAB: AUTO STRATEGY FILTER (자동매매필터) =================== -->
+  <div class="tabpane" id="pane-autofilter" hidden>
+    <section class="card" style="margin-top:26px">
+      <h2>자동매매필터 — 전 전략 비교 <span class="badge" id="af_count"></span></h2>
+      <div class="intro">
+        더블비 5종 + 120선 눌림목 4종 + 다이버전스 4종 = <b>13개 전략 통합 비교표</b>. 헤더 클릭 정렬 · 행 클릭하면 랭킹 사유/겹침/검증 상세.
+        <b>수익%·MDD 주의</b>: 더블비·눌림목은 자체 엔진 사이징, 다이버 계열은 1%리스크 복리 기준이라 절대값 직접 비교는 참고만 — 승률·손익비·PF·MAR·등급은 직접 비교 가능.
+        등급: <b>비용</b>=스프레드 내성(A=0.1%도 OK ~ D=0.04%에 붕괴) · <b>견고</b>=랜덤창/분기/능선 · <b>최근</b>=최근 6~12개월 생존 · <b>분산</b>=포트폴리오 기여(A=유일 축).
+      </div>
+      <div class="subtabs" id="af_fam" style="margin-bottom:8px">
+        <button data-v="" class="on">전체 군</button><button data-v="더블비">더블비</button><button data-v="눌림목">눌림목</button><button data-v="다이버">다이버전스</button>
+      </div>
+      <div class="subtabs" id="af_dir" style="margin-bottom:8px">
+        <button data-v="" class="on">롱+숏</button><button data-v="롱">롱만</button><button data-v="숏">숏만</button>
+      </div>
+      <div class="subtabs" id="af_sym" style="margin-bottom:8px">
+        <button data-v="" class="on">전체 종목</button><button data-v="US100">US100</button><button data-v="XAUUSD">XAUUSD</button>
+      </div>
+      <div class="subtabs" id="af_st" style="margin-bottom:14px">
+        <button data-v="" class="on">전체 상태</button><button data-v="확정">확정</button><button data-v="등재">EA등재</button><button data-v="후보">후보</button>
+      </div>
+      <div id="af_body" class="ytable-wrap"></div>
+      <div class="note"><b>랭킹 기준(가중 순)</b>: ① 견고성(랜덤 3개월 창·분기·능선) ② 비용 내성 ③ 검증 깊이(실비용 스윕·워크포워드 완주 여부) ④ 분산 기여(포트폴리오에 없는 축인가) ⑤ 최근 6~12개월 생존. 수익률·MAR은 그 다음 — 화려한 수치보다 오래 살아남을 구조를 우선.</div>
+    </section>
+  </div>
+
   <div class="tabpane" id="pane-paper" hidden>
     <div class="grid">
       <section class="card">
@@ -1704,6 +1731,93 @@
   }
   const btn=document.querySelector('#tabbar button[data-tab="diverge"]');
   if(btn) btn.addEventListener("click",load);
+})();
+</script>
+<script>
+/* ============ 자동매매필터 탭: 전 전략 통합 비교 (2026-07-02 집계) ============ */
+(function(){
+  const $=s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
+  const G={A:4,B:3,C:2,D:1};   // 등급 정렬용
+  const S=[
+  {rank:1,name:"눌림목 골드 스윙 (MA180·이격1.5)",fam:"눌림목",sym:"XAUUSD",tf:"H2",dir:"롱",st:"확정",t:24,wr:null,po:null,pf:1.29,ret:22.7,mdd:-1.2,mar:19,hold:"일",cost:"A",rob:"A",rec:"A",div:"B",magic:"MAPB",
+   why:"1위 사유: 견고성·비용·최근장 전부 A는 13개 중 유일. 랜덤 3개월 25/27(역대 최고) · 거래당 +0.95%(비용 2위) · 골드 조정기에도 최근 6개월 +9.2% 생존. 주의: 이격 1.25% 미만으로 풀면 폭망(PF 0.46) — 라이브 1.5 고정. 골드 롱 군집(⑥·정다이버·⑦)과 합산 비중 관리."},
+  {rank:2,name:"⑥ 더블비 골드 스윙",fam:"더블비",sym:"XAUUSD",tf:"H2",dir:"롱",st:"확정",t:53,wr:67,po:3.98,pf:null,ret:73,mdd:-4.4,mar:16.6,hold:"일~주",cost:"A",rob:"B",rec:"B",div:"B",magic:"990006",
+   why:"2위 사유: MAR 16.6 전체 1위 + 비용 내성 1위(왕복 0.1%에도 MAR 12) + 2년 검증 완주. 최근 3개월 -1.2%는 5거래 노이즈로 판단하되 감시. 정다이버(880101)와 같은 슬롯이나 진입 국면이 반대(돌파 vs 바닥)라 교차 증거로는 강점."},
+  {rank:3,name:"눌림목 나스닥 스윙 (MA200)",fam:"눌림목",sym:"US100",tf:"H4",dir:"롱",st:"확정",t:20,wr:null,po:null,pf:2.69,ret:27.2,mdd:-0.5,mar:54,hold:"일",cost:"A",rob:"A",rec:"B",div:"C",magic:"MAPB",
+   why:"3위 사유: MDD -0.5% · 거래당 +1.08%로 효율 압도, 랜덤 21/23, 왕복 0.2% 비용에도 +17.6%. 감점: 20거래 표본이라 PF 2.69는 낙관치(실질 1.2~2.7), MAR 54는 착시 가능 — 비중 작게. 나스닥 롱 군집."},
+  {rank:4,name:"④ 더블비 골드 단기숏 (MA200·평단)",fam:"더블비",sym:"XAUUSD",tf:"M5",dir:"숏",st:"확정",t:450,wr:32,po:2.91,pf:null,ret:47,mdd:-3.3,mar:14.1,hold:"분~시간",cost:"D",rob:"B",rec:"B",div:"A",magic:"990004",
+   why:"4위 사유: 대표본(450) + 올웨더 숏 축(강세장엔 조정만 선별 포착). 감점: 승률 32%라 전 라인업 중 비용 최취약 — 왕복 0.04% 넘으면 MAR<5 붕괴. 타이트 스프레드 브로커 + 작은 비중 전제."},
+  {rank:5,name:"정다이버 골드 스윙 (SR+BB·2.5R)",fam:"다이버",sym:"XAUUSD",tf:"H2",dir:"롱",st:"등재",t:22,wr:64,po:2.5,pf:4.38,ret:30.4,mdd:-2.0,mar:15.3,hold:"~12h",cost:"A",rob:"B",rec:"B",div:"B",magic:"880101",
+   why:"5위 사유: 거래당 +1.23R로 질 최강, PF 4.38, 능선 8/8칸, 손절폭 0.53%라 비용 면역. 감점: 2년 22거래로 표본 최소 + MT5 테스터 대조 전 + ⑥과 슬롯 공유. 소액 슬롯으로 시작이 정석."},
+  {rank:6,name:"NEW 히든 나스닥 숏 (SR+BB·k5·4R)",fam:"다이버",sym:"US100",tf:"M15",dir:"숏",st:"후보",t:41,wr:41,po:4,pf:2.77,ret:50.8,mdd:-5.9,mar:8.7,hold:"~6h",cost:"C",rob:"A",rec:"A",div:"A",magic:"-",
+   why:"6위 사유: 분기 8/8 양수는 13개 전략 통틀어 유일 + 라인업의 나스닥 숏 공백을 채우는 유일한 축(분산 A). 하락 전환 구간에서 수익 가속. 감점: 41거래 표본 + 비용 0.02% 경계선(0.04% 사망) + MT5 미검증. 검증 통과 시 3위권 상향 여지."},
+  {rank:7,name:"① 더블비 나스닥 단기 (MA120·TR3)",fam:"더블비",sym:"US100",tf:"M5",dir:"롱",st:"확정",t:322,wr:55,po:1.4,pf:null,ret:52,mdd:-4.6,mar:11.1,hold:"분~시간",cost:"C",rob:"B",rec:"A",div:"C",magic:"990001",
+   why:"7위 사유: 대표본 322 + 12m/6m/3m 전 구간 양수의 안정형 주력. 감점: 왕복 0.02%부터 성과 침식 + 나스닥 롱 군집이라 분산 기여 낮음."},
+  {rank:8,name:"NEW 히든 나스닥 눌림롱 (SR·MA200·4R)",fam:"다이버",sym:"US100",tf:"M30",dir:"롱",st:"후보",t:62,wr:40,po:4,pf:2.55,ret:74.2,mdd:-7.0,mar:10.6,hold:"~11h",cost:"C",rob:"A",rec:"A",div:"C",magic:"-",
+   why:"8위 사유: 1%리스크 기준 수익 1위(+74%) + 분기 7/8 · 랜덤 26/30 + 자리 3변형 능선. 감점: MDD -7%로 라인업 최대(RR4라 5~6연패가 정상) + 눌림목 M30과 같은 슬롯(교체 또는 합산 관리) + MT5 미검증."},
+  {rank:9,name:"⑦ 더블비 골드 단기 (컨펌cW5·MA120)",fam:"더블비",sym:"XAUUSD",tf:"M5",dir:"롱",st:"확정",t:500,wr:69,po:1.83,pf:null,ret:57,mdd:-4.1,mar:14.1,hold:"분~시간",cost:"B",rob:"B",rec:"B",div:"C",magic:"990007",
+   why:"9위 사유: 승률 69% 대표본이라 심리적으로 굴리기 쉽고 비용 0.06%에도 MAR 6.9. 감점: 골드 대상승장 의존이 전 라인업 최대 — 하락 전환 시 MA120 필터가 유일한 방어선. 골드 롱 군집."},
+  {rank:10,name:"눌림목 골드 단기숏 (MA200·단일)",fam:"눌림목",sym:"XAUUSD",tf:"M10",dir:"숏",st:"확정",t:null,wr:null,po:null,pf:2.0,ret:43,mdd:-7.1,mar:6,hold:"시간",cost:"B",rob:"B",rec:"B",div:"A",magic:"880005",
+   why:"10위 사유: 올웨더 골드 숏(1년차 골드 +42% 폭등에도 +10.4%/MDD -1.8%). 감점: 2년 전체 MDD -7.1%로 거칢 + 단일 진입 필수(N2부터 PF 급락) — 물타기 금지 구조 유지가 생명선."},
+  {rank:11,name:"히든 숏 M15 페어 (MA200·BB·2.5R)",fam:"다이버",sym:"XAUUSD",tf:"M15",dir:"숏",st:"등재",t:38,wr:50,po:2.5,pf:2.5,ret:32.1,mdd:-3.0,mar:10.8,hold:"~2h",cost:"B",rob:"A",rec:"A",div:"B",magic:"880102/3",
+   why:"11위 사유: 검증 자체는 우수(분기 6/8 · 랜덤 23/30 · 0.04% 비용 생존). 순위가 낮은 건 성능이 아니라 역할 중복 — NEW 나스닥 M15 숏(6위)과 같은 '반등 실패 숏' 슬롯이라 결국 하나만 실전에 가면 됨. XAU 쪽(880102)은 6위와 종목이 달라 병행 여지."},
+  {rank:12,name:"⑤ 더블비컨펌 나스닥 장기 (cW3)",fam:"더블비",sym:"US100",tf:"H1",dir:"롱",st:"확정",t:52,wr:52,po:3.45,pf:null,ret:79,mdd:-5.0,mar:15.7,hold:"시간~일",cost:"B",rob:"B",rec:"C",div:"C",magic:"990005",
+   why:"12위 사유: 전체 수익 1위(+79%) · MAR 2위(15.7)로 지표는 화려하나 최근 12m 6.3 → 6m 3.5로 약화가 진행형. 52거래 표본도 얇음. 축소·감시 대상 — 최근 반등 확인 전까지 신규 비중 보류 권장."},
+  {rank:13,name:"눌림목 나스닥 단기 (MA120·4분할)",fam:"눌림목",sym:"US100",tf:"M30",dir:"롱",st:"확정",t:84,wr:60,po:null,pf:0.8,ret:27.7,mdd:-4.2,mar:6.6,hold:"시간",cost:"A",rob:"B",rec:"B",div:"C",magic:"MAPB",
+   why:"13위 사유: PF 0.80(<1)의 승률형 구조 + 전후반 17.8→8.4 반토막. 강점은 비용 내성뿐(왕복 0.2%에도 +14%). NEW 히든 M30 롱(8위)이 MT5 검증을 통과하면 같은 슬롯 교체 후보 1순위."}
+  ];
+  let sort={k:"rank",d:1},fam="",dir="",sym="",st="",open=-1;
+  const fmt=(v,suf,dec)=>v==null?"–":(dec!=null?(+v).toFixed(dec):v)+(suf||"");
+  const gcol=g=>g==="A"?' style="color:#0a7d4f;font-weight:700"':g==="D"?' style="color:#c0392b;font-weight:700"':"";
+  function render(){
+    let rows=S.filter(r=>(!fam||r.fam===fam)&&(!dir||r.dir===dir)&&(!sym||r.sym===sym)&&(!st||r.st===st));
+    const k=sort.k;
+    rows=rows.slice().sort((a,b)=>{
+      let va=a[k],vb=b[k];
+      if(["cost","rob","rec","div"].includes(k)){va=G[va]||0;vb=G[vb]||0;}
+      if(va==null&&vb==null)return 0;if(va==null)return 1;if(vb==null)return -1;
+      if(typeof va==="string"&&typeof vb==="string")return va.localeCompare(vb,"ko")*sort.d;
+      return (va-vb)*sort.d;
+    });
+    $("#af_count").textContent=rows.length+"개";
+    const arw=key=>sort.k===key?(sort.d>0?" ▴":" ▾"):"";
+    const H=(key,t)=>'<th data-k="'+key+'" style="cursor:pointer">'+t+arw(key)+"</th>";
+    let h='<table class="ytable"><thead><tr>'+H("rank","순위")+H("name","전략")+H("fam","군")+H("sym","종목")+H("tf","TF")+H("dir","방향")+H("st","상태")
+      +H("t","거래")+H("wr","승률")+H("po","손익비")+H("pf","PF")+H("ret","수익%")+H("mdd","MDD%")+H("mar","MAR")+H("hold","보유")
+      +H("cost","비용")+H("rob","견고")+H("rec","최근")+H("div","분산")+H("magic","매직")+"</tr></thead><tbody>";
+    rows.forEach((r,i)=>{
+      h+='<tr class="af-row" data-i="'+i+'" style="cursor:pointer'+(r.rank<=3?";background:rgba(16,80,55,.05)":"")+'">'
+        +'<td style="font-weight:700">'+r.rank+"</td>"
+        +'<td style="text-align:left;font-weight:700">'+r.name+"</td>"
+        +"<td>"+r.fam+"</td><td>"+r.sym+"</td><td>"+r.tf+"</td><td>"+r.dir+"</td><td>"+r.st+"</td>"
+        +"<td>"+fmt(r.t)+"</td><td>"+fmt(r.wr,"%")+"</td><td>"+fmt(r.po,null,2)+"</td><td>"+fmt(r.pf,null,2)+"</td>"
+        +'<td style="color:#0a7d4f">'+fmt(r.ret,"%",1)+"</td>"
+        +'<td style="color:#c0392b">'+fmt(r.mdd,"%",1)+"</td>"
+        +'<td style="font-weight:700">'+fmt(r.mar,null,1)+"</td><td>"+r.hold+"</td>"
+        +"<td"+gcol(r.cost)+">"+r.cost+"</td><td"+gcol(r.rob)+">"+r.rob+"</td><td"+gcol(r.rec)+">"+r.rec+"</td><td"+gcol(r.div)+">"+r.div+"</td>"
+        +'<td class="mono" style="font-size:11px">'+r.magic+"</td></tr>";
+      if(open===i)h+='<tr><td colspan="20" style="text-align:left;white-space:normal;line-height:1.7;padding:14px 18px;background:rgba(255,255,255,.02);font-size:12.5px">'+r.why+"</td></tr>";
+    });
+    h+="</tbody></table>";
+    const box=$("#af_body");box.innerHTML=h;
+    box.querySelectorAll("th").forEach(th=>th.onclick=()=>{
+      const key=th.dataset.k;
+      if(sort.k===key)sort.d*=-1;else sort={k:key,d:(key==="rank"||key==="mdd")?1:-1};
+      open=-1;render();
+    });
+    box.querySelectorAll(".af-row").forEach(tr=>tr.onclick=()=>{
+      const i=+tr.dataset.i;open=open===i?-1:i;render();
+    });
+  }
+  [["af_fam",v=>fam=v],["af_dir",v=>dir=v],["af_sym",v=>sym=v],["af_st",v=>st=v]].forEach(([id,set])=>{
+    $$("#"+id+" button").forEach(b=>b.onclick=()=>{
+      $$("#"+id+" button").forEach(x=>x.classList.toggle("on",x===b));
+      set(b.dataset.v);open=-1;render();
+    });
+  });
+  const btn=document.querySelector('#tabbar button[data-tab="autofilter"]');
+  let done=false;
+  if(btn)btn.addEventListener("click",()=>{if(!done){done=true;render();}});
 })();
 </script>
 </body>

@@ -25,17 +25,20 @@
 //|        불리 — 저빈도(연 11회)라 영향 작지만 데모로 먼저 검증할 것. |
 //+------------------------------------------------------------------+
 #property copyright "LEVERAGE LAB"
-#property version   "1.00"
+#property version   "1.10"
 #property strict
 
 #include <Trade/Trade.mqh>
 
 enum ENUM_DIR  { DIR_LONG=0, DIR_SHORT=1 };
 enum ENUM_TRIG { TRIG_CANDLE=0, TRIG_MACD=1, TRIG_BOTH=2 };
+enum ENUM_DIVT { DIV_REGULAR=0, DIV_HIDDEN=1 };
 
 //--- inputs ---------------------------------------------------------
 input group "=== 다이버전스 ==="
 input ENUM_DIR  InpDir        = DIR_LONG;   // 방향
+input ENUM_DIVT InpDivType    = DIV_REGULAR;// 정다이버 / 히든(추세 눌림)
+input int       InpMAPeriod   = 0;          // 추세 MA 게이트 (0=끄기, 히든=200 권장)
 input int       InpRsiPeriod  = 14;         // RSI 기간
 input int       InpKBars      = 3;          // 스윙 피벗 k봉
 input int       InpMaxGap     = 60;         // 피벗 최대 간격(봉)
@@ -112,9 +115,10 @@ int OnInit()
       Print("경고: 자동매매 미허용 상태.");
    if((ENUM_ACCOUNT_MARGIN_MODE)AccountInfoInteger(ACCOUNT_MARGIN_MODE)!=ACCOUNT_MARGIN_MODE_RETAIL_HEDGING)
       Print("경고: 헤징 계좌가 아닙니다.");
-   PrintFormat("RSI_Divergence_EA 시작 | %s %s | dir=%s rsi=%d k=%d SR=%s BB=%s FIB=%s trig=%d RR=%.1f magic=%d",
+   PrintFormat("RSI_Divergence_EA 시작 | %s %s | dir=%s div=%s MA=%d rsi=%d k=%d SR=%s BB=%s FIB=%s trig=%d RR=%.1f magic=%d",
                _Symbol, EnumToString((ENUM_TIMEFRAMES)_Period),
-               (InpDir==DIR_LONG?"LONG":"SHORT"), InpRsiPeriod, InpKBars,
+               (InpDir==DIR_LONG?"LONG":"SHORT"),
+               (InpDivType==DIV_HIDDEN?"HIDDEN":"REG"), InpMAPeriod, InpRsiPeriod, InpKBars,
                (InpUseSR?"Y":"N"),(InpUseBB?"Y":"N"),(InpUseFIB?"Y":"N"),
                (int)InpTrigger, InpRR, (int)InpMagic);
    return(INIT_SUCCEEDED);
@@ -213,6 +217,7 @@ void OnNewBar()
    int  k=InpKBars;
    int  need=MathMax(MathMax(BB_PERIOD+k+2, InpFibLookback+k+3), 2*k+3);
    need=MathMax(need, 40);
+   if(InpMAPeriod>0) need=MathMax(need, InpMAPeriod+k+3);
 
    double op[],hi[],lo[],cl[],rsi[],atr[],macdM[],macdS[];
    ArraySetAsSeries(op,true); ArraySetAsSeries(hi,true);
@@ -278,9 +283,21 @@ void OnNewBar()
      {
       if(g_p1Bar>=0 && p2Bar-g_p1Bar<=InpMaxGap && p2Bar-g_p1Bar>k)
         {
-         bool div = isShort ? (p2Px>g_p1Px && p2Rsi<g_p1Rsi)
-                            : (p2Px<g_p1Px && p2Rsi>g_p1Rsi);
-         if(div)
+         bool div;
+         if(InpDivType==DIV_HIDDEN)   // 히든: 가격 저점↑ + RSI 저점↓ (추세 지속 눌림)
+            div = isShort ? (p2Px<g_p1Px && p2Rsi>g_p1Rsi)
+                          : (p2Px>g_p1Px && p2Rsi<g_p1Rsi);
+         else                          // 정다이버: 가격 저점↓ + RSI 저점↑
+            div = isShort ? (p2Px>g_p1Px && p2Rsi<g_p1Rsi)
+                          : (p2Px<g_p1Px && p2Rsi>g_p1Rsi);
+         bool maOK=true;
+         if(InpMAPeriod>0)
+           {
+            double s=0; for(int q=0;q<InpMAPeriod;q++) s+=cl[ps+q];
+            double ma=s/InpMAPeriod;   // 피벗봉 기준 SMA
+            maOK = isShort ? (cl[ps]<ma) : (cl[ps]>ma);
+           }
+         if(div && maOK)
            {
             double tol=InpTolATR*atr[ps];
             // S/R

@@ -3022,9 +3022,9 @@ function drawRSI(rCurve,holdCurve,log){
     }
     const key=SORT.key, dir=SORT.dir;
     const sorted=[...RESULTS].sort((a,b)=>{
-      const va=isFinite(a[key])?a[key]:1e9*Math.sign(dir);
-      const vb=isFinite(b[key])?b[key]:1e9*Math.sign(dir);
-      return(vb-va)*dir;
+      const va=isFinite(a[key])?a[key]:-1e9*Math.sign(dir);
+      const vb=isFinite(b[key])?b[key]:-1e9*Math.sign(dir);
+      return(va-vb)*dir;
     });
     const best=sorted[0];
     const CAP=300;
@@ -3928,9 +3928,9 @@ function drawRSI(rCurve,holdCurve,log){
     }
     const key=SORT.key, dir=SORT.dir;
     const sorted=[...RESULTS].sort((a,b)=>{
-      const va=isFinite(a[key])?a[key]:1e9*Math.sign(dir);
-      const vb=isFinite(b[key])?b[key]:1e9*Math.sign(dir);
-      return(vb-va)*dir;
+      const va=isFinite(a[key])?a[key]:-1e9*Math.sign(dir);
+      const vb=isFinite(b[key])?b[key]:-1e9*Math.sign(dir);
+      return(va-vb)*dir;
     });
     const best=sorted[0];
     const CAP=500;
@@ -4318,9 +4318,9 @@ function drawRSI(rCurve,holdCurve,log){
     }
     const key=SORT.key, dir=SORT.dir;
     const sorted=[...RESULTS].sort((a,b)=>{
-      const va=isFinite(a[key])?a[key]:1e9*Math.sign(dir);
-      const vb=isFinite(b[key])?b[key]:1e9*Math.sign(dir);
-      return(vb-va)*dir;
+      const va=isFinite(a[key])?a[key]:-1e9*Math.sign(dir);
+      const vb=isFinite(b[key])?b[key]:-1e9*Math.sign(dir);
+      return(va-vb)*dir;
     });
     const best=sorted[0];
     const CAP=500;
@@ -4422,3 +4422,382 @@ function drawRSI(rCurve,holdCurve,log){
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init); else init();
 })();
 //__CHUNK_END__
+
+/* ===== RSI DIVERGENCE LAB (다이버전스 테스트랩) =====
+ * divergence/gridsearch.py의 JS 포트 — 수치 동일 재현.
+ * ① 스윙 피벗(좌우 k봉 극값, k봉 뒤 확정) ② 가격 LL + RSI HL 다이버전스(숏은 대칭)
+ * ③ 자리(S/R·BB·FIB 컨플루언스 AND) ④ 트리거(캔들/MACD/둘다, 확정봉부터 W봉)
+ * ⑤ 다음봉 시가 진입 · SL=트리거봉 극값 · TP=RR×리스크 · SL우선/갭손절 시가 · 동시 1포지션
+ */
+(function(){
+  const el=id=>document.getElementById(id);
+  function emaArr(x,p){const a=2/(p+1),out=new Array(x.length);out[0]=x[0];for(let i=1;i<x.length;i++)out[i]=out[i-1]+a*(x[i]-out[i-1]);return out;}
+  function rsiPy(c,p){ // python gridsearch와 동일(시드=첫 델타, α=1/p)
+    const n=c.length,out=new Array(n);let ag=0,al=0;
+    for(let i=0;i<n;i++){
+      const d=i===0?0:c[i]-c[i-1],g=d>0?d:0,l=d<0?-d:0;
+      if(i===0){ag=g;al=l;}else{ag+=(g-ag)/p;al+=(l-al)/p;}
+      out[i]=100-100/(1+ag/(al===0?1e-12:al));
+    }
+    return out;
+  }
+  function atrWilder(bars){ // ema(TR, 2*14-1) = Wilder ATR14
+    const tr=bars.map((b,i)=>i===0?b.h-b.l:Math.max(b.h-b.l,Math.abs(b.h-bars[i-1].c),Math.abs(b.l-bars[i-1].c)));
+    return emaArr(tr,27);
+  }
+  function boll(c,p,mult){
+    const n=c.length,up=new Array(n).fill(null),lo=new Array(n).fill(null);
+    let s=0,s2=0;
+    for(let i=0;i<n;i++){
+      s+=c[i];s2+=c[i]*c[i];
+      if(i>=p){s-=c[i-p];s2-=c[i-p]*c[i-p];}
+      if(i>=p-1){const m=s/p,v=Math.max(0,s2/p-m*m),sd=Math.sqrt(v);up[i]=m+mult*sd;lo[i]=m-mult*sd;}
+    }
+    return{up,lo};
+  }
+  function pivots(bars,k){
+    const n=bars.length,plo=[],phi=[];
+    for(let i=k;i<n-k;i++){
+      let lmin=Infinity,lcnt=0,hmax=-Infinity,hcnt=0;
+      for(let j=i-k;j<=i+k;j++){
+        if(bars[j].l<lmin){lmin=bars[j].l;lcnt=1;}else if(bars[j].l===lmin)lcnt++;
+        if(bars[j].h>hmax){hmax=bars[j].h;hcnt=1;}else if(bars[j].h===hmax)hcnt++;
+      }
+      if(bars[i].l===lmin&&lcnt===1)plo.push(i);
+      if(bars[i].h===hmax&&hcnt===1)phi.push(i);
+    }
+    return{plo,phi};
+  }
+  function buildEvents(bars,rsi,k,dir,atr,bb,opts){
+    const{tolMult,maxGap,srLb,fibLb}=opts,n=bars.length;
+    const{plo,phi}=pivots(bars,k);
+    const lvIdx=[],lvVal=[];
+    let a=0,b=0;
+    while(a<plo.length||b<phi.length){ // 인덱스순 병합
+      if(b>=phi.length||(a<plo.length&&plo[a]<=phi[b])){lvIdx.push(plo[a]);lvVal.push(bars[plo[a]].l);a++;}
+      else{lvIdx.push(phi[b]);lvVal.push(bars[phi[b]].h);b++;}
+    }
+    const piv=dir==="long"?plo:phi;
+    const price=i=>dir==="long"?bars[i].l:bars[i].h;
+    const events=[];
+    for(let j=1;j<piv.length;j++){
+      const p1=piv[j-1],p2=piv[j];
+      if(p2-p1>maxGap||p2-p1<=k)continue;
+      const div=dir==="long"?(price(p2)<price(p1)&&rsi[p2]>rsi[p1]):(price(p2)>price(p1)&&rsi[p2]<rsi[p1]);
+      if(!div)continue;
+      const confirm=p2+k;
+      if(confirm>=n-2)continue;
+      const tol=tolMult*atr[p2];
+      let sr=false;
+      for(let m=0;m<lvIdx.length;m++){
+        if(lvIdx[m]>=p1)break;
+        if(lvIdx[m]<p2-srLb)continue;
+        if(Math.abs(lvVal[m]-price(p2))<=tol){sr=true;break;}
+      }
+      const bbF=dir==="long"?(bb.lo[p2]!==null&&bars[p2].l<=bb.lo[p2]):(bb.up[p2]!==null&&bars[p2].h>=bb.up[p2]);
+      const s0=Math.max(0,p2-fibLb);
+      let hi=-Infinity,lo=Infinity;
+      for(let i=s0;i<p2;i++){if(bars[i].h>hi)hi=bars[i].h;if(bars[i].l<lo)lo=bars[i].l;}
+      if(p2===s0){hi=bars[p2].h;lo=bars[p2].l;}
+      const rng=hi-lo;
+      let fib=false;
+      if(rng>0)for(const r of[0.382,0.5,0.618]){
+        const lvl=dir==="long"?hi-r*rng:lo+r*rng;
+        if(Math.abs(price(p2)-lvl)<=tol){fib=true;break;}
+      }
+      events.push({p1,p2,confirm,sr,bb:bbF,fib});
+    }
+    return events;
+  }
+  function findTrigger(bars,macd,sig,confirm,trig,dir,wait){
+    const n=bars.length,end=Math.min(confirm+wait,n-2);
+    for(let t=Math.max(confirm,1);t<=end;t++){
+      const b=bars[t],pb=bars[t-1];
+      let candle,mx,mstate;
+      if(dir==="long"){candle=b.c>b.o&&b.c>pb.h;mx=macd[t]>sig[t]&&macd[t-1]<=sig[t-1];mstate=macd[t]>sig[t];}
+      else{candle=b.c<b.o&&b.c<pb.l;mx=macd[t]<sig[t]&&macd[t-1]>=sig[t-1];mstate=macd[t]<sig[t];}
+      const ok=trig==="candle"?candle:trig==="macd"?mx:(candle&&mstate);
+      if(ok)return t;
+    }
+    return -1;
+  }
+  function simulate(bars,t,rr,dir,hold){
+    const n=bars.length,e=t+1;
+    if(e>=n)return null;
+    const entry=bars[e].o;
+    const stop=dir==="long"?bars[t].l:bars[t].h;
+    const risk=dir==="long"?entry-stop:stop-entry;
+    if(!(risk>0))return null;
+    const tp=dir==="long"?entry+rr*risk:entry-rr*risk;
+    const last=Math.min(e+hold,n)-1;
+    for(let i=e;i<=last;i++){
+      const b=bars[i];
+      if(dir==="long"){
+        if(b.l<=stop){const px=Math.min(b.o,stop);return{e,x:i,r:(px-entry)/risk,entry,stop,tp,exit:px,reason:"SL"};}
+        if(b.h>=tp)return{e,x:i,r:rr,entry,stop,tp,exit:tp,reason:"TP"};
+      }else{
+        if(b.h>=stop){const px=Math.max(b.o,stop);return{e,x:i,r:(entry-px)/risk,entry,stop,tp,exit:px,reason:"SL"};}
+        if(b.l<=tp)return{e,x:i,r:rr,entry,stop,tp,exit:tp,reason:"TP"};
+      }
+    }
+    const c=bars[last].c,r=dir==="long"?(c-entry)/risk:(entry-c)/risk;
+    return{e,x:last,r,entry,stop,tp,exit:c,reason:"EXPIRE"};
+  }
+  function parseMT5local(text){
+    const lines=text.split(/\r?\n/),out=[];
+    const start=/date|open|time/i.test(lines[0]||"")?1:0;
+    for(let i=start;i<lines.length;i++){
+      const ln=lines[i].trim();if(!ln)continue;
+      const p=ln.split(/[\t,;]+/);if(p.length<5)continue;
+      const d=p[0].replace(/\./g,"-").replace(/\//g,"-").slice(0,10);
+      const hasT=/:/.test(p[1]||"");const oi=hasT?2:1;
+      const o=+p[oi],h=+p[oi+1],l=+p[oi+2],c=+p[oi+3];
+      if(!isFinite(o)||!isFinite(h)||!isFinite(l)||!isFinite(c)||c<=0)continue;
+      out.push({day:d,date:d+" "+(hasT?p[1]:"00:00:00"),o,h,l,c});
+    }
+    if(out.length<2)throw new Error("CSV에서 유효한 OHLC 행을 못 찾음");
+    return out;
+  }
+  let RAWCACHE={},RESULTS=[],SORT={key:"mar",dir:-1};
+  const zoneName=zs=>zs.length?zs.join("+"):"없음";
+  function parseList(str,minV){return String(str).split(/[,\s]+/).map(x=>+x).filter(x=>isFinite(x)&&x>=(minV||0));}
+  function errMsg(m){el("dvl_err").textContent=m||"";}
+  function statusMsg(m){el("dvl_status").textContent=m||"";}
+  async function loadSources(){
+    if(el("dvl_src").dataset.cur==="upload"){
+      if(!RAWCACHE.__upload__)throw new Error("CSV 파일을 먼저 선택하세요");
+      return[{label:RAWCACHE.__uploadName__||"업로드",bars:RAWCACHE.__upload__}];
+    }
+    const picks=selectedCsvFiles("dvl");
+    if(!picks.length)throw new Error("저장 CSV를 1개 이상 체크하세요");
+    const out=[];
+    for(const cf of picks){
+      if(!RAWCACHE[cf.file]){
+        statusMsg(`${cf.sym} ${cf.tf} 불러오는 중…`);
+        const r=await fetch(cf.file,{cache:"force-cache"});
+        if(!r.ok)throw new Error(`${cf.file} 못 찾음(404)`);
+        RAWCACHE[cf.file]=parseMT5local(await r.text());
+      }
+      out.push({label:`${cf.sym}·${cf.tf}`,bars:RAWCACHE[cf.file]});
+    }
+    return out;
+  }
+  function zoneSubsets(){
+    const all=["SR","BB","FIB"];
+    if(el("dvl_zone_sweep").checked){
+      const subs=[];
+      for(let m=1;m<8;m++)subs.push(all.filter((_,i)=>m&(1<<i)));
+      if(el("dvl_zone_none").checked)subs.push([]);
+      return subs;
+    }
+    const zs=all.filter(z=>el("dvl_zone_"+z.toLowerCase()).checked);
+    const subs=[];
+    if(zs.length)subs.push(zs);
+    if(el("dvl_zone_none").checked)subs.push([]);
+    if(!subs.length)throw new Error("자리 필터를 선택하거나 '자리 없이도'를 체크하세요");
+    return subs;
+  }
+  async function run(){
+    errMsg("");RESULTS=[];
+    const btn=el("dvl_run");btn.disabled=true;
+    try{
+      const dirSel=el("dvl_dir").dataset.cur||"long";
+      const dirs=dirSel==="both"?["long","short"]:[dirSel];
+      const trigs=[["candle","dvl_trig_candle"],["macd","dvl_trig_macd"],["candle+macd","dvl_trig_both"]].filter(t=>el(t[1]).checked).map(t=>t[0]);
+      if(!trigs.length)throw new Error("트리거를 1개 이상 선택하세요");
+      const subs=zoneSubsets();
+      const rsis=parseList(el("dvl_rsi").value,2);
+      const ks=parseList(el("dvl_k").value,1).map(Math.round);
+      const rrs=parseList(el("dvl_rr").value,0.1);
+      const tols=parseList(el("dvl_tol").value,0.01);
+      if(!rsis.length||!ks.length||!rrs.length||!tols.length)throw new Error("RSI·k·RR·허용오차 값을 확인하세요");
+      const wait=Math.max(1,+el("dvl_wait").value||10);
+      const maxGap=Math.max(5,+el("dvl_gap").value||60);
+      const hold=Math.max(10,+el("dvl_hold").value||300);
+      const riskF=Math.max(0.001,(+el("dvl_risk").value||1)/100);
+      const srLb=250,fibLb=120;
+      const sources=await loadSources();
+      const total=sources.length*dirs.length*subs.length*trigs.length*rrs.length*rsis.length*ks.length*tols.length;
+      if(total>20000)throw new Error(`조합이 ${total.toLocaleString()}개입니다. 20,000개 이하로 줄여주세요.`);
+      let combo=0;const rows=[];
+      for(const src of sources){
+        const bars=src.bars,n=bars.length;
+        const closes=bars.map(b=>b.c);
+        const atr=atrWilder(bars);
+        const bb=boll(closes,20,2);
+        const e26=emaArr(closes,26),e12=emaArr(closes,12);
+        const macdL=new Array(n);
+        for(let i=0;i<n;i++)macdL[i]=e12[i]-e26[i];
+        const macdS=emaArr(macdL,9);
+        for(const rp of rsis){
+          const rsi=rsiPy(closes,rp);
+          for(const k of ks){
+            for(const dir of dirs){
+              const events=buildEvents(bars,rsi,k,dir,atr,bb,{tolMult:tols[0],maxGap,srLb,fibLb});
+              for(const tolMult of tols){
+                const evs=tolMult===tols[0]?events:buildEvents(bars,rsi,k,dir,atr,bb,{tolMult,maxGap,srLb,fibLb});
+                const simCache=new Map();
+                for(const trig of trigs){
+                  for(const rr of rrs){
+                    for(const zs of subs){
+                      combo++;
+                      if(combo%25===0){statusMsg(`${combo}/${total} 조합…`);await pauseUI();}
+                      const trades=[];let lastExit=-1;
+                      for(let ei=0;ei<evs.length;ei++){
+                        const ev=evs[ei];
+                        if(zs.includes("SR")&&!ev.sr)continue;
+                        if(zs.includes("BB")&&!ev.bb)continue;
+                        if(zs.includes("FIB")&&!ev.fib)continue;
+                        const key=ei+"|"+trig+"|"+rr;
+                        let res;
+                        if(simCache.has(key))res=simCache.get(key);
+                        else{
+                          const t=findTrigger(bars,macdL,macdS,ev.confirm,trig,dir,wait);
+                          res=t<0?null:simulate(bars,t,rr,dir,hold);
+                          if(res)res.trigIdx=t;
+                          simCache.set(key,res);
+                        }
+                        if(!res)continue;
+                        if(res.e<=lastExit)continue;
+                        lastExit=res.x;
+                        trades.push({...res,ev});
+                      }
+                      if(!trades.length)continue;
+                      let wins=0,gw=0,gl=0,sumR=0,h1=0,h2=0,h1n=0,h2n=0,eq=1,peak=1,mdd=0,tpC=0,slC=0,eodC=0;
+                      for(const t of trades){
+                        sumR+=t.r;
+                        if(t.r>0){wins++;gw+=t.r;}else gl-=t.r;
+                        if(t.e<n/2){h1+=t.r;h1n++;}else{h2+=t.r;h2n++;}
+                        eq*=1+riskF*t.r;if(eq>peak)peak=eq;
+                        const dd=eq/peak-1;if(dd<mdd)mdd=dd;
+                        if(t.reason==="TP")tpC++;else if(t.reason==="SL")slC++;else eodC++;
+                      }
+                      const cnt=trades.length,totalRet=eq-1;
+                      rows.push({label:src.label,dir,zone:zoneName(zs),trig,rr,rsi:rp,k,tol:tolMult,
+                        cnt,winRate:wins/cnt,avgR:sumR/cnt,sumR,pf:gl>0?gw/gl:Infinity,
+                        totalRet,mdd,mar:mdd<0?totalRet/Math.abs(mdd):(totalRet>0?Infinity:0),
+                        h1R:h1n?h1/h1n:null,h2R:h2n?h2/h2n:null,tpC,slC,eodC,trades,bars});
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      RESULTS=rows;
+      statusMsg(`완료 — 유효 ${rows.length}개 / 전체 ${total}개 조합`);
+      render();
+    }catch(e){errMsg(e.message);statusMsg("");}
+    finally{btn.disabled=false;}
+  }
+  const pctStr=x=>(x>=0?"+":"")+(x*100).toFixed(1)+"%";
+  const pf2=x=>x===Infinity?"∞":(x==null?"–":x.toFixed(2));
+  const r3=x=>x==null?"–":(x>0?"+":"")+x.toFixed(3);
+  const arw=k=>SORT.key===k?(SORT.dir<0?" ▾":" ▴"):"";
+  function numCls(v,good,bad){return v>=good?"hl-good":v<=bad?"hl-bad":"";}
+  function render(){
+    const con=el("dvl_results");
+    if(!RESULTS.length){
+      con.innerHTML=`<div class="placeholder"><div class="big">거래가 없습니다</div><div class="mono">자리 필터를 줄이거나 허용오차·트리거 대기를 늘려보세요</div></div>`;
+      return;
+    }
+    const key=SORT.key,dir=SORT.dir;
+    const sorted=[...RESULTS].sort((a,b)=>{
+      const va=isFinite(a[key])?a[key]:(a[key]===Infinity?1e9:-1e9);
+      const vb=isFinite(b[key])?b[key]:(b[key]===Infinity?1e9:-1e9);
+      return(va-vb)*dir;
+    });
+    const best=sorted[0],CAP=500,view=sorted.slice(0,CAP);
+    const capNote=sorted.length>CAP?` <span class="dimv">· 상위 ${CAP}개만 표시(전체 ${sorted.length.toLocaleString()})</span>`:"";
+    const hdr=(k,main,sub="")=>`<th class="dvl-s" data-k="${k}" style="cursor:pointer"><div class="th-main">${main}${arw(k)}</div>${sub?`<div class="th-sub">${sub}</div>`:""}</th>`;
+    let html=`<div class="db-best">최상위: <b>${best.label}</b> ${best.dir==="long"?"롱":"숏"} · ${best.zone} · ${best.trig} · RR${best.rr} · RSI${best.rsi} · k${best.k} → 거래 <b>${best.cnt}</b>(TP${best.tpC}/SL${best.slC}/E${best.eodC}) · 승률 ${(best.winRate*100).toFixed(0)}% · 평균R ${r3(best.avgR)} · PF ${pf2(best.pf)} · 수익 ${pctStr(best.totalRet)} · MDD ${pctStr(best.mdd)} · MAR ${pf2(best.mar)}${capNote}</div>`;
+    html+=`<div class="ctable-wrap"><table class="ctable"><thead><tr>
+      <th><div class="th-main">데이터</div></th><th><div class="th-main">방향</div></th>
+      ${hdr("zone","자리")}${hdr("trig","트리거")}${hdr("rr","RR")}${hdr("rsi","RSI")}${hdr("k","k")}${hdr("tol","오차")}
+      ${hdr("cnt","거래")}${hdr("winRate","승률")}${hdr("avgR","평균R")}${hdr("sumR","합계R")}${hdr("pf","PF")}
+      ${hdr("totalRet","수익")}${hdr("mdd","MDD")}${hdr("mar","MAR")}${hdr("h1R","전반R")}${hdr("h2R","후반R")}
+      <th><div class="th-main">청산</div><div class="th-sub">TP/SL/E</div></th><th><div class="th-main">내역</div></th>
+    </tr></thead><tbody>`;
+    view.forEach((r,i)=>{
+      html+=`<tr class="${i===0?"db-hot":""}">
+        <td class="name mono" style="font-size:12px">${r.label}</td>
+        <td>${r.dir==="long"?"롱":"숏"}</td>
+        <td class="num mono" style="font-size:11px">${r.zone}</td><td class="num mono" style="font-size:11px">${r.trig}</td>
+        <td class="num">${r.rr}</td><td class="num">${r.rsi}</td><td class="num">${r.k}</td><td class="num">${r.tol}</td>
+        <td class="num">${r.cnt}</td>
+        <td class="num ${numCls(r.winRate,0.55,0)}">${(r.winRate*100).toFixed(0)}%</td>
+        <td class="num ${r.avgR>0?"pos":"neg"}">${r3(r.avgR)}</td>
+        <td class="num ${r.sumR>0?"pos":"neg"}">${(r.sumR>0?"+":"")+r.sumR.toFixed(1)}</td>
+        <td class="num ${numCls(r.pf,1.3,0.9)}">${pf2(r.pf)}</td>
+        <td class="num ${r.totalRet>0?"pos":"neg"}">${pctStr(r.totalRet)}</td>
+        <td class="num neg">${pctStr(r.mdd)}</td>
+        <td class="num ${numCls(r.mar,2,0)}">${pf2(r.mar)}</td>
+        <td class="num ${r.h1R>0?"pos":"neg"}">${r3(r.h1R)}</td>
+        <td class="num ${r.h2R>0?"pos":"neg"}">${r3(r.h2R)}</td>
+        <td class="num mono" style="font-size:11px">${r.tpC}/${r.slC}/${r.eodC}</td>
+        <td><button class="dvl-dtl" data-idx="${i}" style="padding:4px 9px;border:1px solid var(--cyan);background:rgba(8,145,178,.1);color:var(--cyan);border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">▸내역</button></td>
+      </tr>`;
+    });
+    html+=`</tbody></table></div><div id="dvl_detail_area" style="margin-top:20px"></div>`;
+    con.innerHTML=html;
+    con.querySelectorAll(".dvl-s").forEach(th=>th.onclick=()=>{
+      const k=th.dataset.k;
+      if(SORT.key===k)SORT.dir*=-1;else{SORT.key=k;SORT.dir=-1;}
+      render();
+    });
+    con.querySelectorAll(".dvl-dtl").forEach(b=>b.onclick=()=>showDetail(view[+b.dataset.idx]));
+  }
+  function showDetail(r){
+    const area=el("dvl_detail_area");if(!area)return;
+    const bars=r.bars;
+    let html=`<div class="sectitle">거래 내역 · ${r.label} ${r.dir==="long"?"롱":"숏"} · ${r.zone} · ${r.trig} · RR${r.rr} RSI${r.rsi} k${r.k} · 시각=MT5 서버시간</div>
+    <div class="ctable-wrap"><table class="ctable"><thead><tr>
+      <th><div class="th-main">P1 저점</div></th><th><div class="th-main">P2 저점(다이버)</div></th>
+      <th><div class="th-main">트리거봉</div></th><th><div class="th-main">진입</div></th><th><div class="th-main">청산</div></th>
+      <th><div class="th-main">진입가</div></th><th><div class="th-main">SL</div></th><th><div class="th-main">TP</div></th>
+      <th><div class="th-main">청산가</div></th><th><div class="th-main">결과</div></th><th><div class="th-main">R</div></th>
+      <th><div class="th-main">자리</div><div class="th-sub">SR/BB/FIB</div></th>
+    </tr></thead><tbody>`;
+    for(const t of r.trades){
+      const res=t.reason==="TP"?'<span class="pos">익절</span>':t.reason==="SL"?'<span class="neg">손절</span>':'<span class="dimv">만료</span>';
+      const zf=[t.ev.sr?"SR":null,t.ev.bb?"BB":null,t.ev.fib?"FIB":null].filter(Boolean).join("·")||"-";
+      html+=`<tr>
+        <td class="name mono" style="font-size:11px">${bars[t.ev.p1].date.slice(0,16)}</td>
+        <td class="name mono" style="font-size:11px">${bars[t.ev.p2].date.slice(0,16)}</td>
+        <td class="name mono" style="font-size:11px">${bars[t.trigIdx].date.slice(0,16)}</td>
+        <td class="name mono" style="font-size:11px">${bars[t.e].date.slice(0,16)}</td>
+        <td class="name mono" style="font-size:11px">${bars[t.x].date.slice(0,16)}</td>
+        <td class="num mono">${t.entry.toFixed(2)}</td><td class="num mono">${t.stop.toFixed(2)}</td><td class="num mono">${t.tp.toFixed(2)}</td>
+        <td class="num mono">${t.exit.toFixed(2)}</td><td>${res}</td>
+        <td class="num ${t.r>0?"pos":"neg"}">${(t.r>0?"+":"")+t.r.toFixed(2)}</td>
+        <td class="num mono" style="font-size:11px">${zf}</td>
+      </tr>`;
+    }
+    html+=`</tbody></table></div>`;
+    area.innerHTML=html;
+    area.scrollIntoView({behavior:"smooth"});
+  }
+  function init(){
+    if(!el("dvl_run"))return;
+    renderCsvChecks("dvl",Math.max(0,CSV_FILES.findIndex(cf=>cf.sym==="XAUUSD"&&cf.tf==="H2")));
+    el("dvl_src").querySelectorAll("button").forEach(b=>b.onclick=()=>{
+      el("dvl_src").dataset.cur=b.dataset.s;
+      el("dvl_src").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+      el("dvl_storedRow").style.display=b.dataset.s==="stored"?"":"none";
+      el("dvl_uploadRow").style.display=b.dataset.s==="upload"?"":"none";
+    });
+    el("dvl_dir").querySelectorAll("button").forEach(b=>b.onclick=()=>{
+      el("dvl_dir").dataset.cur=b.dataset.m;
+      el("dvl_dir").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+    });
+    el("dvl_file").onchange=async e=>{
+      const f=e.target.files[0];if(!f)return;
+      try{RAWCACHE.__upload__=parseMT5local(await f.text());RAWCACHE.__uploadName__=f.name.replace(/\.csv$/i,"");errMsg("");}
+      catch(ex){errMsg("⚠ "+ex.message);}
+    };
+    el("dvl_reload").onclick=()=>{RAWCACHE={};statusMsg("캐시 비움");};
+    el("dvl_run").onclick=run;
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);else init();
+})();

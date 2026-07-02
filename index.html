@@ -1326,6 +1326,105 @@
   <!-- =================== TAB: PAPER TRADE (가상매매) =================== -->
   <!-- =================== TAB: RSI DIVERGENCE (다이버전스) =================== -->
   <div class="tabpane" id="pane-diverge" hidden>
+    <div class="grid">
+      <section class="card">
+        <h2>다이버전스 테스트랩</h2>
+        <div class="intro"><b>가격 저점↓ + RSI 저점↑</b>(다이버전스)를 <b>자리</b>(S/R·볼린저·피보)에서 잡고 <b>트리거</b> 봉으로 진입.
+        콤마로 여러 값을 넣으면 전 조합을 스윕합니다. 아래 파이썬 전수조사와 동일 엔진(피벗 k봉 확정 · SL·TP 동시=SL · 갭손절=시가 · 동시 1포지션).</div>
+
+        <div class="field"><label>데이터 소스</label>
+          <div class="subtabs" id="dvl_src" data-cur="stored">
+            <button data-s="stored" class="on">저장된 CSV</button><button data-s="upload">CSV 업로드</button>
+          </div>
+          <div id="dvl_storedRow" style="margin-top:6px">
+            <div class="csv-checkbar">
+              <label><input id="dvl_csv_all" type="checkbox"> 전체선택</label>
+              <div class="csv-actions">
+                <button type="button" id="dvl_csv_gold">골드</button>
+                <button type="button" id="dvl_csv_us100">나스닥</button>
+                <span class="csv-sep"></span>
+                <button type="button" id="dvl_csv_min">분봉만</button>
+                <button type="button" id="dvl_csv_hour">시간봉만</button>
+                <span class="csv-sep"></span>
+                <button type="button" id="dvl_csv_clear">선택해제</button>
+              </div>
+            </div>
+            <div id="dvl_csv_list" class="csv-checklist"></div>
+            <button id="dvl_reload" style="padding:3px 8px;border:1px solid var(--border);background:var(--input-bg);color:var(--ink-dim);border-radius:6px;font-size:11px;cursor:pointer">↻ 캐시 비우기</button>
+          </div>
+          <div id="dvl_uploadRow" style="display:none;margin-top:6px">
+            <input id="dvl_file" type="file" accept=".csv,text/csv">
+            <div class="hint">MT4/MT5 export(.csv) — 콤마/탭/세미콜론, 헤더 유무 무관. 내보낸 TF 그대로 사용.</div>
+          </div>
+        </div>
+
+        <div class="row2">
+          <div class="field"><label>방향</label>
+            <div class="subtabs" id="dvl_dir" data-cur="long">
+              <button data-m="long" class="on">롱</button><button data-m="short">숏</button><button data-m="both">둘 다</button>
+            </div>
+          </div>
+          <div class="field"><label>트리거 (복수 선택 = 스윕)</label>
+            <div class="csv-checkbar" style="margin:0">
+              <label><input id="dvl_trig_candle" type="checkbox" checked> 캔들</label>
+              <label><input id="dvl_trig_macd" type="checkbox"> MACD</label>
+              <label><input id="dvl_trig_both" type="checkbox"> 캔들+MACD</label>
+            </div>
+            <div class="hint">캔들=양봉·종가>직전고가(장악형) / MACD=12,26,9 크로스 / 둘다=캔들+MACD 상태.</div>
+          </div>
+        </div>
+
+        <div class="field"><label>자리 필터 (선택 전부 충족 = 컨플루언스 AND)</label>
+          <div class="csv-checkbar" style="margin:0">
+            <label><input id="dvl_zone_sr" type="checkbox" checked> S/R</label>
+            <label><input id="dvl_zone_bb" type="checkbox" checked> 볼린저 이탈</label>
+            <label><input id="dvl_zone_fib" type="checkbox"> 피보 되돌림</label>
+            <span class="csv-sep"></span>
+            <label><input id="dvl_zone_sweep" type="checkbox"> 7개 부분집합 전부 스윕</label>
+            <label><input id="dvl_zone_none" type="checkbox"> 자리 없이도</label>
+          </div>
+          <div class="hint">S/R=과거 피벗 레벨 ±오차 / 볼린저=밴드(20,2σ) 밖 / 피보=최근 스윙 38.2·50·61.8% ±오차. "자리 없이도"=무필터 조합 추가.</div>
+        </div>
+
+        <div class="row2">
+          <div class="field"><label>RSI 기간 (콤마)</label><input id="dvl_rsi" class="mono" value="14"></div>
+          <div class="field"><label>스윙 피벗 k봉 (콤마)</label>
+            <input id="dvl_k" class="mono" value="3">
+            <div class="hint">좌우 k봉 극값이 피벗. k봉 뒤 확정(지연 진입).</div>
+          </div>
+        </div>
+
+        <div class="row2">
+          <div class="field"><label>손익비 RR (콤마)</label>
+            <input id="dvl_rr" class="mono" value="1.5,2.5">
+            <div class="hint">TP = 진입가 + RR×(진입가−손절가). 손절 = 트리거봉 극값.</div>
+          </div>
+          <div class="field"><label>자리 허용오차 ×ATR14 (콤마)</label><input id="dvl_tol" class="mono" value="0.5"></div>
+        </div>
+
+        <div class="row2">
+          <div class="field"><label>트리거 대기 (봉)</label><input id="dvl_wait" class="mono" type="number" value="10" min="1" step="1"></div>
+          <div class="field"><label>피벗 최대 간격 (봉)</label><input id="dvl_gap" class="mono" type="number" value="60" min="5" step="5"></div>
+        </div>
+
+        <div class="row2">
+          <div class="field"><label>최대 보유 (봉)</label><input id="dvl_hold" class="mono" type="number" value="300" min="10" step="10"></div>
+          <div class="field"><label>리스크 %/트레이드</label>
+            <input id="dvl_risk" class="mono" type="number" value="1" min="0.1" step="0.1">
+            <div class="hint">수익%·MDD·MAR 환산용(복리). R 지표에는 영향 없음.</div>
+          </div>
+        </div>
+
+        <button class="runbtn" id="dvl_run">▶ 다이버전스 백테스트 돌리기</button>
+        <div class="err" id="dvl_err"></div>
+        <div class="mono" id="dvl_status" style="font-size:11px;color:var(--ink-faint);margin-top:8px;line-height:1.5"></div>
+        <div class="note"><b>확인 순서</b> · ① 거래수(30↑) ② 전·후반R 둘 다 + ③ PF·MAR 순으로. 상위 1개만 좋으면 과최적화 의심 — 이웃 값도 같이 스윕해서 능선을 보세요.</div>
+      </section>
+      <section id="dvl_results">
+        <div class="placeholder"><div class="big">조건을 설정하고 <span class="amb">다이버전스 백테스트 돌리기</span></div><div class="mono" style="font-size:12px">저점 낮춤 + RSI 저점 높임 → 자리 확인 → 트리거봉 → 다음봉 시가 진입 → SL/TP</div></div>
+      </section>
+    </div>
+
     <section class="card" style="margin-top:26px">
       <h2>RSI 다이버전스 (변곡) — 336조합 전수조사</h2>
       <div class="intro">
@@ -1478,7 +1577,7 @@
 
 </div>
 
-<script src="leverage-lab.js?v=20260701b"></script>
+<script src="leverage-lab.js?v=20260702a"></script>
 <script>
 /* ============ 다이버전스 탭: 사전 계산된 그리드서치 결과 뷰어 ============ */
 (function(){

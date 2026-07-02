@@ -4469,7 +4469,7 @@ function drawRSI(rCurve,holdCurve,log){
     return{plo,phi};
   }
   function buildEvents(bars,rsi,k,dir,atr,bb,opts){
-    const{tolMult,maxGap,srLb,fibLb}=opts,n=bars.length;
+    const{tolMult,maxGap,srLb,fibLb,hidden}=opts,n=bars.length;
     const{plo,phi}=pivots(bars,k);
     const lvIdx=[],lvVal=[];
     let a=0,b=0;
@@ -4483,7 +4483,9 @@ function drawRSI(rCurve,holdCurve,log){
     for(let j=1;j<piv.length;j++){
       const p1=piv[j-1],p2=piv[j];
       if(p2-p1>maxGap||p2-p1<=k)continue;
-      const div=dir==="long"?(price(p2)<price(p1)&&rsi[p2]>rsi[p1]):(price(p2)>price(p1)&&rsi[p2]<rsi[p1]);
+      const div=hidden
+        ? (dir==="long"?(price(p2)>price(p1)&&rsi[p2]<rsi[p1]):(price(p2)<price(p1)&&rsi[p2]>rsi[p1]))
+        : (dir==="long"?(price(p2)<price(p1)&&rsi[p2]>rsi[p1]):(price(p2)>price(p1)&&rsi[p2]<rsi[p1]));
       if(!div)continue;
       const confirm=p2+k;
       if(confirm>=n-2)continue;
@@ -4543,6 +4545,83 @@ function drawRSI(rCurve,holdCurve,log){
     const c=bars[last].c,r=dir==="long"?(c-entry)/risk:(entry-c)/risk;
     return{e,x:last,r,entry,stop,tp,exit:c,reason:"EXPIRE"};
   }
+  function simulateFrom(bars,e,entry,sl,rr,dir){
+    const n=bars.length;
+    const risk=dir==="long"?entry-sl:sl-entry;
+    if(!(risk>0))return null;
+    const tp=dir==="long"?entry+rr*risk:entry-rr*risk;
+    const last=Math.min(e+ (+document.getElementById("dvl_hold").value||300), n)-1;
+    for(let i=e;i<=last;i++){
+      const b=bars[i];
+      if(dir==="long"){
+        if(b.l<=sl){const px=Math.min(b.o,sl);return{e,x:i,r:(px-entry)/risk,entry,stop:sl,tp,exit:px,reason:"SL"};}
+        if(b.h>=tp)return{e,x:i,r:rr,entry,stop:sl,tp,exit:tp,reason:"TP"};
+      }else{
+        if(b.h>=sl){const px=Math.max(b.o,sl);return{e,x:i,r:(entry-px)/risk,entry,stop:sl,tp,exit:px,reason:"SL"};}
+        if(b.l<=tp)return{e,x:i,r:rr,entry,stop:sl,tp,exit:tp,reason:"TP"};
+      }
+    }
+    const c=bars[last].c,r=dir==="long"?(c-entry)/risk:(entry-c)/risk;
+    return{e,x:last,r,entry,stop:sl,tp,exit:c,reason:"EXPIRE"};
+  }
+  function resampleM(bars,m){
+    const N=Math.floor(bars.length/m),hb=[],end=[];
+    for(let j=0;j<N;j++){
+      const s=j*m;let hh=-Infinity,ll=Infinity;
+      for(let q=s;q<s+m;q++){if(bars[q].h>hh)hh=bars[q].h;if(bars[q].l<ll)ll=bars[q].l;}
+      hb.push({day:bars[s].day,date:bars[s].date,o:bars[s].o,h:hh,l:ll,c:bars[s+m-1].c});
+      end.push(s+m-1);
+    }
+    return{hb,end};
+  }
+  function chochTrades(bars,rsiP,k,m,cw,rr,dir,maxGap){
+    const n=bars.length;
+    const{hb,end}=resampleM(bars,m);
+    if(hb.length<k*2+3)return[];
+    const rsiH=rsiPy(hb.map(b=>b.c),rsiP);
+    const pv=pivots(hb,k);
+    const piv=dir==="long"?pv.plo:pv.phi;
+    const priceH=i=>dir==="long"?hb[i].l:hb[i].h;
+    const evs=[];
+    for(let j=1;j<piv.length;j++){
+      const P1=piv[j-1],P2=piv[j];
+      if(P2-P1>maxGap||P2-P1<=k)continue;
+      const div=dir==="long"?(priceH(P2)<priceH(P1)&&rsiH[P2]>rsiH[P1])
+                            :(priceH(P2)>priceH(P1)&&rsiH[P2]<rsiH[P1]);
+      if(!div)continue;
+      const CF=P2+k;
+      if(CF>=hb.length)continue;
+      evs.push({P1,P2,CF});
+    }
+    const bv=pivots(bars,k);
+    const opp=dir==="long"?bv.phi:bv.plo;   // 롱=피벗고점 돌파
+    const sims=[];
+    for(const ev of evs){
+      const ws=end[ev.CF]+1,we=Math.min(ws+cw,n-1);
+      for(let t=ws;t<we;t++){
+        let qi=-1;   // t까지 확정된 마지막 반대 피벗 (이진 탐색)
+        let lo=0,hi=opp.length-1;
+        while(lo<=hi){const mid=(lo+hi)>>1;if(opp[mid]+k<=t){qi=mid;lo=mid+1;}else hi=mid-1;}
+        if(qi<0)continue;
+        const q=opp[qi];
+        const lvl=dir==="long"?bars[q].h:bars[q].l;
+        const brk=dir==="long"?bars[t].c>lvl:bars[t].c<lvl;
+        if(!brk)continue;
+        let ex=dir==="long"?Infinity:-Infinity;
+        for(let q2=ws;q2<=t;q2++){
+          if(dir==="long"){if(bars[q2].l<ex)ex=bars[q2].l;}
+          else{if(bars[q2].h>ex)ex=bars[q2].h;}
+        }
+        const e=t+1;
+        if(e<n){
+          const res=simulateFrom(bars,e,bars[e].o,ex,rr,dir);
+          if(res){res.trigIdx=t;res.ev={p1:end[ev.P1],p2:end[ev.P2],sr:false,bb:false,fib:false};sims.push(res);}
+        }
+        break;
+      }
+    }
+    return sims;
+  }
   function parseMT5local(text){
     const lines=text.split(/\r?\n/),out=[];
     const start=/date|open|time/i.test(lines[0]||"")?1:0;
@@ -4597,29 +4676,79 @@ function drawRSI(rCurve,holdCurve,log){
     if(!subs.length)throw new Error("자리 필터를 선택하거나 '자리 없이도'를 체크하세요");
     return subs;
   }
+  function finishRow(trades,meta,n,riskF){
+    if(!trades.length)return null;
+    let wins=0,gw=0,gl=0,sumR=0,h1=0,h2=0,h1n=0,h2n=0,eq=1,peak=1,mdd=0,tpC=0,slC=0,eodC=0;
+    for(const t of trades){
+      sumR+=t.r;
+      if(t.r>0){wins++;gw+=t.r;}else gl-=t.r;
+      if(t.e<n/2){h1+=t.r;h1n++;}else{h2+=t.r;h2n++;}
+      eq*=1+riskF*t.r;if(eq>peak)peak=eq;
+      const dd=eq/peak-1;if(dd<mdd)mdd=dd;
+      if(t.reason==="TP")tpC++;else if(t.reason==="SL")slC++;else eodC++;
+    }
+    const cnt=trades.length,totalRet=eq-1;
+    return Object.assign(meta,{cnt,winRate:wins/cnt,avgR:sumR/cnt,sumR,pf:gl>0?gw/gl:Infinity,
+      totalRet,mdd,mar:mdd<0?totalRet/Math.abs(mdd):(totalRet>0?Infinity:0),
+      h1R:h1n?h1/h1n:null,h2R:h2n?h2/h2n:null,tpC,slC,eodC,trades});
+  }
   async function run(){
     errMsg("");RESULTS=[];
     const btn=el("dvl_run");btn.disabled=true;
     try{
+      const divType=el("dvl_divtype").dataset.cur||"reg";
       const dirSel=el("dvl_dir").dataset.cur||"long";
       const dirs=dirSel==="both"?["long","short"]:[dirSel];
-      const trigs=[["candle","dvl_trig_candle"],["macd","dvl_trig_macd"],["candle+macd","dvl_trig_both"]].filter(t=>el(t[1]).checked).map(t=>t[0]);
-      if(!trigs.length)throw new Error("트리거를 1개 이상 선택하세요");
-      const subs=zoneSubsets();
       const rsis=parseList(el("dvl_rsi").value,2);
       const ks=parseList(el("dvl_k").value,1).map(Math.round);
       const rrs=parseList(el("dvl_rr").value,0.1);
-      const tols=parseList(el("dvl_tol").value,0.01);
-      if(!rsis.length||!ks.length||!rrs.length||!tols.length)throw new Error("RSI·k·RR·허용오차 값을 확인하세요");
-      const wait=Math.max(1,+el("dvl_wait").value||10);
+      if(!rsis.length||!ks.length||!rrs.length)throw new Error("RSI·k·RR 값을 확인하세요");
       const maxGap=Math.max(5,+el("dvl_gap").value||60);
       const hold=Math.max(10,+el("dvl_hold").value||300);
       const riskF=Math.max(0.001,(+el("dvl_risk").value||1)/100);
-      const srLb=250,fibLb=120;
       const sources=await loadSources();
-      const total=sources.length*dirs.length*subs.length*trigs.length*rrs.length*rsis.length*ks.length*tols.length;
-      if(total>20000)throw new Error(`조합이 ${total.toLocaleString()}개입니다. 20,000개 이하로 줄여주세요.`);
       let combo=0;const rows=[];
+
+      if(divType==="choch"){
+        const htfs=parseList(el("dvl_htf").value,2).map(Math.round);
+        if(!htfs.length)throw new Error("상위TF 배수를 입력하세요 (예: 4,8)");
+        const cw=Math.max(10,+el("dvl_chochwin").value||80);
+        const total=sources.length*dirs.length*rsis.length*ks.length*htfs.length*rrs.length;
+        if(total>20000)throw new Error(`조합이 ${total.toLocaleString()}개입니다. 줄여주세요.`);
+        for(const src of sources){
+          const bars=src.bars,n=bars.length;
+          for(const dir of dirs)for(const rp of rsis)for(const k of ks)for(const m of htfs)for(const rr of rrs){
+            combo++;
+            if(combo%10===0){statusMsg(`${combo}/${total} 조합…`);await pauseUI();}
+            const sims=chochTrades(bars,rp,k,m,cw,rr,dir,maxGap);
+            const trades=[];let lastExit=-1;
+            for(const res of sims){
+              if(res.e<=lastExit)continue;
+              lastExit=res.x;trades.push(res);
+            }
+            const row=finishRow(trades,{label:src.label,type:"CHoCH",dir,zone:"—",trig:"구조돌파",
+              rr,rsi:rp,k,tol:"—",ma:"—",htf:m,bars},n,riskF);
+            if(row)rows.push(row);
+          }
+        }
+        RESULTS=rows;
+        statusMsg(`완료 — 유효 ${rows.length}개 / 전체 ${total}개 조합`);
+        render();return;
+      }
+
+      const hidden=divType==="hidden";
+      const typeName=hidden?"히든":"정";
+      const trigs=[["candle","dvl_trig_candle"],["macd","dvl_trig_macd"],["candle+macd","dvl_trig_both"]].filter(t=>el(t[1]).checked).map(t=>t[0]);
+      if(!trigs.length)throw new Error("트리거를 1개 이상 선택하세요");
+      const subs=zoneSubsets();
+      const tols=parseList(el("dvl_tol").value,0.01);
+      if(!tols.length)throw new Error("허용오차 값을 확인하세요");
+      let mas=parseList(el("dvl_ma").value,0).map(Math.round);
+      if(!mas.length)mas=[0];
+      const wait=Math.max(1,+el("dvl_wait").value||10);
+      const srLb=250,fibLb=120;
+      const total=sources.length*dirs.length*subs.length*trigs.length*rrs.length*rsis.length*ks.length*tols.length*mas.length;
+      if(total>20000)throw new Error(`조합이 ${total.toLocaleString()}개입니다. 20,000개 이하로 줄여주세요.`);
       for(const src of sources){
         const bars=src.bars,n=bars.length;
         const closes=bars.map(b=>b.c);
@@ -4629,54 +4758,53 @@ function drawRSI(rCurve,holdCurve,log){
         const macdL=new Array(n);
         for(let i=0;i<n;i++)macdL[i]=e12[i]-e26[i];
         const macdS=emaArr(macdL,9);
+        const maCache={};
+        for(const maP of mas)if(maP>0&&!maCache[maP])maCache[maP]=smaArr(closes,maP);
         for(const rp of rsis){
           const rsi=rsiPy(closes,rp);
           for(const k of ks){
             for(const dir of dirs){
-              const events=buildEvents(bars,rsi,k,dir,atr,bb,{tolMult:tols[0],maxGap,srLb,fibLb});
+              const events=buildEvents(bars,rsi,k,dir,atr,bb,{tolMult:tols[0],maxGap,srLb,fibLb,hidden});
               for(const tolMult of tols){
-                const evs=tolMult===tols[0]?events:buildEvents(bars,rsi,k,dir,atr,bb,{tolMult,maxGap,srLb,fibLb});
+                const evs=tolMult===tols[0]?events:buildEvents(bars,rsi,k,dir,atr,bb,{tolMult,maxGap,srLb,fibLb,hidden});
                 const simCache=new Map();
-                for(const trig of trigs){
-                  for(const rr of rrs){
-                    for(const zs of subs){
-                      combo++;
-                      if(combo%25===0){statusMsg(`${combo}/${total} 조합…`);await pauseUI();}
-                      const trades=[];let lastExit=-1;
-                      for(let ei=0;ei<evs.length;ei++){
-                        const ev=evs[ei];
-                        if(zs.includes("SR")&&!ev.sr)continue;
-                        if(zs.includes("BB")&&!ev.bb)continue;
-                        if(zs.includes("FIB")&&!ev.fib)continue;
-                        const key=ei+"|"+trig+"|"+rr;
-                        let res;
-                        if(simCache.has(key))res=simCache.get(key);
-                        else{
-                          const t=findTrigger(bars,macdL,macdS,ev.confirm,trig,dir,wait);
-                          res=t<0?null:simulate(bars,t,rr,dir,hold);
-                          if(res)res.trigIdx=t;
-                          simCache.set(key,res);
+                for(const maP of mas){
+                  const maArr=maP>0?maCache[maP]:null;
+                  const maOk=evs.map(ev=>{
+                    if(!maArr)return true;
+                    const v=maArr[ev.p2];
+                    return v!=null&&(dir==="long"?bars[ev.p2].c>v:bars[ev.p2].c<v);
+                  });
+                  for(const trig of trigs){
+                    for(const rr of rrs){
+                      for(const zs of subs){
+                        combo++;
+                        if(combo%25===0){statusMsg(`${combo}/${total} 조합…`);await pauseUI();}
+                        const trades=[];let lastExit=-1;
+                        for(let ei=0;ei<evs.length;ei++){
+                          const ev=evs[ei];
+                          if(!maOk[ei])continue;
+                          if(zs.includes("SR")&&!ev.sr)continue;
+                          if(zs.includes("BB")&&!ev.bb)continue;
+                          if(zs.includes("FIB")&&!ev.fib)continue;
+                          const key=ei+"|"+trig+"|"+rr;
+                          let res;
+                          if(simCache.has(key))res=simCache.get(key);
+                          else{
+                            const t=findTrigger(bars,macdL,macdS,ev.confirm,trig,dir,wait);
+                            res=t<0?null:simulate(bars,t,rr,dir,hold);
+                            if(res)res.trigIdx=t;
+                            simCache.set(key,res);
+                          }
+                          if(!res)continue;
+                          if(res.e<=lastExit)continue;
+                          lastExit=res.x;
+                          trades.push({...res,ev});
                         }
-                        if(!res)continue;
-                        if(res.e<=lastExit)continue;
-                        lastExit=res.x;
-                        trades.push({...res,ev});
+                        const row=finishRow(trades,{label:src.label,type:typeName,dir,zone:zoneName(zs),
+                          trig,rr,rsi:rp,k,tol:tolMult,ma:maP||"—",htf:"—",bars},n,riskF);
+                        if(row)rows.push(row);
                       }
-                      if(!trades.length)continue;
-                      let wins=0,gw=0,gl=0,sumR=0,h1=0,h2=0,h1n=0,h2n=0,eq=1,peak=1,mdd=0,tpC=0,slC=0,eodC=0;
-                      for(const t of trades){
-                        sumR+=t.r;
-                        if(t.r>0){wins++;gw+=t.r;}else gl-=t.r;
-                        if(t.e<n/2){h1+=t.r;h1n++;}else{h2+=t.r;h2n++;}
-                        eq*=1+riskF*t.r;if(eq>peak)peak=eq;
-                        const dd=eq/peak-1;if(dd<mdd)mdd=dd;
-                        if(t.reason==="TP")tpC++;else if(t.reason==="SL")slC++;else eodC++;
-                      }
-                      const cnt=trades.length,totalRet=eq-1;
-                      rows.push({label:src.label,dir,zone:zoneName(zs),trig,rr,rsi:rp,k,tol:tolMult,
-                        cnt,winRate:wins/cnt,avgR:sumR/cnt,sumR,pf:gl>0?gw/gl:Infinity,
-                        totalRet,mdd,mar:mdd<0?totalRet/Math.abs(mdd):(totalRet>0?Infinity:0),
-                        h1R:h1n?h1/h1n:null,h2R:h2n?h2/h2n:null,tpC,slC,eodC,trades,bars});
                     }
                   }
                 }
@@ -4711,10 +4839,10 @@ function drawRSI(rCurve,holdCurve,log){
     const best=sorted[0],CAP=500,view=sorted.slice(0,CAP);
     const capNote=sorted.length>CAP?` <span class="dimv">· 상위 ${CAP}개만 표시(전체 ${sorted.length.toLocaleString()})</span>`:"";
     const hdr=(k,main,sub="")=>`<th class="dvl-s" data-k="${k}" style="cursor:pointer"><div class="th-main">${main}${arw(k)}</div>${sub?`<div class="th-sub">${sub}</div>`:""}</th>`;
-    let html=`<div class="db-best">최상위: <b>${best.label}</b> ${best.dir==="long"?"롱":"숏"} · ${best.zone} · ${best.trig} · RR${best.rr} · RSI${best.rsi} · k${best.k} → 거래 <b>${best.cnt}</b>(TP${best.tpC}/SL${best.slC}/E${best.eodC}) · 승률 ${(best.winRate*100).toFixed(0)}% · 평균R ${r3(best.avgR)} · PF ${pf2(best.pf)} · 수익 ${pctStr(best.totalRet)} · MDD ${pctStr(best.mdd)} · MAR ${pf2(best.mar)}${capNote}</div>`;
+    let html=`<div class="db-best">최상위: <b>${best.label}</b> ${best.type||"정"} ${best.dir==="long"?"롱":"숏"} · ${best.zone} · ${best.trig} · MA${best.ma||"—"} · HTF${best.htf||"—"} · RR${best.rr} · RSI${best.rsi} · k${best.k} → 거래 <b>${best.cnt}</b>(TP${best.tpC}/SL${best.slC}/E${best.eodC}) · 승률 ${(best.winRate*100).toFixed(0)}% · 평균R ${r3(best.avgR)} · PF ${pf2(best.pf)} · 수익 ${pctStr(best.totalRet)} · MDD ${pctStr(best.mdd)} · MAR ${pf2(best.mar)}${capNote}</div>`;
     html+=`<div class="ctable-wrap"><table class="ctable"><thead><tr>
-      <th><div class="th-main">데이터</div></th><th><div class="th-main">방향</div></th>
-      ${hdr("zone","자리")}${hdr("trig","트리거")}${hdr("rr","RR")}${hdr("rsi","RSI")}${hdr("k","k")}${hdr("tol","오차")}
+      <th><div class="th-main">데이터</div></th>${hdr("type","타입")}<th><div class="th-main">방향</div></th>
+      ${hdr("zone","자리")}${hdr("trig","트리거")}${hdr("ma","MA")}${hdr("htf","HTF")}${hdr("rr","RR")}${hdr("rsi","RSI")}${hdr("k","k")}${hdr("tol","오차")}
       ${hdr("cnt","거래")}${hdr("winRate","승률")}${hdr("avgR","평균R")}${hdr("sumR","합계R")}${hdr("pf","PF")}
       ${hdr("totalRet","수익")}${hdr("mdd","MDD")}${hdr("mar","MAR")}${hdr("h1R","전반R")}${hdr("h2R","후반R")}
       <th><div class="th-main">청산</div><div class="th-sub">TP/SL/E</div></th><th><div class="th-main">내역</div></th>
@@ -4722,8 +4850,10 @@ function drawRSI(rCurve,holdCurve,log){
     view.forEach((r,i)=>{
       html+=`<tr class="${i===0?"db-hot":""}">
         <td class="name mono" style="font-size:12px">${r.label}</td>
+        <td class="num mono" style="font-size:11px">${r.type||"정"}</td>
         <td>${r.dir==="long"?"롱":"숏"}</td>
         <td class="num mono" style="font-size:11px">${r.zone}</td><td class="num mono" style="font-size:11px">${r.trig}</td>
+        <td class="num">${r.ma||"—"}</td><td class="num">${r.htf||"—"}</td>
         <td class="num">${r.rr}</td><td class="num">${r.rsi}</td><td class="num">${r.k}</td><td class="num">${r.tol}</td>
         <td class="num">${r.cnt}</td>
         <td class="num ${numCls(r.winRate,0.55,0)}">${(r.winRate*100).toFixed(0)}%</td>
@@ -4751,7 +4881,7 @@ function drawRSI(rCurve,holdCurve,log){
   function showDetail(r){
     const area=el("dvl_detail_area");if(!area)return;
     const bars=r.bars;
-    let html=`<div class="sectitle">거래 내역 · ${r.label} ${r.dir==="long"?"롱":"숏"} · ${r.zone} · ${r.trig} · RR${r.rr} RSI${r.rsi} k${r.k} · 시각=MT5 서버시간</div>
+    let html=`<div class="sectitle">거래 내역 · ${r.label} ${r.type||"정"} ${r.dir==="long"?"롱":"숏"} · ${r.zone} · ${r.trig} · MA${r.ma||"—"} HTF${r.htf||"—"} · RR${r.rr} RSI${r.rsi} k${r.k} · 시각=MT5 서버시간</div>
     <div class="ctable-wrap"><table class="ctable"><thead><tr>
       <th><div class="th-main">P1 저점</div></th><th><div class="th-main">P2 저점(다이버)</div></th>
       <th><div class="th-main">트리거봉</div></th><th><div class="th-main">진입</div></th><th><div class="th-main">청산</div></th>
@@ -4790,6 +4920,11 @@ function drawRSI(rCurve,holdCurve,log){
     el("dvl_dir").querySelectorAll("button").forEach(b=>b.onclick=()=>{
       el("dvl_dir").dataset.cur=b.dataset.m;
       el("dvl_dir").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+    });
+    el("dvl_divtype").querySelectorAll("button").forEach(b=>b.onclick=()=>{
+      el("dvl_divtype").dataset.cur=b.dataset.m;
+      el("dvl_divtype").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+      el("dvl_chochrow").style.display=b.dataset.m==="choch"?"":"none";
     });
     el("dvl_file").onchange=async e=>{
       const f=e.target.files[0];if(!f)return;

@@ -19,13 +19,18 @@
 //|      MACD = 12,26,9 크로스 / 캔들+MACD = 캔들 & MACD 상태          |
 //|   ⑤ 트리거봉 마감 직후 시장가 진입(≈다음봉 시가).                  |
 //|      SL = 트리거봉 저가(롱)/고가(숏). TP = 체결가 ± RR×리스크.     |
-//|      최대보유 maxHold봉 초과 시 종가 청산. 동시 1포지션.           |
+//|      최대보유 maxHold봉 초과 시 종가 청산. 동시 1포지션(셋업).     |
+//|   ⑥ 분할 진입(v1.20, 선택): 1차=시장가, 2~N차=시장가~SL 사이를     |
+//|      N등분한 지정가(차수별 랏 지정). SL 공통=트리거봉 극값,        |
+//|      TP=평단±RR×(평단-SL), 체결 추가 시 자동 갱신.                 |
+//|      ⚠ 분할>1은 백테스트 미검증(검증은 단일 진입 기준) —           |
+//|        전략테스터 확인 후 사용. 기본값 1(단일)=기존과 동일.        |
 //|                                                                  |
 //|  주의: 백테스트는 무비용·봉시가 체결 가정. 실거래는 스프레드만큼   |
 //|        불리 — 저빈도(연 11회)라 영향 작지만 데모로 먼저 검증할 것. |
 //+------------------------------------------------------------------+
 #property copyright "LEVERAGE LAB"
-#property version   "1.10"
+#property version   "1.20"
 #property strict
 
 #include <Trade/Trade.mqh>
@@ -57,9 +62,13 @@ input int       InpTrigWindow = 10;         // 트리거 대기(봉)
 input double    InpRR         = 2.5;        // 손익비 RR
 input int       InpMaxHold    = 300;        // 최대 보유(봉)
 
-input group "=== 자금 / 실행 ==="
-input double    InpLot        = 0.01;       // 고정 랏 (리스크%>0이면 무시)
-input double    InpRiskPct    = 0.0;        // 리스크 %/트레이드 (0=고정 랏)
+input group "=== 자금 / 분할 진입 ==="
+input int       InpSplitCount = 1;          // 분할 차수 (1=단일·검증값, 최대 4)
+input double    InpLot1       = 0.01;       // 1차 랏 (시장가)
+input double    InpLot2       = 0.01;       // 2차 랏 (지정가)
+input double    InpLot3       = 0.01;       // 3차 랏 (지정가)
+input double    InpLot4       = 0.01;       // 4차 랏 (지정가)
+input double    InpRiskPct    = 0.0;        // 리스크 %/트레이드 (단일 진입시만, 0=고정 랏)
 input long      InpMagic      = 880101;     // 매직넘버 (전략마다 고유값!)
 input int       InpMaxSpreadPts = 0;        // 최대 스프레드(포인트, 0=무시)
 input string    InpComment    = "DIV";      // 주문 코멘트
@@ -84,6 +93,7 @@ long      g_trigDeadline = -1;              // 트리거 대기 마감 봉번호
 double    g_SL = 0, g_TP = 0;
 long      g_entryBar = -1;
 bool      g_tpSet = false;
+double    g_lastVol = 0;                    // TP 갱신 감지용 총 체결 볼륨
 
 int       hRSI = INVALID_HANDLE, hATR = INVALID_HANDLE, hMACD = INVALID_HANDLE;
 CTrade    g_trade;
@@ -128,9 +138,9 @@ void OnDeinit(const int reason){}
 //+------------------------------------------------------------------+
 //| 유틸: 매직 일치 포지션                                            |
 //+------------------------------------------------------------------+
-int CountMyPositions(double &avgPrice)
+int CountMyPositions(double &avgPrice, double &totVol)
   {
-   int cnt=0; double sumPV=0, totVol=0;
+   int cnt=0; double sumPV=0; totVol=0;
    for(int i=PositionsTotal()-1;i>=0;i--)
      {
       ulong tk=PositionGetTicket(i);
@@ -142,6 +152,30 @@ int CountMyPositions(double &avgPrice)
      }
    avgPrice=(totVol>0? sumPV/totVol : 0);
    return cnt;
+  }
+int CountMyPendings()
+  {
+   int cnt=0;
+   for(int i=OrdersTotal()-1;i>=0;i--)
+     {
+      ulong tk=OrderGetTicket(i);
+      if(tk==0) continue;
+      if(OrderGetString(ORDER_SYMBOL)!=_Symbol) continue;
+      if(OrderGetInteger(ORDER_MAGIC)!=InpMagic) continue;
+      cnt++;
+     }
+   return cnt;
+  }
+void DeleteMyPendings()
+  {
+   for(int i=OrdersTotal()-1;i>=0;i--)
+     {
+      ulong tk=OrderGetTicket(i);
+      if(tk==0) continue;
+      if(OrderGetString(ORDER_SYMBOL)!=_Symbol) continue;
+      if(OrderGetInteger(ORDER_MAGIC)!=InpMagic) continue;
+      g_trade.OrderDelete(tk);
+     }
   }
 void CloseMyPositions()
   {
@@ -172,12 +206,12 @@ double BBside(const double &cl[], int shift, bool upper)
 //+------------------------------------------------------------------+
 double CalcLot(double entryPx, double slPx)
   {
-   if(InpRiskPct<=0) return InpLot;
+   if(InpRiskPct<=0) return InpLot1;
    double dist=MathAbs(entryPx-slPx);
-   if(dist<=0) return InpLot;
+   if(dist<=0) return InpLot1;
    double tickVal =SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_VALUE);
    double tickSize=SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_SIZE);
-   if(tickVal<=0 || tickSize<=0) return InpLot;
+   if(tickVal<=0 || tickSize<=0) return InpLot1;
    double valuePerUnit=tickVal/tickSize;                     // 1랏이 가격 1.0 움직일 때 손익
    double riskMoney=AccountInfoDouble(ACCOUNT_BALANCE)*InpRiskPct/100.0;
    double lot=riskMoney/(dist*valuePerUnit);
@@ -186,6 +220,34 @@ double CalcLot(double entryPx, double slPx)
    double vmax=SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_MAX);
    if(step>0) lot=MathFloor(lot/step)*step;
    return MathMin(MathMax(lot,vmin),vmax);
+  }
+
+//+------------------------------------------------------------------+
+//| TP 부착·갱신: 평단±RR×(평단-SL). 체결 볼륨 변동 시 자동 재계산     |
+//+------------------------------------------------------------------+
+void UpdateTP()
+  {
+   if(g_SL<=0) return;
+   double avg=0, vol=0;
+   int npos=CountMyPositions(avg,vol);
+   if(npos==0) return;
+   if(g_tpSet && vol==g_lastVol) return;      // 변동 없음
+   bool isShort=(InpDir==DIR_SHORT);
+   double risk = isShort ? g_SL-avg : avg-g_SL;
+   if(risk<=0)
+     { Print("갭 진입(리스크<=0) → 즉시 정리"); CloseMyPositions(); DeleteMyPendings(); return; }
+   g_TP = isShort ? avg-InpRR*risk : avg+InpRR*risk;
+   int dig=(int)SymbolInfoInteger(_Symbol,SYMBOL_DIGITS);
+   for(int i=PositionsTotal()-1;i>=0;i--)
+     {
+      ulong tk=PositionGetTicket(i);
+      if(tk==0) continue;
+      if(PositionGetString(POSITION_SYMBOL)!=_Symbol) continue;
+      if(PositionGetInteger(POSITION_MAGIC)!=InpMagic) continue;
+      g_trade.PositionModify(tk,NormalizeDouble(g_SL,dig),NormalizeDouble(g_TP,dig));
+     }
+   g_tpSet=true; g_lastVol=vol;
+   PrintFormat("TP 부착/갱신: 평단=%.5f SL=%.5f TP=%.5f (체결 %.2f랏)", avg, g_SL, g_TP, vol);
   }
 
 //+------------------------------------------------------------------+
@@ -233,36 +295,17 @@ void OnNewBar()
    if(CopyBuffer(hMACD,0,0,need,macdM)!=need) return;
    if(CopyBuffer(hMACD,1,0,need,macdS)!=need) return;
 
-   // ---- 포지션 상태 동기화 / TP 부착 / 만료 ----
-   double avg=0;
-   int npos=CountMyPositions(avg);
+   // ---- 포지션 상태 동기화 / TP 부착·갱신 / 만료 ----
+   double avg=0, vol=0;
+   int npos=CountMyPositions(avg,vol);
    if(npos>0)
      {
-      if(!g_tpSet && g_SL>0)
-        {
-         double risk = isShort ? g_SL-avg : avg-g_SL;
-         if(risk>0)
-           {
-            g_TP = isShort ? avg-InpRR*risk : avg+InpRR*risk;
-            int dig=(int)SymbolInfoInteger(_Symbol,SYMBOL_DIGITS);
-            for(int i=PositionsTotal()-1;i>=0;i--)
-              {
-               ulong tk=PositionGetTicket(i);
-               if(tk==0) continue;
-               if(PositionGetString(POSITION_SYMBOL)!=_Symbol) continue;
-               if(PositionGetInteger(POSITION_MAGIC)!=InpMagic) continue;
-               g_trade.PositionModify(tk,NormalizeDouble(g_SL,dig),NormalizeDouble(g_TP,dig));
-              }
-            g_tpSet=true;
-            PrintFormat("TP 부착: entry=%.5f SL=%.5f TP=%.5f", avg, g_SL, g_TP);
-           }
-         else { Print("갭 진입(리스크<=0) → 즉시 정리"); CloseMyPositions(); }
-        }
+      UpdateTP();
       if(g_entryBar>=0 && g_barCount-g_entryBar>=InpMaxHold)
-        { Print("최대보유 만료 청산"); CloseMyPositions(); }
+        { Print("최대보유 만료 청산"); CloseMyPositions(); DeleteMyPendings(); }
      }
-   else if(g_entryBar>=0)   // 청산 완료 → 리셋
-     { g_entryBar=-1; g_SL=0; g_TP=0; g_tpSet=false; }
+   else if(g_entryBar>=0)   // 청산 완료 → 잔여 지정가 정리 + 리셋
+     { DeleteMyPendings(); g_entryBar=-1; g_SL=0; g_TP=0; g_tpSet=false; g_lastVol=0; }
 
    // ---- 피벗 확정 검사 (피벗봉 = shift k+1, 봉번호 = g_barCount-k) ----
    int ps=k+1;
@@ -352,7 +395,7 @@ void OnNewBar()
 
    // ---- 트리거 (대기 중 & 무포지션) ----
    if(g_trigDeadline>=0 && g_barCount>g_trigDeadline) g_trigDeadline=-1;   // 만료
-   if(g_trigDeadline>=0 && npos==0 && g_entryBar<0)
+   if(g_trigDeadline>=0 && npos==0 && g_entryBar<0 && CountMyPendings()==0)
      {
       bool candle = isShort ? (cl[1]<op[1] && cl[1]<lo[2]) : (cl[1]>op[1] && cl[1]>hi[2]);
       bool mx     = isShort ? (macdM[1]<macdS[1] && macdM[2]>=macdS[2])
@@ -366,16 +409,28 @@ void OnNewBar()
          double risk = isShort ? sl-px : px-sl;
          if(risk>0)
            {
-            double lot=CalcLot(px,sl);
+            int N=(int)MathMax(1,MathMin(4,InpSplitCount));
+            double lotsArr[4]; lotsArr[0]=InpLot1; lotsArr[1]=InpLot2; lotsArr[2]=InpLot3; lotsArr[3]=InpLot4;
+            double lot1=(N==1)? CalcLot(px,sl) : lotsArr[0];
             int dig=(int)SymbolInfoInteger(_Symbol,SYMBOL_DIGITS);
             bool ok = isShort
-               ? g_trade.Sell(lot,_Symbol,0.0,NormalizeDouble(sl,dig),0.0,InpComment)
-               : g_trade.Buy (lot,_Symbol,0.0,NormalizeDouble(sl,dig),0.0,InpComment);
+               ? g_trade.Sell(lot1,_Symbol,0.0,NormalizeDouble(sl,dig),0.0,InpComment)
+               : g_trade.Buy (lot1,_Symbol,0.0,NormalizeDouble(sl,dig),0.0,InpComment);
             if(ok)
               {
-               g_SL=sl; g_TP=0; g_tpSet=false; g_entryBar=g_barCount; g_trigDeadline=-1;
-               PrintFormat("진입: %s lot=%.2f SL=%.5f (TP는 체결가 기준 다음 봉에 부착)",
-                           (isShort?"SELL":"BUY"), lot, sl);
+               // 2~N차: 시장가~SL 사이 N등분 지정가 (SL 방향, 차수별 랏)
+               for(int k2=1;k2<N;k2++)
+                 {
+                  double p = isShort ? px + risk*k2/N : px - risk*k2/N;
+                  p=NormalizeDouble(p,dig);
+                  bool ok2 = isShort
+                     ? g_trade.SellLimit(lotsArr[k2],p,_Symbol,NormalizeDouble(sl,dig),0.0,ORDER_TIME_GTC,0,InpComment)
+                     : g_trade.BuyLimit (lotsArr[k2],p,_Symbol,NormalizeDouble(sl,dig),0.0,ORDER_TIME_GTC,0,InpComment);
+                  if(!ok2) PrintFormat("분할 %d차 주문 실패 @%.*f (%s)",k2+1,dig,p,g_trade.ResultRetcodeDescription());
+                 }
+               g_SL=sl; g_TP=0; g_tpSet=false; g_lastVol=0; g_entryBar=g_barCount; g_trigDeadline=-1;
+               PrintFormat("진입: %s 1차 %.2f랏 시장가 + 분할 %d차 SL=%.5f (TP=평단 기준 자동 부착)",
+                           (isShort?"SELL":"BUY"), lot1, N, sl);
               }
             else PrintFormat("주문 실패: %s", g_trade.ResultRetcodeDescription());
            }
@@ -398,30 +453,7 @@ void OnTick()
       g_lastBarTime=t;
       OnNewBar();
      }
-   // 체결 직후 TP 미부착 상태면 틱에서도 시도 (다음 봉까지 안 기다림)
-   if(!g_tpSet && g_SL>0)
-     {
-      double avg=0;
-      if(CountMyPositions(avg)>0)
-        {
-         bool isShort=(InpDir==DIR_SHORT);
-         double risk = isShort ? g_SL-avg : avg-g_SL;
-         if(risk>0)
-           {
-            g_TP = isShort ? avg-InpRR*risk : avg+InpRR*risk;
-            int dig=(int)SymbolInfoInteger(_Symbol,SYMBOL_DIGITS);
-            for(int i=PositionsTotal()-1;i>=0;i--)
-              {
-               ulong tk=PositionGetTicket(i);
-               if(tk==0) continue;
-               if(PositionGetString(POSITION_SYMBOL)!=_Symbol) continue;
-               if(PositionGetInteger(POSITION_MAGIC)!=InpMagic) continue;
-               g_trade.PositionModify(tk,NormalizeDouble(g_SL,dig),NormalizeDouble(g_TP,dig));
-              }
-            g_tpSet=true;
-           }
-         else { CloseMyPositions(); }
-        }
-     }
+   // 매 틱: TP 부착·갱신 (신규 체결/분할 체결 시 평단 변동 반영)
+   UpdateTP();
   }
 //+------------------------------------------------------------------+

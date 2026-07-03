@@ -25,6 +25,7 @@
 //|      TP=평단±RR×(평단-SL), 체결 추가 시 자동 갱신.                 |
 //|      ⚠ 분할>1은 백테스트 미검증(검증은 단일 진입 기준) —           |
 //|        전략테스터 확인 후 사용. 기본값 1(단일)=기존과 동일.        |
+//|        단일(분할1)은 기존 InpLot/InpRiskPct 그대로 — 프리셋 무변경. |
 //|                                                                  |
 //|  주의: 백테스트는 무비용·봉시가 체결 가정. 실거래는 스프레드만큼   |
 //|        불리 — 저빈도(연 11회)라 영향 작지만 데모로 먼저 검증할 것. |
@@ -62,13 +63,15 @@ input int       InpTrigWindow = 10;         // 트리거 대기(봉)
 input double    InpRR         = 2.5;        // 손익비 RR
 input int       InpMaxHold    = 300;        // 최대 보유(봉)
 
-input group "=== 자금 / 분할 진입 ==="
-input int       InpSplitCount = 1;          // 분할 차수 (1=단일·검증값, 최대 4)
-input double    InpLot1       = 0.01;       // 1차 랏 (시장가)
-input double    InpLot2       = 0.01;       // 2차 랏 (지정가)
-input double    InpLot3       = 0.01;       // 3차 랏 (지정가)
-input double    InpLot4       = 0.01;       // 4차 랏 (지정가)
-input double    InpRiskPct    = 0.0;        // 리스크 %/트레이드 (단일 진입시만, 0=고정 랏)
+input group "=== 자금 / 실행 (단일 진입 — 기존 검증 동작) ==="
+input double    InpLot        = 0.01;       // 고정 랏 (리스크%>0이면 무시)
+input double    InpRiskPct    = 0.0;        // 리스크 %/트레이드 (0=고정 랏)
+input group "=== 분할 진입 (선택 · 미검증 — 분할차수>=2일 때만 적용) ==="
+input int       InpSplitCount = 1;          // 분할 차수 (1=단일: 위 InpLot 사용, 최대 4)
+input double    InpLot1       = 0.01;       // 분할 1차 랏 (시장가)
+input double    InpLot2       = 0.01;       // 분할 2차 랏 (지정가)
+input double    InpLot3       = 0.01;       // 분할 3차 랏 (지정가)
+input double    InpLot4       = 0.01;       // 분할 4차 랏 (지정가)
 input long      InpMagic      = 880101;     // 매직넘버 (전략마다 고유값!)
 input int       InpMaxSpreadPts = 0;        // 최대 스프레드(포인트, 0=무시)
 input string    InpComment    = "DIV";      // 주문 코멘트
@@ -206,12 +209,12 @@ double BBside(const double &cl[], int shift, bool upper)
 //+------------------------------------------------------------------+
 double CalcLot(double entryPx, double slPx)
   {
-   if(InpRiskPct<=0) return InpLot1;
+   if(InpRiskPct<=0) return InpLot;
    double dist=MathAbs(entryPx-slPx);
-   if(dist<=0) return InpLot1;
+   if(dist<=0) return InpLot;
    double tickVal =SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_VALUE);
    double tickSize=SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_SIZE);
-   if(tickVal<=0 || tickSize<=0) return InpLot1;
+   if(tickVal<=0 || tickSize<=0) return InpLot;
    double valuePerUnit=tickVal/tickSize;                     // 1랏이 가격 1.0 움직일 때 손익
    double riskMoney=AccountInfoDouble(ACCOUNT_BALANCE)*InpRiskPct/100.0;
    double lot=riskMoney/(dist*valuePerUnit);

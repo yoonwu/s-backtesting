@@ -416,22 +416,28 @@ void OnNewBar()
             double lotsArr[4]; lotsArr[0]=InpLot1; lotsArr[1]=InpLot2; lotsArr[2]=InpLot3; lotsArr[3]=InpLot4;
             double lot1=(N==1)? CalcLot(px,sl) : lotsArr[0];
             int dig=(int)SymbolInfoInteger(_Symbol,SYMBOL_DIGITS);
+            double tp = isShort ? px-InpRR*risk : px+InpRR*risk;
+            double orderSL=NormalizeDouble(sl,dig);
+            double orderTP=NormalizeDouble(tp,dig);
             bool ok = isShort
-               ? g_trade.Sell(lot1,_Symbol,0.0,NormalizeDouble(sl,dig),0.0,InpComment)
-               : g_trade.Buy (lot1,_Symbol,0.0,NormalizeDouble(sl,dig),0.0,InpComment);
+               ? g_trade.Sell(lot1,_Symbol,0.0,orderSL,orderTP,InpComment)
+               : g_trade.Buy (lot1,_Symbol,0.0,orderSL,orderTP,InpComment);
             if(ok)
               {
                // 2~N차: 시장가~SL 사이 N등분 지정가 (SL 방향, 차수별 랏)
                for(int k2=1;k2<N;k2++)
                  {
-                  double p = isShort ? px + risk*k2/N : px - risk*k2/N;
-                  p=NormalizeDouble(p,dig);
-                  bool ok2 = isShort
-                     ? g_trade.SellLimit(lotsArr[k2],p,_Symbol,NormalizeDouble(sl,dig),0.0,ORDER_TIME_GTC,0,InpComment)
-                     : g_trade.BuyLimit (lotsArr[k2],p,_Symbol,NormalizeDouble(sl,dig),0.0,ORDER_TIME_GTC,0,InpComment);
+                   double p = isShort ? px + risk*k2/N : px - risk*k2/N;
+                   p=NormalizeDouble(p,dig);
+                   double pendingRisk = isShort ? sl-p : p-sl;
+                   double pendingTP = isShort ? p-InpRR*pendingRisk : p+InpRR*pendingRisk;
+                   pendingTP=NormalizeDouble(pendingTP,dig);
+                   bool ok2 = isShort
+                      ? g_trade.SellLimit(lotsArr[k2],p,_Symbol,orderSL,pendingTP,ORDER_TIME_GTC,0,InpComment)
+                      : g_trade.BuyLimit (lotsArr[k2],p,_Symbol,orderSL,pendingTP,ORDER_TIME_GTC,0,InpComment);
                   if(!ok2) PrintFormat("분할 %d차 주문 실패 @%.*f (%s)",k2+1,dig,p,g_trade.ResultRetcodeDescription());
                  }
-               g_SL=sl; g_TP=0; g_tpSet=false; g_lastVol=0; g_entryBar=g_barCount; g_trigDeadline=-1;
+               g_SL=sl; g_TP=tp; g_tpSet=false; g_lastVol=0; g_entryBar=g_barCount; g_trigDeadline=-1;
                PrintFormat("진입: %s 1차 %.2f랏 시장가 + 분할 %d차 SL=%.5f (TP=평단 기준 자동 부착)",
                            (isShort?"SELL":"BUY"), lot1, N, sl);
               }

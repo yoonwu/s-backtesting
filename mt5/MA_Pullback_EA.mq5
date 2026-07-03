@@ -226,22 +226,24 @@ void PlaceEntryOrders()
    double deepest=(isShort? g_touchPx+(N-1)*g_KR : g_touchPx-(N-1)*g_KR);
    g_SL=(isShort? deepest+InpSL_x*g_KR : deepest-InpSL_x*g_KR);
    g_SL=NormalizeDouble(g_SL,dig);
+   double orderSL=g_SL;
    int okCount=0;
    for(int k=0;k<N;k++)
      {
       double p=(isShort? g_touchPx+k*g_KR : g_touchPx-k*g_KR);
       p=NormalizeDouble(p,dig);
       double lot=(k<4? lots[k] : lots[3]);
+      double orderTP=NormalizeDouble((isShort? p-InpTP_x*g_KR : p+InpTP_x*g_KR),dig);
       bool ok=false;
       if(isShort)
         {
-         if(p>=bid) ok=g_trade.SellLimit(lot,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
-         else       ok=g_trade.SellStop (lot,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
+         if(p>=bid) ok=g_trade.SellLimit(lot,p,_Symbol,orderSL,orderTP,ORDER_TIME_GTC,0,InpComment);
+         else       ok=g_trade.SellStop (lot,p,_Symbol,orderSL,orderTP,ORDER_TIME_GTC,0,InpComment);
         }
       else
         {
-         if(p<=ask) ok=g_trade.BuyLimit(lot,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
-         else       ok=g_trade.BuyStop (lot,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
+         if(p<=ask) ok=g_trade.BuyLimit(lot,p,_Symbol,orderSL,orderTP,ORDER_TIME_GTC,0,InpComment);
+         else       ok=g_trade.BuyStop (lot,p,_Symbol,orderSL,orderTP,ORDER_TIME_GTC,0,InpComment);
         }
       if(!ok) PrintFormat("주문 실패 차수%d @%.*f (%s)",k,dig,p,g_trade.ResultRetcodeDescription());
       else    okCount++;

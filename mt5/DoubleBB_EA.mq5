@@ -19,7 +19,7 @@
 //|   · 손절·익절 동시 = 손절 우선. 동시 1포지션.                      |
 //+------------------------------------------------------------------+
 #property copyright "LEVERAGE LAB"
-#property version   "1.05"
+#property version   "1.06"
 #property strict
 
 #include <Trade/Trade.mqh>
@@ -241,21 +241,28 @@ void PlaceEntryOrders()
                      ? (isShort ? p - InpTP_x*g_brkTR : p + InpTP_x*g_brkTR)
                      : breakoutTP;
       double orderTP=NormalizeDouble(tpRaw,dig);
-      bool ok;
-      if(isShort)
+      bool ok=false;
+      bool skipped=false;
+      if(k==0)
         {
-         // 숏: 현재가보다 위면 SellLimit, 아래면 SellStop
+         // Breakout signal is already confirmed here. The first tranche enters now.
+         ok = isShort ? g_trade.Sell(lot,_Symbol,0.0,orderSL,orderTP,InpComment)
+                      : g_trade.Buy (lot,_Symbol,0.0,orderSL,orderTP,InpComment);
+        }
+      else if(isShort)
+        {
+         // Additional short tranches are pullback sells only. Do not chase with SellStop.
          if(p >= bid) ok=g_trade.SellLimit(lot,p,_Symbol,orderSL,orderTP,ORDER_TIME_GTC,0,InpComment);
-         else         ok=g_trade.SellStop (lot,p,_Symbol,orderSL,orderTP,ORDER_TIME_GTC,0,InpComment);
+         else        { skipped=true; PrintFormat("추가 숏 주문 건너뜀 차수%d @%.*f: 현재가 아래라 SellStop 추격 금지",k,dig,p); }
         }
       else
         {
-         // 롱: 현재가보다 아래면 BuyLimit, 위면 BuyStop
+         // Additional long tranches are pullback buys only. Do not chase with BuyStop.
          if(p <= ask) ok=g_trade.BuyLimit(lot,p,_Symbol,orderSL,orderTP,ORDER_TIME_GTC,0,InpComment);
-         else         ok=g_trade.BuyStop (lot,p,_Symbol,orderSL,orderTP,ORDER_TIME_GTC,0,InpComment);
+         else        { skipped=true; PrintFormat("추가 롱 주문 건너뜀 차수%d @%.*f: 현재가 위라 BuyStop 추격 금지",k,dig,p); }
         }
-      if(!ok) PrintFormat("주문 실패 차수%d @%.*f (%s)",k,dig,p,g_trade.ResultRetcodeDescription());
-      else    okCount++;
+      if(ok) okCount++;
+      else if(!skipped) PrintFormat("주문 실패 차수%d @%.*f (%s)",k,dig,p,g_trade.ResultRetcodeDescription());
      }
    if(okCount>0){ g_state=ST_ENTERING; g_barsSince=0; }
    else         { Print("전체 주문 실패 → IDLE 복귀"); ResetIdle(); }

@@ -29,7 +29,10 @@ def load_vt(path, mins):
     """혼합TF 트리밍 로드 + tickvol + 시각(분단위)/일자ID."""
     df = pd.read_csv(path, sep="\t")
     df.columns = [c.strip("<>").lower() for c in df.columns]
-    dt = pd.to_datetime(df["date"] + " " + df["time"], format="%Y.%m.%d %H:%M:%S")
+    if "time" in df.columns:
+        dt = pd.to_datetime(df["date"] + " " + df["time"], format="%Y.%m.%d %H:%M:%S")
+    else:                                     # 일봉 파일: DATE만 존재
+        dt = pd.to_datetime(df["date"], format="%Y.%m.%d")
     d = dt.diff().dt.total_seconds().to_numpy() / 60
     start, run, run_start = 0, 0, 0
     for i in range(1, len(df)):

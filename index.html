@@ -243,15 +243,11 @@
     </div>
     <div class="tabbar" id="tabbar">
       <button data-tab="lab" class="on">수익율 연구소<span class="sub">Profit Lab</span></button>
-      <button data-tab="doubleb">더블비<span class="sub">Double-BB</span></button>
-      <button data-tab="revdb">변곡더블비<span class="sub">Reversal-DB</span></button>
-      <button data-tab="revdbc">변곡더블비-코덱스<span class="sub">Reversal-DB · Codex</span></button>
-      <button data-tab="revema">변곡DB EMA<span class="sub">Reversal EMA</span></button>
-      <button data-tab="trsig">변곡신호<span class="sub">Structural Reversal</span></button>
-      <button data-tab="nlpb">넥라인눌림<span class="sub">Neckline PB · by Codex</span></button>
+      <button data-tab="grp-dbb">더블비<span class="sub">Double-BB</span></button>
+      <button data-tab="grp-inflect">변곡<span class="sub">Reversal Suite</span></button>
+      <button data-tab="grp-neck">넥라인눌림<span class="sub">Neckline PB</span></button>
       <button data-tab="break120">120선 눌림목<span class="sub">MA120-Pullback</span></button>
       <button data-tab="diverge">다이버전스<span class="sub">RSI Divergence</span></button>
-      <button data-tab="neckline">넥라인눌림<span class="sub">by Claude</span></button>
       <button data-tab="autofilter">자동매매필터<span class="sub">Strategy Filter</span></button>
       <button data-tab="paper">가상매매<span class="sub">Paper Lot</span></button>
       <button data-tab="saved">⭐ 저장된 전략 <span class="badge" id="tab_saved_badge"></span><span class="sub">Saved</span></button>
@@ -274,6 +270,32 @@
       <button data-labtab="tranche">분할매수<span class="sub">Tranche</span></button>
       <button data-labtab="shannon">도깨비<span class="sub">Shannon</span></button>
       <button data-labtab="rsirev">RSI 매수<span class="sub">Mean Rev</span></button>
+    </div>
+  </div>
+
+  <!-- =================== TAB GROUP: 더블비 =================== -->
+  <div class="tabpane" id="pane-grp-dbb" hidden>
+    <div class="labtabbar" id="grp_dbb_bar">
+      <button data-t="doubleb" class="on">더블비 그리드<span class="sub">Double-BB</span></button>
+      <button data-t="doublebc">더블비컨펌<span class="sub">Confirm Grid</span></button>
+    </div>
+  </div>
+
+  <!-- =================== TAB GROUP: 변곡 =================== -->
+  <div class="tabpane" id="pane-grp-inflect" hidden>
+    <div class="labtabbar" id="grp_inflect_bar">
+      <button data-t="revdb" class="on">변곡더블비<span class="sub">Reversal-DB</span></button>
+      <button data-t="revdbc">변곡더블비-코덱스<span class="sub">by Codex</span></button>
+      <button data-t="revema">변곡DB EMA<span class="sub">EMA Confirm</span></button>
+      <button data-t="trsig">변곡신호<span class="sub">Structural</span></button>
+    </div>
+  </div>
+
+  <!-- =================== TAB GROUP: 넥라인눌림 =================== -->
+  <div class="tabpane" id="pane-grp-neck" hidden>
+    <div class="labtabbar" id="grp_neck_bar">
+      <button data-t="neckline" class="on">by Claude<span class="sub">전수조사 · 차트검증</span></button>
+      <button data-t="nlpb">by Codex<span class="sub">Grid Sweep</span></button>
     </div>
   </div>
 
@@ -1894,7 +1916,7 @@
 
 </div>
 
-<script src="leverage-lab.js?v=20260707c"></script>
+<script src="leverage-lab.js?v=20260707d"></script>
 <script>
 /* ============ 다이버전스 탭: 사전 계산된 그리드서치 결과 뷰어 ============ */
 (function(){
@@ -2104,8 +2126,10 @@
       .then(t=>{DS=parseCsv(t);renderDs();})
       .catch(()=>{$("#nk_ds_body").innerHTML='<div class="note">divergence/results/neckline_by_dataset.csv 를 불러오지 못했습니다.</div>';});
   }
-  const btn=document.querySelector('#tabbar button[data-tab="neckline"]');
-  if(btn) btn.addEventListener("click",load);
+  ['#tabbar button[data-tab="grp-neck"]','#grp_neck_bar button[data-t="neckline"]'].forEach(sel=>{
+    const btn=document.querySelector(sel);
+    if(btn) btn.addEventListener("click",load);
+  });
 })();
 </script>
 <script>

@@ -1,0 +1,24 @@
+; ============================================================
+; Volatility_Squeeze_EA 프리셋 — 압축 골드 H4 롱 (XAUUSD H4)
+; 차트: XAUUSD · H4 · 헤징계좌 · 알고리즘 트레이딩 ON
+; 0.05%비용 성과: 86거래 · 승률 40% · +0.596R/거래 · PF 2.25
+;   4/4분기 · 랜덤 3개월 27/30 · 복리(1%) +63% MDD -10%
+;   → 리스크 0.5% 권장. 6개 변형 전부 양수(능선 두꺼움)
+; 로직: 인사이드바+NR5(최근 5봉 최소 레인지) → 신호봉 고가에
+;   매수 스탑 · SL=신호봉 저가 · TP=3.5R · 반대편 터치 시 취소
+;   · 미체결 10봉 만료
+; 더블비⑥과 거래 겹침 43% — 신규 슬롯 자격 (수축 후 선진입 축)
+; 로드: EA 속성 → 입력 탭 → [로드] → 이 파일.
+; ============================================================
+InpDir=0
+InpNRPeriod=5
+InpCancelBars=10
+InpTP_R=3.5
+InpMaxHoldBars=300
+InpLot=0.01
+InpRiskPct=0.0
+InpMagic=880202
+InpMaxSpreadPts=0
+InpComment=SQZ-XAU-H4
+InpExpectedSymbol=XAUUSD
+InpExpectedTF=16388

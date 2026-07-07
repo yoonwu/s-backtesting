@@ -4936,3 +4936,350 @@ function drawRSI(rCurve,holdCurve,log){
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);else init();
 })();
+
+/* ===== NECKLINE PULLBACK LAB (넥라인눌림 by Claude) — engine-start =====
+ * divergence/neckline_scan.py의 JS 포트 — 수치 동일 재현.
+ * ① 다중바닥 클러스터: k봉 피벗저점들이 클러스터 최저점 ±tol×ATR14 안에 모임
+ *    (저점 간 최대 60봉 · 저점 사이 반등 minBounce×ATR 이상 · 최저점 maxBreak×ATR 하회 시 무효)
+ * ② 넥라인 = 첫 저점~마지막 저점 사이 최고가, 바닥 n개 이상 + 마지막 저점 확정 시 무장
+ * ③ 돌파: 무장 후 brkWin봉 내 종가 > 넥라인 (추격 안 함)
+ * ④ 리테스트: 돌파 후 rtWin봉 내 저가 ≤ 넥라인 + touchTol×ATR (가짜돌파 failTol 취소)
+ * ⑤ 진입: 터치(넥라인 지정가) / 확인형(터치 후 confWin봉 내 넥라인 위 양봉 마감 → 다음봉 시가)
+ * ⑥ SL = 클러스터 최저점 − slAtr×ATR · TP = R배수 또는 패턴목표(넥라인+높이)
+ * ⑦ 보수적 체결(SL 우선 · 갭손절 시가) · 최대 300봉 · 동시 1포지션 · 숏은 부호반전 대칭
+ */
+(function(){
+  const el=id=>document.getElementById(id);
+  function nkEma(x,p){const a=2/(p+1),out=new Array(x.length);out[0]=x[0];for(let i=1;i<x.length;i++)out[i]=out[i-1]+a*(x[i]-out[i-1]);return out;}
+  function nkAtr14(h,l,c){ // python gridsearch.atr14와 동일: ema(TR, 27)
+    const n=c.length,tr=new Array(n);
+    for(let i=0;i<n;i++){const pc=i===0?c[0]:c[i-1];tr[i]=Math.max(h[i]-l[i],Math.abs(h[i]-pc),Math.abs(l[i]-pc));}
+    return nkEma(tr,27);
+  }
+  function nkPivotLows(arr,k){ // 좌우 k봉 유일 최소값 (python gridsearch.pivots와 동일)
+    const n=arr.length,out=[];
+    for(let i=k;i<n-k;i++){
+      let mn=Infinity,cnt=0;
+      for(let j=i-k;j<=i+k;j++){if(arr[j]<mn){mn=arr[j];cnt=1;}else if(arr[j]===mn)cnt++;}
+      if(arr[i]===mn&&cnt===1)out.push(i);
+    }
+    return out;
+  }
+  /* 상태기계 — neckline_scan.detect_events와 라인 단위 동일 */
+  function nkDetect(o,h,l,c,atr,k,tol,dir,P){
+    const n=c.length,lo=new Array(n),hi=new Array(n),op=new Array(n),cl=new Array(n);
+    for(let i=0;i<n;i++){
+      if(dir==="long"){lo[i]=l[i];hi[i]=h[i];op[i]=o[i];cl[i]=c[i];}
+      else{lo[i]=-h[i];hi[i]=-l[i];op[i]=-o[i];cl[i]=-c[i];}
+    }
+    const plo=nkPivotLows(lo,k);
+    const events=[];
+    let clLows=[],clMin=null,state="SCAN",neck=null,deadline=-1,brkBar=-1,pi=0;
+    for(let i=0;i<n-1;i++){
+      let newPiv=null;
+      if(pi<plo.length&&plo[pi]+k<=i){newPiv=plo[pi];pi++;} // 봉당 하나만 확정
+      if(newPiv!==null){
+        const p=newPiv,px=lo[p],a=atr[p];
+        if(clLows.length&&p-clLows[clLows.length-1][0]<=P.maxGap){
+          if(px<clMin-P.maxBreak*a){clLows=[[p,px]];clMin=px;state="SCAN";neck=null;}
+          else if(Math.abs(px-clMin)<=tol*a){
+            let segHi=-Infinity;
+            for(let q=clLows[clLows.length-1][0];q<=p;q++)if(hi[q]>segHi)segHi=hi[q];
+            if(segHi-Math.max(clLows[clLows.length-1][1],px)>=P.minBounce*a){
+              clLows.push([p,px]);
+              if(px<clMin)clMin=px;
+              if(state==="SCAN"||state==="ARMED"){
+                let nk=-Infinity;
+                for(let q=clLows[0][0];q<=p;q++)if(hi[q]>nk)nk=hi[q];
+                neck=nk;state="ARMED";deadline=i+P.brkWin;
+              }
+            } // 반등 부족 → 같은 바닥 노이즈로 무시
+          } // 밴드 밖(위쪽) 저점 → 무시
+        }else{clLows=[[p,px]];clMin=px;state="SCAN";neck=null;}
+      }
+      if(state==="ARMED"){
+        if(lo[i]<clMin-P.maxBreak*atr[i]){clLows=[];clMin=null;state="SCAN";neck=null;}
+        else if(cl[i]>neck){state="BROKE";brkBar=i;deadline=i+P.rtWin;}
+        else if(i>=deadline)state="SCAN"; // 돌파 못 함 — 클러스터 유지(새 저점 오면 재무장)
+      }else if(state==="BROKE"){
+        const a=atr[i];
+        if(cl[i]<neck-P.failTol*a||lo[i]<clMin){state="SCAN";clLows=[];clMin=null;neck=null;}
+        else if(i>brkBar&&lo[i]<=neck+P.touchTol*a){
+          const pxTouch=Math.min(op[i],neck+P.touchTol*a);
+          let eConf=-1,pxConf=null;
+          const ccEnd=Math.min(i+P.confWin+1,n-1);
+          for(let cc=i;cc<ccEnd;cc++){
+            if(cl[cc]>op[cc]&&cl[cc]>neck){eConf=cc+1;pxConf=op[cc+1];break;}
+            if(cl[cc]<neck-P.failTol*atr[cc]||lo[cc]<clMin)break;
+          }
+          events.push({eTouch:i,pxTouch,eConf,pxConf,sl:clMin-P.slAtr*atr[i],neck,
+            nbottoms:clLows.length,lows:clLows.map(x=>x[0]),measured:neck+(neck-clMin)});
+          state="SCAN";clLows=[];clMin=null;neck=null;
+        }else if(i>=deadline){state="SCAN";clLows=[];clMin=null;neck=null;} // 안 눌러주고 감
+      }
+    }
+    return events;
+  }
+  /* 부호 통일 좌표계 시뮬 — neckline_scan.simulate_px와 동일 */
+  function nkSim(oo,hh,ll,cc,e,entry,sl,tp,hold){
+    const n=cc.length,risk=entry-sl;
+    if(!(risk>0)||e>=n)return null;
+    const end=Math.min(e+hold,n);
+    for(let i=e;i<end;i++){
+      if(ll[i]<=sl){
+        let px=i>e?Math.min(oo[i],sl):sl;
+        if(i===e&&oo[i]<sl)px=oo[i];
+        return{e,x:i,r:(px-entry)/risk,risk,reason:"SL",exitS:px};
+      }
+      if(hh[i]>=tp)return{e,x:i,r:(tp-entry)/risk,risk,reason:"TP",exitS:tp};
+    }
+    const i=end-1;
+    return{e,x:i,r:(cc[i]-entry)/risk,risk,reason:"EXPIRE",exitS:cc[i]};
+  }
+  /* 한 데이터 × (dir,k,tol) 이벤트 → (bottoms,entry,tp) 조합의 트레이드 목록 */
+  function nkTrades(evs,oo,hh,ll,cc,dir,nb,em,tpm,hold){
+    const trades=[];let last=-1;
+    for(const ev of evs){
+      if(ev.nbottoms<nb)continue;
+      let e,px;
+      if(em==="touch"){e=ev.eTouch;px=ev.pxTouch;}
+      else{if(ev.eConf<0)continue;e=ev.eConf;px=ev.pxConf;}
+      const risk=px-ev.sl;
+      if(!(risk>0))continue;
+      const tp=tpm==="measured"?ev.measured:px+parseFloat(tpm)*risk;
+      if(tp<=px)continue;
+      const res=nkSim(oo,hh,ll,cc,e,px,ev.sl,tp,hold);
+      if(!res)continue;
+      if(res.e<=last)continue;
+      last=res.x;
+      const realPx=dir==="long"?px:-px;
+      trades.push({...res,ev,entryS:px,slS:ev.sl,tpS:tp,riskPct:Math.abs(risk)/Math.abs(realPx)});
+    }
+    return trades;
+  }
+  if(typeof window!=="undefined")window.__NK_ENGINE__={nkAtr14,nkPivotLows,nkDetect,nkSim,nkTrades};
+  /* ===== engine-end ===== */
+
+  function parseMT5nk(text){
+    const lines=text.split(/\r?\n/),out=[];
+    const start=/date|open|time/i.test(lines[0]||"")?1:0;
+    for(let i=start;i<lines.length;i++){
+      const ln=lines[i].trim();if(!ln)continue;
+      const p=ln.split(/[\t,;]+/);if(p.length<5)continue;
+      const d=p[0].replace(/\./g,"-").replace(/\//g,"-").slice(0,10);
+      const hasT=/:/.test(p[1]||"");const oi=hasT?2:1;
+      const o=+p[oi],h=+p[oi+1],l=+p[oi+2],c=+p[oi+3];
+      if(!isFinite(o)||!isFinite(h)||!isFinite(l)||!isFinite(c)||c<=0)continue;
+      out.push({date:d+" "+(hasT?p[1]:"00:00:00"),o,h,l,c});
+    }
+    if(out.length<2)throw new Error("CSV에서 유효한 OHLC 행을 못 찾음");
+    return out;
+  }
+  let CACHE={},RESULTS=[],SORT={key:"mar",dir:-1};
+  const errMsg=m=>{const e=el("nk_err");if(e)e.textContent=m||"";};
+  const statusMsg=m=>{const e=el("nk_status");if(e)e.textContent=m||"";};
+  const parseNums=(str,minV)=>String(str).split(/[,\s]+/).map(x=>+x).filter(x=>isFinite(x)&&x>=(minV||0));
+  async function loadSources(){
+    if(el("nk_src").dataset.cur==="upload"){
+      if(!CACHE.__upload__)throw new Error("CSV 파일을 먼저 선택하세요");
+      return[{label:CACHE.__uploadName__||"업로드",bars:CACHE.__upload__}];
+    }
+    const picks=selectedCsvFiles("nk");
+    if(!picks.length)throw new Error("저장 CSV를 1개 이상 체크하세요");
+    const out=[];
+    for(const cf of picks){
+      if(!CACHE[cf.file]){
+        statusMsg(`${cf.sym} ${cf.tf} 불러오는 중…`);
+        const r=await fetch(cf.file,{cache:"force-cache"});
+        if(!r.ok)throw new Error(`${cf.file} 못 찾음(404)`);
+        CACHE[cf.file]=parseMT5nk(await r.text());
+      }
+      out.push({label:`${cf.sym}·${cf.tf}`,bars:CACHE[cf.file]});
+    }
+    return out;
+  }
+  function finishRow(trades,meta,n,riskF){
+    if(!trades.length)return null;
+    let wins=0,gw=0,gl=0,sumR=0,net=0,h1=0,h2=0,h1n=0,h2n=0,eq=1,peak=1,mdd=0,tpC=0,slC=0,eodC=0;
+    for(const t of trades){
+      sumR+=t.r;net+=t.r-0.0005/t.riskPct;
+      if(t.r>0){wins++;gw+=t.r;}else gl-=t.r;
+      if(t.e<n/2){h1+=t.r;h1n++;}else{h2+=t.r;h2n++;}
+      eq*=1+riskF*t.r;if(eq>peak)peak=eq;
+      const dd=eq/peak-1;if(dd<mdd)mdd=dd;
+      if(t.reason==="TP")tpC++;else if(t.reason==="SL")slC++;else eodC++;
+    }
+    const cnt=trades.length,totalRet=eq-1;
+    return Object.assign(meta,{cnt,winRate:wins/cnt,avgR:sumR/cnt,net05:net/cnt,sumR,
+      pf:gl>0?gw/gl:Infinity,totalRet,mdd,mar:mdd<0?totalRet/Math.abs(mdd):(totalRet>0?Infinity:0),
+      h1R:h1n?h1/h1n:null,h2R:h2n?h2/h2n:null,tpC,slC,eodC,trades});
+  }
+  async function run(){
+    errMsg("");RESULTS=[];
+    const btn=el("nk_run");btn.disabled=true;
+    try{
+      const dirSel=el("nk_dir").dataset.cur||"long";
+      const dirs=dirSel==="both"?["long","short"]:[dirSel];
+      const ks=parseNums(el("nk_k").value,1).map(Math.round);
+      const tols=parseNums(el("nk_tol").value,0.05);
+      const nbs=parseNums(el("nk_bottoms").value,2).map(Math.round);
+      if(!ks.length||!tols.length||!nbs.length)throw new Error("k·허용범위·바닥수 값을 확인하세요");
+      const ems=[["touch","nk_ent_touch"],["confirm","nk_ent_conf"]].filter(t=>el(t[1]).checked).map(t=>t[0]);
+      if(!ems.length)throw new Error("진입 방식을 1개 이상 선택하세요");
+      const tpms=[["1.5","nk_tp_15"],["2.5","nk_tp_25"],["3.5","nk_tp_35"],["measured","nk_tp_ms"]].filter(t=>el(t[1]).checked).map(t=>t[0]);
+      if(!tpms.length)throw new Error("익절을 1개 이상 선택하세요");
+      const P={
+        minBounce:Math.max(0,+el("nk_bounce").value||1.0),
+        maxBreak:Math.max(0,+el("nk_break").value||0.3),
+        maxGap:Math.max(5,+el("nk_gap").value||60),
+        brkWin:Math.max(5,+el("nk_brkwin").value||40),
+        rtWin:Math.max(3,+el("nk_rtwin").value||30),
+        touchTol:Math.max(0,+el("nk_touchtol").value||0.2),
+        failTol:Math.max(0,+el("nk_failtol").value||0.5),
+        confWin:Math.max(1,+el("nk_confwin").value||5),
+        slAtr:Math.max(0,+el("nk_slatr").value||0.5),
+      };
+      const hold=Math.max(10,+el("nk_hold").value||300);
+      const riskF=Math.max(0.001,(+el("nk_risk").value||1)/100);
+      const sources=await loadSources();
+      const total=sources.length*dirs.length*ks.length*tols.length*nbs.length*ems.length*tpms.length;
+      if(total>20000)throw new Error(`조합이 ${total.toLocaleString()}개입니다. 줄여주세요.`);
+      let combo=0;const rows=[];
+      for(const src of sources){
+        const bars=src.bars,n=bars.length;
+        const o=bars.map(b=>b.o),h=bars.map(b=>b.h),l=bars.map(b=>b.l),c=bars.map(b=>b.c);
+        const atr=nkAtr14(h,l,c);
+        for(const dir of dirs){
+          const oo=dir==="long"?o:o.map(x=>-x), hh=dir==="long"?h:l.map(x=>-x),
+                ll=dir==="long"?l:h.map(x=>-x), cc=dir==="long"?c:c.map(x=>-x);
+          for(const k of ks)for(const tol of tols){
+            const evs=nkDetect(o,h,l,c,atr,k,tol,dir,P);
+            for(const nb of nbs)for(const em of ems)for(const tpm of tpms){
+              combo++;
+              if(combo%8===0){statusMsg(`${combo}/${total} 조합…`);await pauseUI();}
+              const trades=nkTrades(evs,oo,hh,ll,cc,dir,nb,em,tpm,hold);
+              const row=finishRow(trades,{label:src.label,dir,k,tol,nb,em,
+                tpm:tpm==="measured"?"패턴":tpm+"R",bars},n,riskF);
+              if(row)rows.push(row);
+            }
+          }
+        }
+      }
+      RESULTS=rows;
+      statusMsg(`완료 — 유효 ${rows.length}개 / 전체 ${total}개 조합`);
+      render();
+    }catch(e){errMsg(e.message);statusMsg("");}
+    finally{btn.disabled=false;}
+  }
+  const pctStr=x=>(x>=0?"+":"")+(x*100).toFixed(1)+"%";
+  const pf2=x=>x===Infinity?"∞":(x==null?"–":x.toFixed(2));
+  const r3=x=>x==null?"–":(x>0?"+":"")+x.toFixed(3);
+  const arw=k=>SORT.key===k?(SORT.dir<0?" ▾":" ▴"):"";
+  const numCls=(v,good,bad)=>v>=good?"hl-good":v<=bad?"hl-bad":"";
+  function render(){
+    const con=el("nk_results");
+    if(!RESULTS.length){
+      con.innerHTML=`<div class="placeholder"><div class="big">거래가 없습니다</div><div class="mono">허용범위·터치오차를 늘리거나 바닥수를 2로 낮춰보세요</div></div>`;
+      return;
+    }
+    const key=SORT.key,dir=SORT.dir;
+    const sorted=[...RESULTS].sort((a,b)=>{
+      const va=isFinite(a[key])?a[key]:(a[key]===Infinity?1e9:-1e9);
+      const vb=isFinite(b[key])?b[key]:(b[key]===Infinity?1e9:-1e9);
+      return(va-vb)*dir;
+    });
+    const best=sorted[0],CAP=500,view=sorted.slice(0,CAP);
+    const capNote=sorted.length>CAP?` <span class="dimv">· 상위 ${CAP}개만 표시(전체 ${sorted.length.toLocaleString()})</span>`:"";
+    const hdr=(k,main,sub="")=>`<th class="nk-s" data-k="${k}" style="cursor:pointer"><div class="th-main">${main}${arw(k)}</div>${sub?`<div class="th-sub">${sub}</div>`:""}</th>`;
+    let html=`<div class="db-best">최상위: <b>${best.label}</b> ${best.dir==="long"?"롱":"숏"} · k${best.k} · 허용${best.tol} · 바닥${best.nb}+ · ${best.em==="touch"?"터치":"확인"} · ${best.tpm} → 거래 <b>${best.cnt}</b>(TP${best.tpC}/SL${best.slC}/E${best.eodC}) · 승률 ${(best.winRate*100).toFixed(0)}% · 평균R ${r3(best.avgR)} · 실비용R ${r3(best.net05)} · PF ${pf2(best.pf)} · 수익 ${pctStr(best.totalRet)} · MDD ${pctStr(best.mdd)} · MAR ${pf2(best.mar)}${capNote}</div>`;
+    html+=`<div class="ctable-wrap"><table class="ctable"><thead><tr>
+      <th><div class="th-main">데이터</div></th><th><div class="th-main">방향</div></th>
+      ${hdr("k","k")}${hdr("tol","허용","×ATR")}${hdr("nb","바닥")}<th><div class="th-main">진입</div></th><th><div class="th-main">익절</div></th>
+      ${hdr("cnt","거래")}${hdr("winRate","승률")}${hdr("avgR","평균R")}${hdr("net05","실비용R","0.05%")}${hdr("sumR","합계R")}${hdr("pf","PF")}
+      ${hdr("totalRet","수익")}${hdr("mdd","MDD")}${hdr("mar","MAR")}${hdr("h1R","전반R")}${hdr("h2R","후반R")}
+      <th><div class="th-main">청산</div><div class="th-sub">TP/SL/E</div></th><th><div class="th-main">내역</div></th>
+    </tr></thead><tbody>`;
+    view.forEach((r,i)=>{
+      html+=`<tr class="${i===0?"db-hot":""}">
+        <td class="name mono" style="font-size:12px">${r.label}</td>
+        <td>${r.dir==="long"?"롱":"숏"}</td>
+        <td class="num">${r.k}</td><td class="num">${r.tol}</td><td class="num">${r.nb}+</td>
+        <td class="num mono" style="font-size:11px">${r.em==="touch"?"터치":"확인"}</td>
+        <td class="num mono" style="font-size:11px">${r.tpm}</td>
+        <td class="num">${r.cnt}</td>
+        <td class="num ${numCls(r.winRate,0.55,0)}">${(r.winRate*100).toFixed(0)}%</td>
+        <td class="num ${r.avgR>0?"pos":"neg"}">${r3(r.avgR)}</td>
+        <td class="num ${r.net05>0?"pos":"neg"}">${r3(r.net05)}</td>
+        <td class="num ${r.sumR>0?"pos":"neg"}">${(r.sumR>0?"+":"")+r.sumR.toFixed(1)}</td>
+        <td class="num ${numCls(r.pf,1.3,0.9)}">${pf2(r.pf)}</td>
+        <td class="num ${r.totalRet>0?"pos":"neg"}">${pctStr(r.totalRet)}</td>
+        <td class="num neg">${pctStr(r.mdd)}</td>
+        <td class="num ${numCls(r.mar,2,0)}">${pf2(r.mar)}</td>
+        <td class="num ${r.h1R>0?"pos":"neg"}">${r3(r.h1R)}</td>
+        <td class="num ${r.h2R>0?"pos":"neg"}">${r3(r.h2R)}</td>
+        <td class="num mono" style="font-size:11px">${r.tpC}/${r.slC}/${r.eodC}</td>
+        <td><button class="nk-dtl" data-idx="${i}" style="padding:4px 9px;border:1px solid var(--cyan);background:rgba(8,145,178,.1);color:var(--cyan);border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">▸내역</button></td>
+      </tr>`;
+    });
+    html+=`</tbody></table></div><div id="nk_detail_area" style="margin-top:20px"></div>`;
+    con.innerHTML=html;
+    con.querySelectorAll(".nk-s").forEach(th=>th.onclick=()=>{
+      const k=th.dataset.k;
+      if(SORT.key===k)SORT.dir*=-1;else{SORT.key=k;SORT.dir=-1;}
+      render();
+    });
+    con.querySelectorAll(".nk-dtl").forEach(b=>b.onclick=()=>showDetail(view[+b.dataset.idx]));
+  }
+  function showDetail(r){
+    const area=el("nk_detail_area");if(!area)return;
+    const bars=r.bars,sgn=r.dir==="long"?1:-1;
+    const px=v=>(sgn*v).toFixed(2);
+    let html=`<div class="sectitle">거래 내역 · ${r.label} ${r.dir==="long"?"롱":"숏"} · k${r.k} 허용${r.tol} 바닥${r.nb}+ ${r.em==="touch"?"터치":"확인"} ${r.tpm} · 시각=MT5 서버시간</div>
+    <div class="ctable-wrap"><table class="ctable"><thead><tr>
+      <th><div class="th-main">바닥들</div></th><th><div class="th-main">바닥수</div></th>
+      <th><div class="th-main">넥라인</div></th><th><div class="th-main">터치봉</div></th><th><div class="th-main">진입</div></th><th><div class="th-main">청산</div></th>
+      <th><div class="th-main">진입가</div></th><th><div class="th-main">SL</div></th><th><div class="th-main">TP</div></th>
+      <th><div class="th-main">청산가</div></th><th><div class="th-main">결과</div></th><th><div class="th-main">R</div></th>
+    </tr></thead><tbody>`;
+    for(const t of r.trades){
+      const res=t.reason==="TP"?'<span class="pos">익절</span>':t.reason==="SL"?'<span class="neg">손절</span>':'<span class="dimv">만료</span>';
+      const lows=t.ev.lows.map(b=>bars[b].date.slice(5,16)).join(" · ");
+      html+=`<tr>
+        <td class="name mono" style="font-size:11px">${lows}</td>
+        <td class="num">${t.ev.nbottoms}</td>
+        <td class="num mono">${px(t.ev.neck)}</td>
+        <td class="name mono" style="font-size:11px">${bars[t.ev.eTouch].date.slice(0,16)}</td>
+        <td class="name mono" style="font-size:11px">${bars[t.e].date.slice(0,16)}</td>
+        <td class="name mono" style="font-size:11px">${bars[t.x].date.slice(0,16)}</td>
+        <td class="num mono">${px(t.entryS)}</td><td class="num mono">${px(t.slS)}</td><td class="num mono">${px(t.tpS)}</td>
+        <td class="num mono">${px(t.exitS)}</td><td>${res}</td>
+        <td class="num ${t.r>0?"pos":"neg"}">${(t.r>0?"+":"")+t.r.toFixed(2)}</td>
+      </tr>`;
+    }
+    html+=`</tbody></table></div>`;
+    area.innerHTML=html;
+    area.scrollIntoView({behavior:"smooth"});
+  }
+  function init(){
+    if(!el("nk_run"))return;
+    renderCsvChecks("nk",Math.max(0,CSV_FILES.findIndex(cf=>cf.sym==="XAUUSD"&&cf.tf==="M30")));
+    el("nk_src").querySelectorAll("button").forEach(b=>b.onclick=()=>{
+      el("nk_src").dataset.cur=b.dataset.s;
+      el("nk_src").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+      el("nk_storedRow").style.display=b.dataset.s==="stored"?"":"none";
+      el("nk_uploadRow").style.display=b.dataset.s==="upload"?"":"none";
+    });
+    el("nk_dir").querySelectorAll("button").forEach(b=>b.onclick=()=>{
+      el("nk_dir").dataset.cur=b.dataset.m;
+      el("nk_dir").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+    });
+    el("nk_file").onchange=async e=>{
+      const f=e.target.files[0];if(!f)return;
+      try{CACHE.__upload__=parseMT5nk(await f.text());CACHE.__uploadName__=f.name.replace(/\.csv$/i,"");errMsg("");}
+      catch(ex){errMsg("⚠ "+ex.message);}
+    };
+    el("nk_reload").onclick=()=>{CACHE={};statusMsg("캐시 비움");};
+    el("nk_run").onclick=run;
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);else init();
+})();

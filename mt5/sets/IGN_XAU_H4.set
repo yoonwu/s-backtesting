@@ -6,6 +6,7 @@
 ;   복리(1%리스크) +65% · MDD -11% → 리스크 0.5% 권장
 ; 로직: 대양봉(>=1.5×ATR14)+상단 20% 마감+직전고가 돌파 →
 ;   다음봉 진입 · SL=신호봉 중간 · 20봉 시간청산 (익절 없음)
+; 게이트: EMA50 ON (총수익 동일 · 랜덤 30/30 · 노출 20%↓) — 끄려면 0
 ; ⚠ 더블비 ⑥(990006)과 같은 골드 급등 파도 57% 공유 —
 ;   같은 클러스터로 합산 비중 관리 (또는 ⑥과 A/B).
 ; 로드: EA 속성 → 입력 탭 → [로드] → 이 파일.
@@ -22,5 +23,5 @@ InpMaxSpreadPts=0
 InpComment=IGN-XAU-H4
 InpExpectedSymbol=XAUUSD
 InpExpectedTF=16388
-InpMAGate=0
+InpMAGate=50
 InpGateEMA=true

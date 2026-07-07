@@ -5166,7 +5166,7 @@ function drawRSI(rCurve,holdCurve,log){
       const touchesList=parseList(el("nlpb_touches").value,true,2).filter(x=>x<=4);
       const lowTols=parseList(el("nlpb_lowtol").value,false,0);
       const bounces=parseList(el("nlpb_bounce").value,false,0);
-      const maxClusterBars=Math.max(5,+el("nlpb_cluster").value||120);
+      const maxClusterBars=Math.max(5,+el("nlpb_cluster").value||36);
       const breakKs=parseList(el("nlpb_break").value,false,0);
       const retestWait=Math.max(1,+el("nlpb_retestwait").value||80);
       const retestTols=parseList(el("nlpb_retesttol").value,false,0);

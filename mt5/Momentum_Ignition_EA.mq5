@@ -19,6 +19,7 @@ input double    InpBigX         = 1.5;        // 점화봉 레인지 최소 ×AT
 input double    InpClosePos     = 0.8;        // 종가 위치(0~1) — 롱=상단 이 비율 이상
 input int       InpHoldBars     = 20;         // 보유 봉수(시간청산)
 input int       InpATRPeriod    = 14;         // ATR 기간(Wilder)
+input int       InpMAGate       = 0;          // MA 레짐 게이트(0=끄기) — 롱=종가>SMA (50 권장: +0.89→+1.11R)
 
 input group "=== 자금 / 실행 ==="
 input double    InpLot          = 0.01;       // 고정 랏 (RiskPct=0일 때)
@@ -152,6 +153,15 @@ void OnTick()
    double tr1=h1-l1;
    double atr=ATRW(1);
    if(tr1<=0 || atr<=0 || tr1<InpBigX*atr) return;
+   if(InpMAGate>1)                              // MA 레짐 게이트
+     {
+      double cl[]; ArraySetAsSeries(cl,true);
+      int need=InpMAGate+3;
+      if(CopyClose(_Symbol,_Period,0,need,cl)<need) return;
+      double s=0; for(int k2=1;k2<=InpMAGate;k2++) s+=cl[k2];
+      double ma=s/InpMAGate;
+      if(InpDir==DIR_LONG ? c1<=ma : c1>=ma) return;
+     }
    bool sig;
    double sl;
    if(InpDir==DIR_LONG)

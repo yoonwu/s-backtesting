@@ -21,6 +21,7 @@ input int       InpNRPeriod     = 5;          // NR 기간 — 최근 N봉 중 �
 input int       InpCancelBars   = 10;         // 미체결 만료(봉)
 input double    InpTP_R         = 3.5;        // 익절 R배수 (리스크=신호봉 레인지)
 input int       InpMaxHoldBars  = 300;        // 최대 보유 봉수(안전청산)
+input int       InpMAGate       = 0;          // MA 레짐 게이트(0=끄기) — 롱=종가>SMA (골드 50 권장: +0.60→+0.82R)
 
 input group "=== 자금 / 실행 ==="
 input double    InpLot          = 0.01;       // 고정 랏 (RiskPct=0일 때)
@@ -159,6 +160,16 @@ void OnTick()
      {
       double trj=iHigh(_Symbol,_Period,j)-iLow(_Symbol,_Period,j);
       if(tr1>trj) return;
+     }
+   if(InpMAGate>1)                              // MA 레짐 게이트
+     {
+      double cl[]; ArraySetAsSeries(cl,true);
+      int need=InpMAGate+3;
+      if(CopyClose(_Symbol,_Period,0,need,cl)<need) return;
+      double s=0; for(int k2=1;k2<=InpMAGate;k2++) s+=cl[k2];
+      double ma=s/InpMAGate;
+      double c1=iClose(_Symbol,_Period,1);
+      if(InpDir==DIR_LONG ? c1<=ma : c1>=ma) return;
      }
    if(!SpreadOK()) return;
 

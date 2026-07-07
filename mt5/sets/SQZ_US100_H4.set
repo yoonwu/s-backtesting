@@ -22,3 +22,4 @@ InpMaxSpreadPts=0
 InpComment=SQZ-US100-H4
 InpExpectedSymbol=US100
 InpExpectedTF=16388
+InpMAGate=0

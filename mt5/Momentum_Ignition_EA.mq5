@@ -19,7 +19,8 @@ input double    InpBigX         = 1.5;        // 점화봉 레인지 최소 ×AT
 input double    InpClosePos     = 0.8;        // 종가 위치(0~1) — 롱=상단 이 비율 이상
 input int       InpHoldBars     = 20;         // 보유 봉수(시간청산)
 input int       InpATRPeriod    = 14;         // ATR 기간(Wilder)
-input int       InpMAGate       = 0;          // MA 레짐 게이트(0=끄기) — 롱=종가>SMA (50 권장: +0.89→+1.11R)
+input int       InpMAGate       = 0;          // MA 레짐 게이트(0=끄기) — 롱=종가>MA. 골드 50 권장(랜덤 30/30)
+input bool      InpGateEMA      = true;       // 게이트 MA 종류: true=EMA(우위) / false=SMA
 
 input group "=== 자금 / 실행 ==="
 input double    InpLot          = 0.01;       // 고정 랏 (RiskPct=0일 때)
@@ -122,6 +123,20 @@ bool SpreadOK()
    if(InpMaxSpreadPts<=0) return true;
    return (SymbolInfoInteger(_Symbol,SYMBOL_SPREAD)<=InpMaxSpreadPts);
   }
+double GateMA()                                 // 직전 닫힌 봉 기준 SMA/EMA
+  {
+   int need=(InpGateEMA? InpMAGate*5 : InpMAGate)+3;
+   double cl[]; ArraySetAsSeries(cl,true);
+   if(CopyClose(_Symbol,_Period,0,need,cl)<need) return 0;
+   if(!InpGateEMA)
+     {
+      double s=0; for(int k=1;k<=InpMAGate;k++) s+=cl[k];
+      return s/InpMAGate;
+     }
+   double a=2.0/(InpMAGate+1), ema=cl[need-1];
+   for(int k=need-2;k>=1;k--) ema+=a*(cl[k]-ema);
+   return ema;
+  }
 
 //+------------------------------------------------------------------+
 void OnTick()
@@ -155,11 +170,8 @@ void OnTick()
    if(tr1<=0 || atr<=0 || tr1<InpBigX*atr) return;
    if(InpMAGate>1)                              // MA 레짐 게이트
      {
-      double cl[]; ArraySetAsSeries(cl,true);
-      int need=InpMAGate+3;
-      if(CopyClose(_Symbol,_Period,0,need,cl)<need) return;
-      double s=0; for(int k2=1;k2<=InpMAGate;k2++) s+=cl[k2];
-      double ma=s/InpMAGate;
+      double ma=GateMA();
+      if(ma<=0) return;
       if(InpDir==DIR_LONG ? c1<=ma : c1>=ma) return;
      }
    bool sig;

@@ -23,3 +23,4 @@ InpComment=SQZ-XAU-H4
 InpExpectedSymbol=XAUUSD
 InpExpectedTF=16388
 InpMAGate=0
+InpGateEMA=true

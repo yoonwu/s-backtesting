@@ -251,6 +251,7 @@
       <button data-tab="nlpb">넥라인눌림<span class="sub">Neckline PB · by Codex</span></button>
       <button data-tab="break120">120선 눌림목<span class="sub">MA120-Pullback</span></button>
       <button data-tab="diverge">다이버전스<span class="sub">RSI Divergence</span></button>
+      <button data-tab="neckline">넥라인눌림<span class="sub">by Claude</span></button>
       <button data-tab="autofilter">자동매매필터<span class="sub">Strategy Filter</span></button>
       <button data-tab="paper">가상매매<span class="sub">Paper Lot</span></button>
       <button data-tab="saved">⭐ 저장된 전략 <span class="badge" id="tab_saved_badge"></span><span class="sub">Saved</span></button>
@@ -1602,6 +1603,173 @@
     </section>
   </div>
 
+  <!-- =================== TAB: NECKLINE PULLBACK (넥라인눌림 by Claude) =================== -->
+  <div class="tabpane" id="pane-neckline" hidden>
+    <div class="grid">
+      <section class="card">
+        <h2>넥라인눌림 테스트랩 <span class="badge">by Claude</span></h2>
+        <div class="intro"><b>쌍바닥(3중·4중 포함) → 넥라인 돌파 → 리테스트 눌림 매수</b>.
+        돌파를 추격하지 않고, 돌파 후 넥라인까지 되돌아와 눌러줄 때만 삽니다. 숏은 다중천장 대칭.
+        아래 파이썬 전수조사와 동일 엔진(수치 일치 검증 완료 · 피벗 k봉 확정 · SL·TP 동시=SL · 갭손절=시가 · 동시 1포지션).</div>
+
+        <div class="field"><label>데이터 소스</label>
+          <div class="subtabs" id="nk_src" data-cur="stored">
+            <button data-s="stored" class="on">저장된 CSV</button><button data-s="upload">CSV 업로드</button>
+          </div>
+          <div id="nk_storedRow" style="margin-top:6px">
+            <div class="csv-checkbar">
+              <label><input id="nk_csv_all" type="checkbox"> 전체선택</label>
+              <div class="csv-actions">
+                <button type="button" id="nk_csv_gold">골드</button>
+                <button type="button" id="nk_csv_us100">나스닥</button>
+                <span class="csv-sep"></span>
+                <button type="button" id="nk_csv_min">분봉만</button>
+                <button type="button" id="nk_csv_hour">시간봉만</button>
+                <span class="csv-sep"></span>
+                <button type="button" id="nk_csv_clear">선택해제</button>
+              </div>
+            </div>
+            <div id="nk_csv_list" class="csv-checklist"></div>
+            <button id="nk_reload" style="padding:3px 8px;border:1px solid var(--border);background:var(--input-bg);color:var(--ink-dim);border-radius:6px;font-size:11px;cursor:pointer">↻ 캐시 비우기</button>
+          </div>
+          <div id="nk_uploadRow" style="display:none;margin-top:6px">
+            <input id="nk_file" type="file" accept=".csv,text/csv">
+            <div class="hint">MT4/MT5 export(.csv) — 콤마/탭/세미콜론, 헤더 유무 무관. 내보낸 TF 그대로 사용.</div>
+          </div>
+        </div>
+
+        <div class="row2">
+          <div class="field"><label>방향</label>
+            <div class="subtabs" id="nk_dir" data-cur="long">
+              <button data-m="long" class="on">롱 (다중바닥)</button><button data-m="short">숏 (다중천장)</button><button data-m="both">둘 다</button>
+            </div>
+            <div class="hint">전수조사 결과 엣지는 롱 쪽 — 숏은 평균 음수.</div>
+          </div>
+          <div class="field"><label>진입 방식 (복수 선택 = 스윕)</label>
+            <div class="csv-checkbar" style="margin:0">
+              <label><input id="nk_ent_touch" type="checkbox" checked> 터치(공격형)</label>
+              <label><input id="nk_ent_conf" type="checkbox"> 확인형</label>
+            </div>
+            <div class="hint">터치=리테스트 봉에서 넥라인 지정가 체결 / 확인형=터치 후 넥라인 위 양봉 마감 → 다음봉 시가.</div>
+          </div>
+        </div>
+
+        <div class="row2">
+          <div class="field"><label>스윙 피벗 k봉 (콤마)</label>
+            <input id="nk_k" class="mono" value="3,5">
+            <div class="hint">좌우 k봉 최저면 피벗저점. k봉 뒤 확정(리페인트 없음).</div>
+          </div>
+          <div class="field"><label>같은 바닥 허용범위 ×ATR14 (콤마)</label>
+            <input id="nk_tol" class="mono" value="1.0">
+            <div class="hint">저점끼리 이 범위 안이면 같은 바닥 클러스터.</div>
+          </div>
+        </div>
+
+        <div class="row2">
+          <div class="field"><label>최소 바닥 수 (콤마)</label>
+            <input id="nk_bottoms" class="mono" value="2">
+            <div class="hint">2=쌍바닥부터 · 3=3중바닥부터. 4중은 3 설정에 자동 포함(바닥수 이상).</div>
+          </div>
+          <div class="field"><label>익절 (복수 선택 = 스윕)</label>
+            <div class="csv-checkbar" style="margin:0">
+              <label><input id="nk_tp_15" type="checkbox"> 1.5R</label>
+              <label><input id="nk_tp_25" type="checkbox"> 2.5R</label>
+              <label><input id="nk_tp_35" type="checkbox" checked> 3.5R</label>
+              <label><input id="nk_tp_ms" type="checkbox"> 패턴목표</label>
+            </div>
+            <div class="hint">패턴목표 = 넥라인 + (넥라인−바닥) 높이.</div>
+          </div>
+        </div>
+
+        <div class="row2">
+          <div class="field"><label>저점 사이 최소 반등 ×ATR</label><input id="nk_bounce" class="mono" type="number" value="1.0" min="0" step="0.1"></div>
+          <div class="field"><label>바닥 하회 허용 ×ATR</label><input id="nk_break" class="mono" type="number" value="0.3" min="0" step="0.1">
+            <div class="hint">최저점을 이보다 깊게 깨면 클러스터 무효.</div></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>돌파 대기 (봉)</label><input id="nk_brkwin" class="mono" type="number" value="40" min="5" step="5"></div>
+          <div class="field"><label>리테스트 대기 (봉)</label><input id="nk_rtwin" class="mono" type="number" value="30" min="3" step="5">
+            <div class="hint">이 안에 안 눌러주면 놓침 — 추격 안 함.</div></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>터치 허용오차 ×ATR</label><input id="nk_touchtol" class="mono" type="number" value="0.2" min="0" step="0.05"></div>
+          <div class="field"><label>가짜돌파 취소 ×ATR</label><input id="nk_failtol" class="mono" type="number" value="0.5" min="0" step="0.1">
+            <div class="hint">종가가 넥라인−이 값 아래로 마감하면 셋업 취소.</div></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>확인형 대기 (봉)</label><input id="nk_confwin" class="mono" type="number" value="5" min="1" step="1"></div>
+          <div class="field"><label>손절 여유 ×ATR</label><input id="nk_slatr" class="mono" type="number" value="0.5" min="0" step="0.1">
+            <div class="hint">SL = 클러스터 최저점 − 이 값×ATR.</div></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>저점 간 최대 간격 (봉)</label><input id="nk_gap" class="mono" type="number" value="60" min="5" step="5"></div>
+          <div class="field"><label>최대 보유 (봉)</label><input id="nk_hold" class="mono" type="number" value="300" min="10" step="10"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>리스크 %/트레이드</label>
+            <input id="nk_risk" class="mono" type="number" value="1" min="0.1" step="0.1">
+            <div class="hint">수익%·MDD·MAR 환산용(복리). R 지표에는 영향 없음.</div>
+          </div>
+          <div class="field"></div>
+        </div>
+
+        <button class="runbtn" id="nk_run">▶ 넥라인눌림 백테스트 돌리기</button>
+        <div class="err" id="nk_err"></div>
+        <div class="mono" id="nk_status" style="font-size:11px;color:var(--ink-faint);margin-top:8px;line-height:1.5"></div>
+        <div class="note"><b>확인 순서</b> · ① 거래수(30↑) ② 전·후반R 둘 다 + ③ 실비용R(0.05% 차감) 양수 ④ PF·MAR. 상위 1개만 좋으면 과최적화 의심 — k·허용범위 이웃 값도 같이 스윕해서 능선을 보세요.</div>
+      </section>
+      <section id="nk_results">
+        <div class="placeholder"><div class="big">조건을 설정하고 <span class="amb">넥라인눌림 백테스트 돌리기</span></div><div class="mono" style="font-size:12px">다중바닥 클러스터 → 넥라인 돌파(추격 금지) → 리테스트 터치 → 진입 → SL/TP</div></div>
+      </section>
+    </div>
+
+    <section class="card" style="margin-top:26px">
+      <h2>넥라인눌림 — 128조합 전수조사</h2>
+      <div class="intro">
+        <b>다중바닥(피벗저점 클러스터) → 넥라인(저점들 사이 최고가) 종가 돌파 → 리테스트 눌림 진입.</b>
+        방향(2) × k(3/5) × 허용범위(0.5/1.0×ATR) × 최소바닥(2/3) × 진입(터치/확인) × 익절(1.5R/2.5R/3.5R/패턴목표) = 128조합.<br>
+        데이터: <b>US100·XAUUSD 2024-07~2026-06</b> × M10/M15/M30/H1/H2/H4 = 12데이터셋 ·
+        오프라인 파이썬(<span class="mono">divergence/neckline_scan.py</span>) 사전 계산 · <b>실비용R = 왕복 0.05% 차감</b>.
+      </div>
+      <div class="note" style="margin-top:10px">
+        <b>핵심 결론</b> — ① <b>롱이 압도</b>(평균 +0.06R vs 숏 −0.03R) — 다중천장 숏은 비추천
+        ② <b>골드 롱은 M10~H4 전 타임프레임 양수</b>, 나스닥은 M30 이상만 (M10·M15는 노이즈에 침식)
+        ③ 대표 견고 셀: <b>롱 · k5 · 허용1.0 · 쌍바닥+ · 터치 · 3.5R</b> = 668거래 · 실비용 +0.117R · 12셋 중 10셋 양수
+        ④ 골드 M30 단독으로는 k3·k5 둘 다 실비용 +0.38~0.44R로 능선 형성
+        ⑤ 익절은 3.5R 등 <b>넉넉한 RR이 우세</b> — 터치 진입이 확인형보다 평균 우위(눌림 자체가 이미 컨펌)
+        ⑥ ⚠️ 워크포워드·MT5 대조 전 = <b>관찰 단계</b>.
+      </div>
+    </section>
+
+    <section class="card" style="margin-top:26px">
+      <h2>128조합 합산 결과 <span class="badge" id="nk_agg_count"></span></h2>
+      <div class="intro">전 데이터셋 트레이드 합산. 헤더 클릭으로 정렬 · 아래 필터로 좁히기. <b>실비용R</b> = 평균R − 왕복0.05%를 손절폭으로 환산한 값.</div>
+      <div class="subtabs" id="nk_filters" style="margin-bottom:12px">
+        <button data-f="ea" class="on">EA필터(거래≥30·전후반+)</button>
+        <button data-f="long">롱만</button>
+        <button data-f="short">숏만</button>
+        <button data-f="all">전체 128</button>
+      </div>
+      <div id="nk_agg_body" class="ytable-wrap"><div class="note">불러오는 중…</div></div>
+    </section>
+
+    <section class="card" style="margin-top:26px">
+      <h2>데이터셋별 상세 <span class="badge" id="nk_ds_count"></span></h2>
+      <div class="intro">조합 × 종목/TF. 종목·TF 선택 후 헤더 클릭으로 정렬.</div>
+      <div class="subtabs" id="nk_ds_sym" style="margin-bottom:8px">
+        <button data-v="" class="on">전체 종목</button><button data-v="US100">US100</button><button data-v="XAUUSD">XAUUSD</button>
+      </div>
+      <div class="subtabs" id="nk_ds_tf" style="margin-bottom:12px">
+        <button data-v="" class="on">전체 TF</button><button data-v="M10">M10</button><button data-v="M15">M15</button><button data-v="M30">M30</button><button data-v="H1">H1</button><button data-v="H2">H2</button><button data-v="H4">H4</button>
+      </div>
+      <div class="note" style="margin:0 0 10px;padding:0;border:none">기본 필터: 거래≥20 · 전/후반 모두 + (아래 버튼으로 해제)</div>
+      <div class="subtabs" id="nk_ds_ea" style="margin-bottom:12px">
+        <button data-v="1" class="on">견고 필터 ON</button><button data-v="0">전체 보기</button>
+      </div>
+      <div id="nk_ds_body" class="ytable-wrap"><div class="note">불러오는 중…</div></div>
+    </section>
+  </div>
+
   <!-- =================== TAB: AUTO STRATEGY FILTER (자동매매필터) =================== -->
   <div class="tabpane" id="pane-autofilter" hidden>
     <section class="card" style="margin-top:26px">
@@ -1722,7 +1890,7 @@
 
 </div>
 
-<script src="leverage-lab.js?v=20260707-nlpb"></script>
+<script src="leverage-lab.js?v=20260707b"></script>
 <script>
 /* ============ 다이버전스 탭: 사전 계산된 그리드서치 결과 뷰어 ============ */
 (function(){
@@ -1824,6 +1992,115 @@
       .catch(()=>{$("#dv_ds_body").innerHTML='<div class="note">divergence/results/grid_results_by_dataset.csv 를 불러오지 못했습니다.</div>';});
   }
   const btn=document.querySelector('#tabbar button[data-tab="diverge"]');
+  if(btn) btn.addEventListener("click",load);
+})();
+</script>
+<script>
+/* ============ 넥라인눌림 탭: 사전 계산된 전수조사 결과 뷰어 ============ */
+(function(){
+  const $=s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
+  let AGG=null, DS=null, aggSort={k:"net05",d:-1}, dsSort={k:"net05_avg_r",d:-1}, aggFilter="ea", dsSym="", dsTf="", dsEa="1";
+
+  function parseCsv(text){
+    const lines=text.trim().split(/\r?\n/), head=lines[0].split(",");
+    return lines.slice(1).map(l=>{
+      const c=l.split(","), o={};
+      head.forEach((h,i)=>{ const v=c[i]; o[h]=(v===""||v===undefined)?null:(v==="inf"?Infinity:(isNaN(v)?v:+v)); });
+      return o;
+    });
+  }
+  const KO={touch:"터치",confirm:"확인",measured:"패턴",long:"롱",short:"숏"};
+  const fmt={
+    pct:v=>v==null?"–":(v*100).toFixed(1)+"%",
+    r3:v=>v==null?"–":(v>0?"+":"")+v.toFixed(3),
+    r2:v=>v==null?"–":(v>0?"+":"")+v.toFixed(2),
+    pf:v=>v==null?"–":(v===Infinity||v==="inf"||v>99?"∞":(+v).toFixed(2)),
+    int:v=>v==null?"0":String(v),
+    ko:v=>v==null?"–":(KO[v]||v)
+  };
+  const col=v=>v==null?"":(v>0?' style="color:var(--green,#0a7d4f)"':(v<0?' style="color:var(--red,#c0392b)"':""));
+
+  function table(rows, cols, sort, onSort, cap){
+    let capped=false;
+    if(cap && rows.length>cap){ rows=rows.slice(0,cap); capped=true; }
+    let h='<table class="ytable"><thead><tr>';
+    cols.forEach(c=>{ h+=`<th data-k="${c.k}" style="cursor:pointer">${c.t}${sort.k===c.k?(sort.d<0?" ▼":" ▲"):""}</th>`; });
+    h+='</tr></thead><tbody>';
+    rows.forEach(r=>{
+      h+='<tr>';
+      cols.forEach(c=>{
+        const v=r[c.k], txt=c.f?fmt[c.f](v):(v==null?"–":v);
+        h+=`<td${c.f==="r3"||c.f==="r2"?col(v):""}>${txt}</td>`;
+      });
+      h+='</tr>';
+    });
+    h+='</tbody></table>';
+    if(capped) h+=`<div class="note">상위 ${cap}행만 표시 — 필터로 좁혀주세요.</div>`;
+    const el=document.createElement("div"); el.innerHTML=h;
+    el.querySelectorAll("th").forEach(th=>th.onclick=()=>onSort(th.dataset.k));
+    return el;
+  }
+  const bySort=s=>(a,b)=>{
+    const x=a[s.k], y=b[s.k];
+    if(x==null&&y==null)return 0; if(x==null)return 1; if(y==null)return -1;
+    return (x<y?-1:x>y?1:0)*s.d;
+  };
+
+  const AGG_COLS=[
+    {k:"direction",t:"방향",f:"ko"},{k:"k",t:"k"},{k:"tol",t:"허용"},{k:"bottoms",t:"바닥"},{k:"entry",t:"진입",f:"ko"},{k:"tp",t:"익절"},
+    {k:"trades",t:"거래",f:"int"},{k:"winrate",t:"승률",f:"pct"},{k:"avg_r",t:"평균R",f:"r3"},{k:"net05",t:"실비용R",f:"r3"},
+    {k:"pf",t:"PF",f:"pf"},{k:"h1_avg_r",t:"전반R",f:"r3"},{k:"h2_avg_r",t:"후반R",f:"r3"},{k:"pos_ds",t:"+셋",f:"int"},{k:"n_ds",t:"셋",f:"int"}
+  ];
+  const DS_COLS=[{k:"symbol",t:"종목"},{k:"tf",t:"TF"},
+    {k:"direction",t:"방향",f:"ko"},{k:"k",t:"k"},{k:"tol",t:"허용"},{k:"bottoms",t:"바닥"},{k:"entry",t:"진입",f:"ko"},{k:"tp",t:"익절"},
+    {k:"trades",t:"거래",f:"int"},{k:"winrate",t:"승률",f:"pct"},{k:"avg_r",t:"평균R",f:"r3"},{k:"net05_avg_r",t:"실비용R",f:"r3"},
+    {k:"sum_r",t:"합계R",f:"r2"},{k:"pf",t:"PF",f:"pf"},{k:"h1_avg_r",t:"전반R",f:"r3"},{k:"h2_avg_r",t:"후반R",f:"r3"}];
+
+  function renderAgg(){
+    if(!AGG) return;
+    let rows=AGG.slice();
+    if(aggFilter==="ea") rows=rows.filter(r=>r.trades>=30&&r.h1_avg_r>0&&r.h2_avg_r>0);
+    else if(aggFilter==="long") rows=rows.filter(r=>r.direction==="long");
+    else if(aggFilter==="short") rows=rows.filter(r=>r.direction==="short");
+    rows.sort(bySort(aggSort));
+    $("#nk_agg_count").textContent=rows.length+"개";
+    const el=table(rows,AGG_COLS,aggSort,k=>{aggSort=aggSort.k===k?{k,d:-aggSort.d}:{k,d:-1};renderAgg();});
+    const box=$("#nk_agg_body"); box.innerHTML=""; box.appendChild(el);
+  }
+  function renderDs(){
+    if(!DS) return;
+    let rows=DS.filter(r=>r.trades>0);
+    if(dsSym) rows=rows.filter(r=>r.symbol===dsSym);
+    if(dsTf) rows=rows.filter(r=>r.tf===dsTf);
+    if(dsEa==="1") rows=rows.filter(r=>r.trades>=20&&r.h1_avg_r>0&&r.h2_avg_r>0);
+    rows.sort(bySort(dsSort));
+    $("#nk_ds_count").textContent=rows.length+"행";
+    const el=table(rows,DS_COLS,dsSort,k=>{dsSort=dsSort.k===k?{k,d:-dsSort.d}:{k,d:-1};renderDs();},400);
+    const box=$("#nk_ds_body"); box.innerHTML=""; box.appendChild(el);
+  }
+
+  function subtabs(id, set){
+    $$("#"+id+" button").forEach(b=>b.onclick=()=>{
+      $$("#"+id+" button").forEach(x=>x.classList.toggle("on",x===b));
+      set(b.dataset.f!==undefined?b.dataset.f:b.dataset.v);
+    });
+  }
+  subtabs("nk_filters",v=>{aggFilter=v;renderAgg();});
+  subtabs("nk_ds_sym",v=>{dsSym=v;renderDs();});
+  subtabs("nk_ds_tf",v=>{dsTf=v;renderDs();});
+  subtabs("nk_ds_ea",v=>{dsEa=v;renderDs();});
+
+  let loaded=false;
+  function load(){
+    if(loaded) return; loaded=true;
+    fetch("divergence/results/neckline_agg.csv").then(r=>{if(!r.ok)throw 0;return r.text()})
+      .then(t=>{AGG=parseCsv(t);renderAgg();})
+      .catch(()=>{$("#nk_agg_body").innerHTML='<div class="note">divergence/results/neckline_agg.csv 를 불러오지 못했습니다.</div>';});
+    fetch("divergence/results/neckline_by_dataset.csv").then(r=>{if(!r.ok)throw 0;return r.text()})
+      .then(t=>{DS=parseCsv(t);renderDs();})
+      .catch(()=>{$("#nk_ds_body").innerHTML='<div class="note">divergence/results/neckline_by_dataset.csv 를 불러오지 못했습니다.</div>';});
+  }
+  const btn=document.querySelector('#tabbar button[data-tab="neckline"]');
   if(btn) btn.addEventListener("click",load);
 })();
 </script>

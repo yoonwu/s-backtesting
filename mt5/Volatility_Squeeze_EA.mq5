@@ -21,7 +21,8 @@ input int       InpNRPeriod     = 5;          // NR 기간 — 최근 N봉 중 �
 input int       InpCancelBars   = 10;         // 미체결 만료(봉)
 input double    InpTP_R         = 3.5;        // 익절 R배수 (리스크=신호봉 레인지)
 input int       InpMaxHoldBars  = 300;        // 최대 보유 봉수(안전청산)
-input int       InpMAGate       = 0;          // MA 레짐 게이트(0=끄기) — 롱=종가>SMA (골드 50 권장: +0.60→+0.82R)
+input int       InpMAGate       = 0;          // MA 레짐 게이트(0=끄기) — 골드 선택사항 / 나스닥은 반드시 0(해악)
+input bool      InpGateEMA      = true;       // 게이트 MA 종류: true=EMA(우위) / false=SMA
 
 input group "=== 자금 / 실행 ==="
 input double    InpLot          = 0.01;       // 고정 랏 (RiskPct=0일 때)
@@ -114,6 +115,20 @@ bool SpreadOK()
    if(InpMaxSpreadPts<=0) return true;
    return (SymbolInfoInteger(_Symbol,SYMBOL_SPREAD)<=InpMaxSpreadPts);
   }
+double GateMA()                                 // 직전 닫힌 봉 기준 SMA/EMA
+  {
+   int need=(InpGateEMA? InpMAGate*5 : InpMAGate)+3;
+   double cl[]; ArraySetAsSeries(cl,true);
+   if(CopyClose(_Symbol,_Period,0,need,cl)<need) return 0;
+   if(!InpGateEMA)
+     {
+      double s=0; for(int k=1;k<=InpMAGate;k++) s+=cl[k];
+      return s/InpMAGate;
+     }
+   double a=2.0/(InpMAGate+1), ema=cl[need-1];
+   for(int k=need-2;k>=1;k--) ema+=a*(cl[k]-ema);
+   return ema;
+  }
 
 //+------------------------------------------------------------------+
 void OnTick()
@@ -163,11 +178,8 @@ void OnTick()
      }
    if(InpMAGate>1)                              // MA 레짐 게이트
      {
-      double cl[]; ArraySetAsSeries(cl,true);
-      int need=InpMAGate+3;
-      if(CopyClose(_Symbol,_Period,0,need,cl)<need) return;
-      double s=0; for(int k2=1;k2<=InpMAGate;k2++) s+=cl[k2];
-      double ma=s/InpMAGate;
+      double ma=GateMA();
+      if(ma<=0) return;
       double c1=iClose(_Symbol,_Period,1);
       if(InpDir==DIR_LONG ? c1<=ma : c1>=ma) return;
      }

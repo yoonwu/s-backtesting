@@ -248,6 +248,7 @@
       <button data-tab="revdbc">변곡더블비-코덱스<span class="sub">Reversal-DB · Codex</span></button>
       <button data-tab="revema">변곡DB EMA<span class="sub">Reversal EMA</span></button>
       <button data-tab="trsig">변곡신호<span class="sub">Structural Reversal</span></button>
+      <button data-tab="nlpb">넥라인눌림<span class="sub">Neckline PB · by Codex</span></button>
       <button data-tab="break120">120선 눌림목<span class="sub">MA120-Pullback</span></button>
       <button data-tab="diverge">다이버전스<span class="sub">RSI Divergence</span></button>
       <button data-tab="autofilter">자동매매필터<span class="sub">Strategy Filter</span></button>
@@ -1235,6 +1236,99 @@
     </div>
   </div>
 
+  <!-- =================== TAB: NECKLINE PULLBACK (BY CODEX) =================== -->
+  <div class="tabpane" id="pane-nlpb" hidden>
+    <div class="grid">
+      <section class="card">
+        <h2>넥라인 눌림 백테스트</h2>
+        <div class="intro"><b>by codex</b> · 쌍바닥/다중바닥이 형성되고, 그 사이 반등 고점인 <b>넥라인을 종가로 돌파</b>한 뒤 바로 추격하지 않고 <b>넥라인 재터치/눌림</b>에서 롱 진입합니다. SL은 바닥 클러스터 최저점 아래, TP는 리스크 RR 기준입니다.</div>
+
+        <div class="field"><label>데이터 소스</label>
+          <div id="nlpb_storedRow">
+            <div class="csv-checkbar">
+              <label><input id="nlpb_csv_all" type="checkbox"> 전체선택</label>
+              <div class="csv-actions">
+                <button type="button" id="nlpb_csv_gold">골드</button>
+                <button type="button" id="nlpb_csv_us100">나스닥</button>
+                <span class="csv-sep"></span>
+                <button type="button" id="nlpb_csv_min">분봉만</button>
+                <button type="button" id="nlpb_csv_hour">시간봉만</button>
+                <span class="csv-sep"></span>
+                <button type="button" id="nlpb_csv_clear">선택해제</button>
+              </div>
+            </div>
+            <div id="nlpb_csv_list" class="csv-checklist"></div>
+            <button id="nlpb_reload" style="padding:3px 8px;border:1px solid var(--border);background:var(--input-bg);color:var(--ink-dim);border-radius:6px;font-size:11px;cursor:pointer">캐시 비우기</button>
+          </div>
+        </div>
+
+        <div class="row2">
+          <div class="field"><label>추세 SMA 필터 (0=없음)</label>
+            <input id="nlpb_ma" class="mono" value="0,120,200,240">
+            <div class="hint">롱 기준: 진입 시 종가가 MA 위일 때만 통과. 0은 필터 없음.</div>
+          </div>
+          <div class="field"><label>최소 거래수 필터</label><input id="nlpb_mintrades" class="mono" type="number" value="10" min="0" step="1"></div>
+        </div>
+
+        <div class="row2">
+          <div class="field"><label>피벗 좌/우 봉 (콤마)</label>
+            <input id="nlpb_pivot" class="mono" value="2,3,5">
+            <div class="hint">k봉 좌우에서 가장 낮은 저점을 피벗 저점으로 확정.</div>
+          </div>
+          <div class="field"><label>바닥 개수 (콤마)</label>
+            <input id="nlpb_touches" class="mono" value="2,3,4">
+            <div class="hint">2=쌍바닥, 3/4=다중바닥까지 허용.</div>
+          </div>
+        </div>
+
+        <div class="row2">
+          <div class="field"><label>저점 허용폭 ×ATR14 (콤마)</label><input id="nlpb_lowtol" class="mono" value="0.5,0.75,1"></div>
+          <div class="field"><label>저점 사이 최소 반등 ×ATR14 (콤마)</label><input id="nlpb_bounce" class="mono" value="0.8,1.2,1.5"></div>
+        </div>
+
+        <div class="row2">
+          <div class="field"><label>바닥 클러스터 최대 거리 (봉)</label><input id="nlpb_cluster" class="mono" type="number" value="120" min="5" step="5"></div>
+          <div class="field"><label>넥라인 돌파 여유 ×ATR14 (콤마)</label><input id="nlpb_break" class="mono" value="0,0.2"></div>
+        </div>
+
+        <div class="row2">
+          <div class="field"><label>리테스트 대기 (봉)</label><input id="nlpb_retestwait" class="mono" type="number" value="80" min="1" step="1"></div>
+          <div class="field"><label>넥라인 터치 허용 ×ATR14 (콤마)</label><input id="nlpb_retesttol" class="mono" value="0.15,0.3,0.5"></div>
+        </div>
+
+        <div class="field"><label>리테스트 조건</label>
+          <div class="subtabs" id="nlpb_retestmode" data-cur="hold">
+            <button data-m="touch">터치만</button>
+            <button data-m="hold" class="on">터치+넥라인 위 마감</button>
+            <button data-m="reclaim">터치 후 재회복</button>
+          </div>
+          <div class="hint">터치만=공격형, 위 마감=기본형, 재회복=보수형.</div>
+        </div>
+
+        <div class="row2">
+          <div class="field"><label>SL 버퍼 ×ATR14 (콤마)</label><input id="nlpb_slbuf" class="mono" value="0.3,0.5,0.75,1"></div>
+          <div class="field"><label>TP RR (콤마)</label><input id="nlpb_rr" class="mono" value="1,1.5,2,3,4"></div>
+        </div>
+
+        <div class="row2">
+          <div class="field"><label>최대 보유 (봉)</label><input id="nlpb_hold" class="mono" type="number" value="160" min="1" step="1"></div>
+          <div class="field"><label>표시 시간 보정 (시간)</label>
+            <input id="nlpb_dispoff" class="mono" type="number" value="7" step="1">
+            <div class="hint">계산에는 영향 없음. 거래내역 시간 표시용.</div>
+          </div>
+        </div>
+
+        <button class="runbtn" id="nlpb_run">▶ 넥라인 눌림 돌리기</button>
+        <div class="err" id="nlpb_err"></div>
+        <div class="mono" id="nlpb_status" style="font-size:11px;color:var(--ink-faint);margin-top:8px;line-height:1.5"></div>
+        <div class="note"><b>로직</b> · 피벗저점 2~4개가 ATR 허용폭 안에 모임 → 저점 사이 충분한 반등 → 반등 최고가를 넥라인으로 저장 → 종가 돌파 → N봉 안에 넥라인 재터치 → 다음 봉 시가 롱. 같은 세팅에서는 포지션 중복 진입 없음.</div>
+      </section>
+      <section id="nlpb_results">
+        <div class="placeholder"><div class="big">조건을 설정하고 <span class="amb">넥라인 눌림 돌리기</span></div><div class="mono" style="font-size:12px">쌍바닥/다중바닥 → 넥라인 돌파 → 넥라인 리테스트 → 롱 진입 → SL/TP</div></div>
+      </section>
+    </div>
+  </div>
+
   <!-- =================== TAB: BREAKOUT THEN MA120 =================== -->
   <div class="tabpane" id="pane-break120" hidden>
     <div class="grid">
@@ -1628,7 +1722,7 @@
 
 </div>
 
-<script src="leverage-lab.js?v=20260702b"></script>
+<script src="leverage-lab.js?v=20260707-nlpb"></script>
 <script>
 /* ============ 다이버전스 탭: 사전 계산된 그리드서치 결과 뷰어 ============ */
 (function(){

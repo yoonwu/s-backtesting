@@ -4936,3 +4936,362 @@ function drawRSI(rCurve,holdCurve,log){
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);else init();
 })();
+
+/* ===== NECKLINE PULLBACK (by codex) =====
+ * Double/multiple bottom -> neckline breakout -> neckline retest -> long.
+ */
+(function(){
+  const el=id=>document.getElementById(id);
+  function parseMT5(text){
+    const lines=text.split(/\r?\n/), out=[];
+    const start=/date|open|time/i.test(lines[0]||"")?1:0;
+    for(let i=start;i<lines.length;i++){
+      const ln=lines[i].trim(); if(!ln)continue;
+      const p=ln.split(/[\t,;]+/); if(p.length<5)continue;
+      const d=p[0].replace(/\./g,"-").replace(/\//g,"-").slice(0,10);
+      const hasTime=/:/.test(p[1]||"");
+      const oi=hasTime?2:1;
+      const o=+p[oi], h=+p[oi+1], l=+p[oi+2], c=+p[oi+3];
+      if(!isFinite(o)||!isFinite(h)||!isFinite(l)||!isFinite(c)||c<=0)continue;
+      out.push({day:d,date:d+" "+(hasTime?p[1]:"00:00:00"),o,h,l,c});
+    }
+    if(out.length<2)throw new Error("CSV에서 유효한 OHLC 행을 찾지 못했습니다");
+    return out;
+  }
+  function groupByDay(bars){
+    const m={}, order=[];
+    for(const b of bars){ if(!m[b.day]){m[b.day]=[];order.push(b.day);} m[b.day].push(b); }
+    return {m,order};
+  }
+  function intradayOnly(bars){
+    const {m}=groupByDay(bars);
+    return bars.filter(b=>m[b.day].length>1);
+  }
+  function calcTR(bars){
+    return bars.map((b,i)=>{
+      if(i===0)return b.h-b.l;
+      const pc=bars[i-1].c;
+      return Math.max(b.h-b.l,Math.abs(b.h-pc),Math.abs(b.l-pc));
+    });
+  }
+  function calcATR(bars,period=14){
+    const tr=calcTR(bars), atr=new Array(bars.length).fill(null);
+    if(tr.length<period)return atr;
+    let s=0;
+    for(let i=0;i<period;i++)s+=tr[i];
+    atr[period-1]=s/period;
+    for(let i=period;i<tr.length;i++)atr[i]=(atr[i-1]*(period-1)+tr[i])/period;
+    return atr;
+  }
+  function calcSMA(arr,n){
+    if(!n||n<=0)return null;
+    const out=new Array(arr.length).fill(null); let s=0;
+    for(let i=0;i<arr.length;i++){
+      s+=arr[i]; if(i>=n)s-=arr[i-n];
+      if(i>=n-1)out[i]=s/n;
+    }
+    return out;
+  }
+  function parseList(str,intOnly,minV){
+    return String(str).split(/[,\s]+/).map(x=>+x).filter(x=>isFinite(x)&&x>=(minV||0)&&(!intOnly||Number.isInteger(x)));
+  }
+  function findPivotLows(bars,k){
+    const piv=[];
+    for(let i=k;i<bars.length-k;i++){
+      let ok=true;
+      for(let j=1;j<=k;j++)if(bars[i-j].l<bars[i].l){ok=false;break;}
+      if(ok)for(let j=1;j<=k;j++)if(bars[i+j].l<bars[i].l){ok=false;break;}
+      if(ok)piv.push(i);
+    }
+    return piv;
+  }
+  function maxHigh(bars,a,b){
+    let m=-Infinity;
+    for(let i=Math.max(0,a);i<=Math.min(bars.length-1,b);i++)if(bars[i].h>m)m=bars[i].h;
+    return m;
+  }
+  function maxAtr(atr,a,b){
+    let m=0;
+    for(let i=Math.max(0,a);i<=Math.min(atr.length-1,b);i++)if((atr[i]||0)>m)m=atr[i];
+    return m;
+  }
+  function findRetest(bars,atr,breakIdx,neckline,wait,tolK,mode){
+    const end=Math.min(bars.length-2,breakIdx+wait);
+    let touched=-1;
+    for(let i=breakIdx+1;i<=end;i++){
+      const a=atr[i]||0, tol=tolK*a;
+      const touches=bars[i].l<=neckline+tol && bars[i].h>=neckline-tol;
+      if(!touches)continue;
+      if(mode==="touch")return i;
+      if(mode==="hold" && bars[i].c>=neckline-tol)return i;
+      if(mode==="reclaim"){ touched=i; break; }
+    }
+    if(mode!=="reclaim"||touched<0)return -1;
+    for(let i=touched;i<=end;i++){
+      const a=atr[i]||0, tol=tolK*a;
+      if(bars[i].c>=neckline+tol*0.25)return i;
+    }
+    return -1;
+  }
+  function detectNecklinePullbacks(bars,maArr,atr,opts){
+    const {pivotK,touches,lowTolK,minBounceK,maxClusterBars,breakK,retestWait,retestTolK,retestMode}=opts;
+    const pivots=findPivotLows(bars,pivotK);
+    const out=[], used=new Set();
+    for(let s=0;s<pivots.length-1;s++){
+      const first=pivots[s];
+      if(!atr[first])continue;
+      const cluster=[first];
+      let clusterLow=bars[first].l;
+      for(let p=s+1;p<pivots.length;p++){
+        const idx=pivots[p];
+        if(idx-first>maxClusterBars)break;
+        if(!atr[idx])continue;
+        const setupAtr=maxAtr(atr,first,idx);
+        if(!(setupAtr>0))continue;
+        const nextLow=bars[idx].l;
+        if(Math.abs(nextLow-clusterLow)>lowTolK*setupAtr)continue;
+        const last=cluster[cluster.length-1];
+        const bounce=maxHigh(bars,last,idx)-Math.min(clusterLow,nextLow);
+        if(bounce<minBounceK*setupAtr)continue;
+        cluster.push(idx);
+        clusterLow=Math.min(clusterLow,nextLow);
+        if(cluster.length<touches)continue;
+        if(cluster.length>touches)break;
+        const finalLowIdx=cluster[cluster.length-1];
+        const neckline=maxHigh(bars,first,finalLowIdx);
+        if(!(neckline>clusterLow+minBounceK*setupAtr*0.5))continue;
+        const breakEnd=Math.min(bars.length-2,finalLowIdx+maxClusterBars);
+        for(let b=finalLowIdx+1;b<=breakEnd;b++){
+          const a=atr[b]||setupAtr;
+          if(bars[b].c<=neckline+breakK*a)continue;
+          const retestIdx=findRetest(bars,atr,b,neckline,retestWait,retestTolK,retestMode);
+          if(retestIdx<0)break;
+          if(maArr&&(maArr[retestIdx]===null||bars[retestIdx].c<maArr[retestIdx]))break;
+          const entryIdx=retestIdx+1;
+          if(entryIdx>=bars.length)break;
+          const key=`${finalLowIdx}-${b}-${retestIdx}-${touches}`;
+          if(used.has(key))break;
+          used.add(key);
+          out.push({
+            firstIdx:first, finalLowIdx, breakIdx:b, retestIdx, entryIdx,
+            firstDate:bars[first].date||bars[first].day,
+            finalDate:bars[finalLowIdx].date||bars[finalLowIdx].day,
+            breakDate:bars[b].date||bars[b].day,
+            retestDate:bars[retestIdx].date||bars[retestIdx].day,
+            entryDate:bars[entryIdx].date||bars[entryIdx].day,
+            neckline, clusterLow, touches, setupAtr
+          });
+          break;
+        }
+      }
+    }
+    return out.sort((a,b)=>a.entryIdx-b.entryIdx);
+  }
+  function backtestNLPB(bars,signals,atr,opts){
+    const {slBufK,rr,maxHoldBars}=opts;
+    const trades=[];
+    let equity=1, peak=1, maxDD=0, wins=0, sumWin=0, sumLoss=0, activeUntil=-1;
+    for(const sig of signals){
+      const entryIdx=sig.entryIdx;
+      if(entryIdx<=activeUntil||entryIdx>=bars.length)continue;
+      const entry=bars[entryIdx].o;
+      const setupAtr=Math.max(sig.setupAtr||0,atr[sig.finalLowIdx]||0,atr[sig.retestIdx]||0);
+      if(!(setupAtr>0))continue;
+      const sl=sig.clusterLow-slBufK*setupAtr;
+      const risk=entry-sl;
+      if(!(risk>0))continue;
+      const tp=entry+rr*risk;
+      const end=Math.min(bars.length-1,entryIdx+maxHoldBars);
+      let exitIdx=end, exitPrice=bars[end].c, exitReason="EXPIRE";
+      for(let i=entryIdx;i<=end;i++){
+        const b=bars[i];
+        if(b.l<=sl){exitIdx=i;exitPrice=sl;exitReason="SL";break;}
+        if(b.h>=tp){exitIdx=i;exitPrice=tp;exitReason="TP";break;}
+      }
+      const ret=(exitPrice-entry)/entry;
+      equity*=1+ret;
+      if(equity>peak)peak=equity;
+      const dd=equity/peak-1;
+      if(dd<maxDD)maxDD=dd;
+      if(ret>0){wins++;sumWin+=ret;}else{sumLoss+=Math.abs(ret);}
+      activeUntil=exitIdx;
+      trades.push({...sig,entry,sl,tp,exitIdx,exitPrice,exitReason,ret,slBufK,rr});
+    }
+    const cnt=trades.length, losses=cnt-wins;
+    const avgWin=wins?sumWin/wins:0, avgLoss=losses?sumLoss/losses:0;
+    const payoff=avgLoss>0?avgWin/avgLoss:(avgWin>0?Infinity:0);
+    const totalRet=equity-1;
+    const mar=maxDD<0?totalRet/Math.abs(maxDD):(totalRet>0?Infinity:0);
+    return {
+      trades,cnt,winRate:cnt?wins/cnt:0,payoff,totalRet,mdd:maxDD,mar,
+      tpC:trades.filter(t=>t.exitReason==="TP").length,
+      slC:trades.filter(t=>t.exitReason==="SL").length,
+      eodC:trades.filter(t=>t.exitReason==="EXPIRE").length
+    };
+  }
+  function displayTime(raw,off){
+    if(!raw)return "-";
+    const d=new Date(String(raw).replace(" ","T"));
+    if(Number.isNaN(d.getTime()))return String(raw);
+    d.setHours(d.getHours()+(off||0));
+    const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,"0"), dd=String(d.getDate()).padStart(2,"0");
+    const hh=String(d.getHours()).padStart(2,"0"), mi=String(d.getMinutes()).padStart(2,"0");
+    return `${y}-${m}-${dd} ${hh}:${mi}`;
+  }
+  let RAWCACHE={}, RESULTS=[], SORT={key:"mar",dir:-1};
+  function errMsg(s){el("nlpb_err").textContent=s||"";}
+  function statusMsg(s){el("nlpb_status").textContent=s||"";}
+  async function loadSources(){
+    const picks=selectedCsvFiles("nlpb");
+    if(!picks.length)throw new Error("CSV를 1개 이상 체크하세요");
+    const out=[];
+    for(const cf of picks){
+      if(!RAWCACHE[cf.file]){
+        statusMsg(`${cf.sym} ${cf.tf} 불러오는 중`);
+        const r=await fetch(cf.file,{cache:"force-cache"});
+        if(!r.ok)throw new Error(`${cf.file} 파일을 찾지 못했습니다`);
+        const parsed=parseMT5(await r.text());
+        RAWCACHE[cf.file]=cf.raw?intradayOnly(parsed):parsed;
+      }
+      out.push({label:`${cf.sym} · ${cf.tf}`,file:cf.file,bars:RAWCACHE[cf.file]});
+    }
+    return out;
+  }
+  async function run(){
+    errMsg(""); RESULTS=[];
+    const btn=el("nlpb_run"); btn.disabled=true;
+    try{
+      const maList=parseList(el("nlpb_ma").value,true,0);
+      const pivots=parseList(el("nlpb_pivot").value,true,1);
+      const touchesList=parseList(el("nlpb_touches").value,true,2).filter(x=>x<=4);
+      const lowTols=parseList(el("nlpb_lowtol").value,false,0);
+      const bounces=parseList(el("nlpb_bounce").value,false,0);
+      const maxClusterBars=Math.max(5,+el("nlpb_cluster").value||120);
+      const breakKs=parseList(el("nlpb_break").value,false,0);
+      const retestWait=Math.max(1,+el("nlpb_retestwait").value||80);
+      const retestTols=parseList(el("nlpb_retesttol").value,false,0);
+      const retestMode=el("nlpb_retestmode").dataset.cur||"hold";
+      const slBufs=parseList(el("nlpb_slbuf").value,false,0);
+      const rrs=parseList(el("nlpb_rr").value,false,0);
+      const maxHoldBars=Math.max(1,+el("nlpb_hold").value||160);
+      const minTrades=Math.max(0,+el("nlpb_mintrades").value||0);
+      const dispOffset=+el("nlpb_dispoff").value||0;
+      if(!maList.length||!pivots.length||!touchesList.length||!lowTols.length||!bounces.length||!breakKs.length||!retestTols.length||!slBufs.length||!rrs.length)
+        throw new Error("콤마 입력값 중 비어있는 항목이 있습니다");
+      const sources=await loadSources();
+      const rows=[];
+      let combo=0;
+      const total=sources.length*maList.length*pivots.length*touchesList.length*lowTols.length*bounces.length*breakKs.length*retestTols.length*slBufs.length*rrs.length;
+      for(const src of sources){
+        const bars=src.bars;
+        if(bars.length<80)continue;
+        const closes=bars.map(b=>b.c), atr=calcATR(bars,14);
+        const maCache={0:null};
+        for(const ma of maList)if(ma>0&&!maCache[ma])maCache[ma]=calcSMA(closes,ma);
+        for(const ma of maList){
+          const maArr=maCache[ma]||null;
+          for(const pivotK of pivots)for(const touches of touchesList)for(const lowTolK of lowTols)for(const minBounceK of bounces)for(const breakK of breakKs)for(const retestTolK of retestTols){
+            const sigs=detectNecklinePullbacks(bars,maArr,atr,{pivotK,touches,lowTolK,minBounceK,maxClusterBars,breakK,retestWait,retestTolK,retestMode});
+            for(const slBufK of slBufs)for(const rr of rrs){
+              combo++;
+              if(combo%40===0){statusMsg(`${combo.toLocaleString()}/${total.toLocaleString()} 조합 계산 중 · ${src.label}`); await pauseUI();}
+              const bt=backtestNLPB(bars,sigs,atr,{slBufK,rr,maxHoldBars});
+              if(bt.cnt<minTrades)continue;
+              rows.push({
+                label:src.label,file:src.file,ma,pivotK,touches,lowTolK,minBounceK,breakK,retestTolK,retestMode,slBufK,rr,dispOffset,
+                ...bt
+              });
+            }
+          }
+        }
+      }
+      RESULTS=rows;
+      statusMsg(`완료 · 유효 ${rows.length.toLocaleString()}개 / 전체 ${total.toLocaleString()}개 조합 · by codex`);
+      render();
+    }catch(e){errMsg(e.message);statusMsg("");}
+    finally{btn.disabled=false;}
+  }
+  function pct(x){return (x>=0?"+":"")+(x*100).toFixed(1)+"%";}
+  function pf2(x){return x===Infinity?"∞":x.toFixed(2);}
+  function arrow(k){return SORT.key===k?(SORT.dir<0?" ▼":" ▲"):"";}
+  function render(){
+    const box=el("nlpb_results");
+    if(!RESULTS.length){
+      box.innerHTML=`<div class="placeholder"><div class="big">조건에 맞는 결과가 없습니다</div><div class="mono" style="font-size:12px">최소 거래수, 피벗, 저점 허용폭, 리테스트 조건을 풀어보세요</div></div>`;
+      return;
+    }
+    const sorted=[...RESULTS].sort((a,b)=>{
+      const k=SORT.key;
+      const av=a[k], bv=b[k];
+      if(typeof av==="string"||typeof bv==="string")return String(av||"").localeCompare(String(bv||""),"ko")*SORT.dir;
+      return ((isFinite(av)?av:-1e9)-(isFinite(bv)?bv:-1e9))*SORT.dir;
+    });
+    const best=sorted[0], view=sorted.slice(0,500);
+    const h=(k,main,sub="")=>`<th class="db-sort nlpb-sort" data-k="${k}"><span class="th-main">${main}${arrow(k)}</span>${sub?`<span class="th-sub">${sub}</span>`:""}</th>`;
+    let html=`<div class="db-best">최상위 · <b class="amb">${best.label} · MA${best.ma||"없음"} · 피벗${best.pivotK} · ${best.touches}중바닥 · 저점${best.lowTolK}ATR · 반등${best.minBounceK}ATR · 리테스트${best.retestTolK}ATR · SL${best.slBufK}ATR · RR${best.rr}</b> → 거래 <b>${best.cnt}</b> · 승률 ${(best.winRate*100).toFixed(0)}% · 손익비 ${pf2(best.payoff)} · 총수익 <b class="${best.totalRet>=0?"pos":"neg"}">${pct(best.totalRet)}</b> · MDD <b class="neg">${pct(best.mdd)}</b> · MAR <b class="cy">${pf2(best.mar)}</b>${RESULTS.length>500?` <span class="dimv">· 상위 500개만 표시</span>`:""}</div>`;
+    html+=`<div class="ctable-wrap"><table class="ctable"><thead><tr>
+      ${h("label","데이터","CSV")}${h("ma","MA")}${h("pivotK","피벗")}${h("touches","바닥")}${h("lowTolK","저점","ATR")}${h("minBounceK","반등","ATR")}${h("breakK","돌파","ATR")}${h("retestTolK","터치","ATR")}${h("slBufK","SL","ATR")}${h("rr","RR")}
+      ${h("cnt","거래")}${h("winRate","승률")}${h("payoff","손익비")}${h("totalRet","총수익")}${h("mdd","MDD")}${h("mar","MAR")}
+      <th><span class="th-main">청산</span><span class="th-sub">TP/SL/E</span></th><th><span class="th-main">내역</span></th>
+    </tr></thead><tbody>`;
+    view.forEach((r,i)=>{
+      html+=`<tr class="${i===0?"db-hot":""}">
+        <td class="mono dimv">${r.label}</td><td class="num">${r.ma||"없음"}</td><td class="num">${r.pivotK}</td><td class="num">${r.touches}</td>
+        <td class="num">${r.lowTolK}</td><td class="num">${r.minBounceK}</td><td class="num">${r.breakK}</td><td class="num">${r.retestTolK}</td>
+        <td class="num">${r.slBufK}</td><td class="num">${r.rr}</td>
+        <td class="num">${r.cnt}</td><td class="num">${(r.winRate*100).toFixed(0)}%</td>
+        <td class="num ${r.payoff>=1?"pos":"neg"}">${pf2(r.payoff)}</td>
+        <td class="num ${r.totalRet>=0?"pos":"neg"}">${pct(r.totalRet)}</td>
+        <td class="num neg">${pct(r.mdd)}</td><td class="num cy">${pf2(r.mar)}</td>
+        <td class="num dimv">${r.tpC}/${r.slC}/${r.eodC}</td>
+        <td><button class="nlpb-dtl" data-i="${i}" style="padding:4px 9px;border:1px solid var(--cyan);background:rgba(8,145,178,.1);color:var(--cyan);border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">보기</button></td>
+      </tr>`;
+    });
+    html+=`</tbody></table></div><div id="nlpb_detail_area" style="margin-top:20px"></div>`;
+    box.innerHTML=html;
+    box.querySelectorAll(".nlpb-sort").forEach(th=>th.onclick=()=>{
+      const k=th.dataset.k;
+      if(SORT.key===k)SORT.dir*=-1; else {SORT.key=k; SORT.dir=(k==="mdd"||k==="label")?1:-1;}
+      render();
+    });
+    box.querySelectorAll(".nlpb-dtl").forEach(b=>b.onclick=()=>showDetail(view[+b.dataset.i]));
+  }
+  function showDetail(r){
+    const area=el("nlpb_detail_area"); if(!area)return;
+    const off=r.dispOffset||0;
+    let html=`<div class="sectitle">거래 내역 · ${r.label} · MA${r.ma||"없음"} · 피벗${r.pivotK} · ${r.touches}중바닥 · SL${r.slBufK}ATR · RR${r.rr}</div>
+    <div class="ctable-wrap"><table class="ctable"><thead><tr>
+      <th><span class="th-main">1차 저점</span></th><th><span class="th-main">마지막 저점</span></th><th><span class="th-main">돌파</span></th><th><span class="th-main">리테스트</span></th>
+      <th><span class="th-main">진입</span></th><th><span class="th-main">넥라인</span></th><th><span class="th-main">바닥</span></th>
+      <th><span class="th-main">진입가</span></th><th><span class="th-main">SL</span></th><th><span class="th-main">TP</span></th><th><span class="th-main">청산</span></th><th><span class="th-main">결과</span></th><th><span class="th-main">수익률</span></th>
+    </tr></thead><tbody>`;
+    for(const t of r.trades){
+      const res=t.exitReason==="TP"?'<span class="pos">TP</span>':t.exitReason==="SL"?'<span class="neg">SL</span>':'<span class="dimv">EXPIRE</span>';
+      html+=`<tr>
+        <td class="name mono" style="font-size:11px">${displayTime(t.firstDate,off)}</td>
+        <td class="name mono" style="font-size:11px">${displayTime(t.finalDate,off)}</td>
+        <td class="name mono" style="font-size:11px">${displayTime(t.breakDate,off)}</td>
+        <td class="name mono" style="font-size:11px">${displayTime(t.retestDate,off)}</td>
+        <td class="name mono" style="font-size:11px">${displayTime(t.entryDate,off)}</td>
+        <td class="num mono">${t.neckline.toFixed(2)}</td><td class="num mono">${t.clusterLow.toFixed(2)}</td>
+        <td class="num mono">${t.entry.toFixed(2)}</td><td class="num mono">${t.sl.toFixed(2)}</td><td class="num mono">${t.tp.toFixed(2)}</td>
+        <td class="num mono">${t.exitPrice.toFixed(2)}</td><td>${res}</td><td class="num ${t.ret>=0?"pos":"neg"}">${pct(t.ret)}</td>
+      </tr>`;
+    }
+    html+=`</tbody></table></div>`;
+    area.innerHTML=html;
+    area.scrollIntoView({behavior:"smooth"});
+  }
+  function init(){
+    if(!el("nlpb_run"))return;
+    renderCsvChecks("nlpb", Math.max(0, CSV_FILES.findIndex(cf=>cf.sym==="XAUUSD"&&cf.tf==="M5")));
+    const mode=el("nlpb_retestmode");
+    mode.querySelectorAll("button").forEach(b=>b.onclick=()=>{
+      mode.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+      mode.dataset.cur=b.dataset.m;
+    });
+    el("nlpb_reload").onclick=()=>{RAWCACHE={};statusMsg("캐시 비움");};
+    el("nlpb_run").onclick=run;
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init); else init();
+})();

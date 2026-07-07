@@ -9,6 +9,8 @@
 - `DoubleBB_EA.mq5` — v1.06 이상
 - `MA_Pullback_EA.mq5` — v1.02 이상
 - `RSI_Divergence_EA.mq5` — v1.10 이상
+- `Momentum_Ignition_EA.mq5` — v1.00 이상 (2026-07-07 신규)
+- `Volatility_Squeeze_EA.mq5` — v1.00 이상 (2026-07-07 신규)
 
 `mt5/sets` 폴더에서 아래 set만 사용합니다.
 
@@ -25,6 +27,9 @@
 - `HID_XAU_M15_SHORT.set`
 - `HID_US100_M30_LONG.set`
 - `HID_US100_M15_SHORT_RR4.set`
+- `IGN_XAU_H4.set` (2026-07-07 신규)
+- `SQZ_XAU_H4.set` (2026-07-07 신규)
+- `SQZ_US100_H4.set` (2026-07-07 신규)
 
 사용 금지:
 
@@ -34,10 +39,10 @@
 
 MT5에서 `파일` → `데이터 폴더 열기`.
 
-- `.mq5` 파일 3개: `MQL5/Experts/`에 복사
+- `.mq5` 파일 5개: `MQL5/Experts/`에 복사
 - `.set` 파일: `MQL5/Presets/`에 복사
 
-MetaEditor에서 EA 3개를 각각 열고 `F7` 컴파일합니다. 컴파일 로그는 반드시 `0 errors`여야 합니다.
+MetaEditor에서 EA 5개를 각각 열고 `F7` 컴파일합니다. 컴파일 로그는 반드시 `0 errors`여야 합니다.
 
 ## 3. 차트 구성
 
@@ -58,6 +63,9 @@ MetaEditor에서 EA 3개를 각각 열고 `F7` 컴파일합니다. 컴파일 로
 | DIV 2 | RSI Divergence | XAUUSD M15 | `HID_XAU_M15_SHORT.set` | 880102 |
 | DIV 3 | RSI Divergence | US100 M30 | `HID_US100_M30_LONG.set` | 880104 |
 | DIV 4 | RSI Divergence | US100 M15 | `HID_US100_M15_SHORT_RR4.set` | 880105 |
+| IGN 1 | Momentum Ignition | XAUUSD H4 | `IGN_XAU_H4.set` | 880201 |
+| SQZ 1 | Volatility Squeeze | XAUUSD H4 | `SQZ_XAU_H4.set` | 880202 |
+| SQZ 2 | Volatility Squeeze | US100 H4 | `SQZ_US100_H4.set` | 880203 |
 
 브로커 심볼이 `US100.x`, `XAUUSD.b`여도 set의 종목 가드는 `US100`, `XAUUSD` 접두어 기준이라 정상입니다.
 
@@ -67,7 +75,7 @@ MetaEditor에서 EA 3개를 각각 열고 `F7` 컴파일합니다. 컴파일 로
 
 전문가 탭에서 아래를 확인합니다.
 
-- EA 버전: `DoubleBB_EA 1.06`, `MA_Pullback_EA 1.02`, `RSI_Divergence_EA 1.10`
+- EA 버전: `DoubleBB_EA 1.06`, `MA_Pullback_EA 1.02`, `RSI_Divergence_EA 1.10`, `Momentum_Ignition_EA 1.00`, `Volatility_Squeeze_EA 1.00`
 - 매직넘버가 위 표와 일치
 - 차트 종목/시간봉 가드 통과
 - 자동매매 버튼 ON
@@ -86,10 +94,20 @@ MetaEditor에서 EA 3개를 각각 열고 `F7` 컴파일합니다. 컴파일 로
 - 신규 주문 생성 시 가능한 경우 SL/TP를 같이 부착
 - 이미 열려 있던 기존 포지션은 새 코드가 SL/TP를 소급 적용하지 않음
 
+신규 `Momentum_Ignition_EA` (880201) 기준:
+
+- 시장가 진입 + SL만 부착, **TP 없음이 정상** (20봉 시간청산)
+- 프리셋 기본 게이트 EMA50 ON — 대양봉이 EMA50 위에서 나올 때만 진입
+
+신규 `Volatility_Squeeze_EA` (880202/880203) 기준:
+
+- 신호 시 `BuyStop` 대기주문 1건 (SL/TP 부착) — 반대편 터치·10봉 경과 시 자동 취소
+- 대기주문이 며칠 떠 있다 사라지는 것도 정상 동작
+
 ## 6. 첫 가동 전
 
 - 기존 수동 주문이나 이전 EA 대기주문이 남아 있으면 먼저 정리
 - 같은 매직넘버 중복 사용 금지
 - 같은 차트에 EA 2개 붙이기 금지
-- 세팅 후 터미널 로그에서 `시작` 로그 13개 확인
+- 세팅 후 터미널 로그에서 `시작` 로그 16개 확인
 

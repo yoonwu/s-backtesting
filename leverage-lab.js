@@ -5416,7 +5416,33 @@ function drawRSI(rCurve,holdCurve,log){
     }
     return trades;
   }
-  if(typeof window!=="undefined")window.__NK_ENGINE__={nkAtr14,nkPivotLows,nkDetect,nkSim,nkTrades};
+  /* 혼합TF 오염 제거 — python load_trimmed와 동일 규칙.
+   * MT5가 히스토리 부족 구간을 상위봉으로 채운 CSV(XAUUSD 분봉 ~2025-03-18 전) 대응:
+   * 파일 끝 500봉의 최빈 간격 = 목표 TF로 보고, 그 간격이 50봉 연속 유지되는
+   * 첫 지점부터만 사용. 주말/휴장 갭(>=2000분)은 리셋 안 함. */
+  function nkTrimMixed(bars){
+    const n=bars.length;
+    if(n<200)return{bars,cut:0,tfMin:0};
+    const t=new Array(n);
+    for(let i=0;i<n;i++){t[i]=Date.parse(bars[i].date.replace(" ","T"));if(!isFinite(t[i]))return{bars,cut:0,tfMin:0};}
+    const freq={};
+    for(let i=Math.max(1,n-500);i<n;i++){const d=(t[i]-t[i-1])/60000;freq[d]=(freq[d]||0)+1;}
+    let mode=0,mc=0;for(const k in freq){if(freq[k]>mc){mc=freq[k];mode=+k;}}
+    if(!(mode>0))return{bars,cut:0,tfMin:0};
+    // 갭이 TF의 배수(결측봉·장마감·일봉)거나 주말(>=2000분)이면 리셋하지 않되
+    // 정확 매치만 카운트 — 상위봉 구간에선 run이 0에 머문다 (python과 동일 규칙)
+    let run=0,runStart=0,start=0;
+    for(let i=1;i<n;i++){
+      const d=(t[i]-t[i-1])/60000;
+      if(d===mode){
+        if(run===0)runStart=i-1;
+        run++;
+        if(run>=50){start=runStart;break;}
+      }else if(d>=2000||d%mode===0){}else run=0;
+    }
+    return start>0?{bars:bars.slice(start),cut:start,tfMin:mode}:{bars,cut:0,tfMin:mode};
+  }
+  if(typeof window!=="undefined")window.__NK_ENGINE__={nkAtr14,nkPivotLows,nkDetect,nkSim,nkTrades,nkTrimMixed};
   /* ===== engine-end ===== */
 
   function parseMT5nk(text){
@@ -5441,7 +5467,7 @@ function drawRSI(rCurve,holdCurve,log){
   async function loadSources(){
     if(el("nk_src").dataset.cur==="upload"){
       if(!CACHE.__upload__)throw new Error("CSV 파일을 먼저 선택하세요");
-      return[{label:CACHE.__uploadName__||"업로드",bars:CACHE.__upload__}];
+      return[{label:CACHE.__uploadName__||"업로드",bars:CACHE.__upload__,cut:CACHE.__uploadCut__||0}];
     }
     const picks=selectedCsvFiles("nk");
     if(!picks.length)throw new Error("저장 CSV를 1개 이상 체크하세요");
@@ -5451,9 +5477,11 @@ function drawRSI(rCurve,holdCurve,log){
         statusMsg(`${cf.sym} ${cf.tf} 불러오는 중…`);
         const r=await fetch(cf.file,{cache:"force-cache"});
         if(!r.ok)throw new Error(`${cf.file} 못 찾음(404)`);
-        CACHE[cf.file]=parseMT5nk(await r.text());
+        const tm=nkTrimMixed(parseMT5nk(await r.text()));
+        CACHE[cf.file]=tm;
       }
-      out.push({label:`${cf.sym}·${cf.tf}`,bars:CACHE[cf.file]});
+      const tm=CACHE[cf.file];
+      out.push({label:`${cf.sym}·${cf.tf}`,bars:tm.bars,cut:tm.cut});
     }
     return out;
   }
@@ -5525,7 +5553,8 @@ function drawRSI(rCurve,holdCurve,log){
         }
       }
       RESULTS=rows;
-      statusMsg(`완료 — 유효 ${rows.length}개 / 전체 ${total}개 조합`);
+      const cutNote=sources.filter(s=>s.cut>0).map(s=>`${s.label} 앞 ${s.cut}봉(혼합TF) 제외 · 시작 ${s.bars[0].date.slice(0,16)}`).join(" / ");
+      statusMsg(`완료 — 유효 ${rows.length}개 / 전체 ${total}개 조합${cutNote?" · ⚠ "+cutNote:""}`);
       render();
     }catch(e){errMsg(e.message);statusMsg("");}
     finally{btn.disabled=false;}
@@ -5593,18 +5622,21 @@ function drawRSI(rCurve,holdCurve,log){
     const area=el("nk_detail_area");if(!area)return;
     const bars=r.bars,sgn=r.dir==="long"?1:-1;
     const px=v=>(sgn*v).toFixed(2);
-    let html=`<div class="sectitle">거래 내역 · ${r.label} ${r.dir==="long"?"롱":"숏"} · k${r.k} 허용${r.tol} 바닥${r.nb}+ ${r.em==="touch"?"터치":"확인"} ${r.tpm} · 시각=MT5 서버시간</div>
+    let html=`<div class="sectitle">거래 내역 · ${r.label} ${r.dir==="long"?"롱":"숏"} · k${r.k} 허용${r.tol} 바닥${r.nb}+ ${r.em==="touch"?"터치":"확인"} ${r.tpm} · 시각=MT5 서버시간 · <b class="amb">차트 버튼으로 눈 검증</b></div>
+    <div id="nk_chart_box" style="display:none;margin:0 0 14px"><div class="mono" id="nk_chart_title" style="font-size:12px;margin-bottom:6px;color:var(--ink-dim)"></div><canvas id="nk_chart" style="width:100%;border:1px solid var(--border);border-radius:10px;background:#0b1220"></canvas></div>
     <div class="ctable-wrap"><table class="ctable"><thead><tr>
+      <th><div class="th-main">차트</div></th>
       <th><div class="th-main">바닥들</div></th><th><div class="th-main">바닥수</div></th>
       <th><div class="th-main">넥라인</div></th><th><div class="th-main">터치봉</div></th><th><div class="th-main">진입</div></th><th><div class="th-main">청산</div></th>
       <th><div class="th-main">진입가</div></th><th><div class="th-main">SL</div></th><th><div class="th-main">TP</div></th>
       <th><div class="th-main">청산가</div></th><th><div class="th-main">결과</div></th><th><div class="th-main">R</div></th>
     </tr></thead><tbody>`;
-    for(const t of r.trades){
+    r.trades.forEach((t,ti)=>{
       const res=t.reason==="TP"?'<span class="pos">익절</span>':t.reason==="SL"?'<span class="neg">손절</span>':'<span class="dimv">만료</span>';
-      const lows=t.ev.lows.map(b=>bars[b].date.slice(5,16)).join(" · ");
+      const lows=t.ev.lows.map(b=>bars[b].date.slice(2,16)).join("<br>");
       html+=`<tr>
-        <td class="name mono" style="font-size:11px">${lows}</td>
+        <td><button class="nk-cht" data-ti="${ti}" style="padding:4px 9px;border:1px solid var(--amber);background:rgba(217,119,6,.1);color:var(--amber);border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">📈</button></td>
+        <td class="name mono" style="font-size:11px;line-height:1.5">${lows}</td>
         <td class="num">${t.ev.nbottoms}</td>
         <td class="num mono">${px(t.ev.neck)}</td>
         <td class="name mono" style="font-size:11px">${bars[t.ev.eTouch].date.slice(0,16)}</td>
@@ -5614,10 +5646,88 @@ function drawRSI(rCurve,holdCurve,log){
         <td class="num mono">${px(t.exitS)}</td><td>${res}</td>
         <td class="num ${t.r>0?"pos":"neg"}">${(t.r>0?"+":"")+t.r.toFixed(2)}</td>
       </tr>`;
-    }
+    });
     html+=`</tbody></table></div>`;
     area.innerHTML=html;
+    area.querySelectorAll(".nk-cht").forEach(b=>b.onclick=()=>drawChart(r,r.trades[+b.dataset.ti]));
     area.scrollIntoView({behavior:"smooth"});
+  }
+  /* 트레이드 1건 캔들차트 — 바닥·넥라인·돌파·터치·진입·SL·TP·청산 표시 */
+  function drawChart(r,t){
+    const box=el("nk_chart_box"),cv=el("nk_chart"),title=el("nk_chart_title");
+    if(!box||!cv)return;
+    box.style.display="";
+    const bars=r.bars,n=bars.length,sgn=r.dir==="long"?1:-1;
+    const ev=t.ev;
+    let s0=Math.max(0,ev.lows[0]-12);
+    let s1=Math.min(n-1,t.x+12);
+    let cut=false;
+    if(s1-s0>420){s1=Math.min(n-1,t.e+40);cut=t.x>s1;}   // 너무 길면 진입 위주로
+    // 실제 가격으로 변환
+    const neck=sgn*ev.neck, entry=sgn*t.entryS, sl=sgn*t.slS, tp=sgn*t.tpS, exit=sgn*t.exitS;
+    // 돌파봉: 마지막 바닥 확정 이후 첫 종가 돌파 (부호 좌표계로 판정)
+    let brk=-1;
+    for(let i=ev.lows[ev.lows.length-1]+1;i<=ev.eTouch;i++){
+      if(sgn*bars[i].c>sgn*neck){brk=i;break;}
+    }
+    const W=Math.max(700,Math.min(1200,box.clientWidth-2)),H=430,dpr=window.devicePixelRatio||1;
+    cv.width=W*dpr;cv.height=H*dpr;cv.style.height=H+"px";
+    const g=cv.getContext("2d");g.setTransform(dpr,0,0,dpr,0,0);
+    g.fillStyle="#0b1220";g.fillRect(0,0,W,H);
+    const padL=8,padR=74,padT=14,padB=34;
+    let pmin=Math.min(sl,tp),pmax=Math.max(sl,tp);
+    for(let i=s0;i<=s1;i++){if(bars[i].l<pmin)pmin=bars[i].l;if(bars[i].h>pmax)pmax=bars[i].h;}
+    const span=(pmax-pmin)||1;pmin-=span*0.05;pmax+=span*0.05;
+    const X=i=>padL+(i-s0)/(s1-s0)*(W-padL-padR);
+    const Y=p=>padT+(1-(p-pmin)/(pmax-pmin))*(H-padT-padB);
+    const bw=Math.max(1,Math.min(9,(W-padL-padR)/(s1-s0+1)*0.7));
+    // y격자+라벨
+    g.font="10px JetBrains Mono,monospace";g.textAlign="left";
+    for(let q=0;q<=4;q++){
+      const p=pmin+(pmax-pmin)*q/4,y=Y(p);
+      g.strokeStyle="rgba(255,255,255,.06)";g.beginPath();g.moveTo(padL,y);g.lineTo(W-padR,y);g.stroke();
+      g.fillStyle="#64748b";g.fillText(p.toFixed(2),W-padR+6,y+3);
+    }
+    // x 날짜 라벨
+    g.textAlign="center";g.fillStyle="#64748b";
+    for(let q=0;q<=5;q++){
+      const i=Math.round(s0+(s1-s0)*q/5);
+      g.fillText(bars[i].date.slice(2,16),Math.min(Math.max(X(i),46),W-padR-46),H-8);
+    }
+    // 수평 레벨선
+    const hline=(p,color,dash,label)=>{
+      g.strokeStyle=color;g.setLineDash(dash);g.beginPath();g.moveTo(padL,Y(p));g.lineTo(W-padR,Y(p));g.stroke();g.setLineDash([]);
+      g.fillStyle=color;g.textAlign="left";g.fillText(label+" "+p.toFixed(2),W-padR+6,Y(p)-4);
+    };
+    hline(neck,"#d97706",[6,4],"넥라인");
+    hline(sl,"#ef4444",[2,3],"SL");
+    hline(tp,"#10b981",[2,3],"TP");
+    // 캔들
+    for(let i=s0;i<=s1;i++){
+      const b=bars[i],up=b.c>=b.o,x=X(i);
+      g.strokeStyle=up?"#10b981":"#ef4444";g.fillStyle=up?"#10b981":"#ef4444";
+      g.beginPath();g.moveTo(x,Y(b.h));g.lineTo(x,Y(b.l));g.stroke();
+      const y1=Y(Math.max(b.o,b.c)),y2=Y(Math.min(b.o,b.c));
+      g.fillRect(x-bw/2,y1,bw,Math.max(1,y2-y1));
+    }
+    // 마커
+    const mark=(i,p,txt,color,below)=>{
+      const x=X(i),y=Y(p)+(below?12:-12);
+      g.fillStyle=color;g.textAlign="center";g.font="bold 11px DM Sans,sans-serif";
+      g.beginPath();
+      if(below){g.moveTo(x,Y(p)+3);g.lineTo(x-4,Y(p)+9);g.lineTo(x+4,Y(p)+9);}
+      else{g.moveTo(x,Y(p)-3);g.lineTo(x-4,Y(p)-9);g.lineTo(x+4,Y(p)-9);}
+      g.closePath();g.fill();
+      g.fillText(txt,x,below?y+10:y-3);g.font="10px JetBrains Mono,monospace";
+    };
+    const bottomBelow=r.dir==="long";           // 롱=바닥(저가 아래), 숏=천장(고가 위)
+    ev.lows.forEach((b,j)=>mark(b,bottomBelow?bars[b].l:bars[b].h,"바닥"+(j+1),"#22d3ee",bottomBelow));
+    if(brk>=0)mark(brk,bottomBelow?bars[brk].h:bars[brk].l,"돌파","#d97706",!bottomBelow);
+    mark(ev.eTouch,bottomBelow?bars[ev.eTouch].l:bars[ev.eTouch].h,"터치","#fbbf24",bottomBelow);
+    mark(t.e,entry,"진입","#10b981",bottomBelow);
+    if(!cut)mark(t.x,exit,t.reason==="TP"?"익절":t.reason==="SL"?"손절":"만료",t.r>0?"#10b981":"#ef4444",!bottomBelow);
+    title.textContent=`${r.label} ${r.dir==="long"?"롱":"숏"} · 바닥 ${ev.lows.map(b=>bars[b].date.slice(2,16)).join(" / ")} · 넥라인 ${neck.toFixed(2)} · 터치 ${bars[ev.eTouch].date.slice(2,16)} · 진입 ${bars[t.e].date.slice(2,16)} @${entry.toFixed(2)} · 청산 ${bars[t.x].date.slice(2,16)} @${exit.toFixed(2)} (${t.reason}, ${(t.r>0?"+":"")+t.r.toFixed(2)}R)${cut?" · ⚠ 청산 봉은 차트 범위 밖":""}`;
+    box.scrollIntoView({behavior:"smooth",block:"nearest"});
   }
   function init(){
     if(!el("nk_run"))return;
@@ -5634,7 +5744,11 @@ function drawRSI(rCurve,holdCurve,log){
     });
     el("nk_file").onchange=async e=>{
       const f=e.target.files[0];if(!f)return;
-      try{CACHE.__upload__=parseMT5nk(await f.text());CACHE.__uploadName__=f.name.replace(/\.csv$/i,"");errMsg("");}
+      try{
+        const tm=nkTrimMixed(parseMT5nk(await f.text()));
+        CACHE.__upload__=tm.bars;CACHE.__uploadCut__=tm.cut;CACHE.__uploadName__=f.name.replace(/\.csv$/i,"");
+        errMsg("");if(tm.cut)statusMsg(`⚠ 혼합TF 앞 ${tm.cut}봉 제외 · 시작 ${tm.bars[0].date.slice(0,16)}`);
+      }
       catch(ex){errMsg("⚠ "+ex.message);}
     };
     el("nk_reload").onclick=()=>{CACHE={};statusMsg("캐시 비움");};

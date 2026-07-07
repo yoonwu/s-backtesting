@@ -23,9 +23,39 @@ import os
 import numpy as np
 import pandas as pd
 import gridsearch as g
-from combo_scan import load_full
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+
+TF_MIN = {"M10": 10, "M15": 15, "M30": 30, "H1": 60, "H2": 120, "H4": 240}
+
+
+def load_trimmed(path, mins):
+    """혼합TF 오염 제거 로드. MT5가 히스토리 부족 구간을 상위봉(일봉/H1)으로
+    채운 CSV가 있어(XAUUSD 분봉: ~2025-03-18 전), 목표 간격(mins)이 50회
+    누적되는 첫 구간부터만 사용. 갭이 mins의 배수(결측봉·장마감·일봉 1440 포함)
+    이거나 주말(>=2000분)이면 리셋하지 않되 정확 매치만 카운트 — 상위봉 구간은
+    mins 매치가 없어 run이 0에 머물고, 진짜 TF 구간에서만 채워진다."""
+    df = pd.read_csv(path, sep="\t")
+    df.columns = [c.strip("<>").lower() for c in df.columns]
+    dt = pd.to_datetime(df["date"] + " " + df["time"], format="%Y.%m.%d %H:%M:%S")
+    d = dt.diff().dt.total_seconds().to_numpy() / 60
+    start, run, run_start = 0, 0, 0
+    for i in range(1, len(df)):
+        if d[i] == mins:
+            if run == 0:
+                run_start = i - 1
+            run += 1
+            if run >= 50:
+                start = run_start
+                break
+        elif d[i] >= 2000 or d[i] % mins == 0:
+            pass
+        else:
+            run = 0
+    df = df.iloc[start:]
+    return (df["open"].to_numpy(float), df["high"].to_numpy(float),
+            df["low"].to_numpy(float), df["close"].to_numpy(float),
+            dt.to_numpy()[start:], start)
 
 DATASETS = [
     ("US100", "M10", "US100.b_M10_202407010100_202606290340.csv"),
@@ -165,7 +195,9 @@ def simulate_px(o, h, l, c, e, entry, sl, tp, d, sign):
 
 
 def run_dataset(sym, tf, path):
-    o, h, l, c, v = load_full(path)
+    o, h, l, c, dt, cut = load_trimmed(path, TF_MIN[tf])
+    if cut:
+        print(f"  {sym} {tf}: 혼합TF 앞 {cut}봉 제외 (시작 {str(dt[0])[:16]})", flush=True)
     n = len(c)
     atr = g.atr14(h, l, c)
     rows = []

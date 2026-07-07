@@ -19,7 +19,7 @@
 //|   · 손절·익절 동시 = 손절 우선. 동시 1포지션.                      |
 //+------------------------------------------------------------------+
 #property copyright "LEVERAGE LAB"
-#property version   "1.06"
+#property version   "1.09"
 #property strict
 
 #include <Trade/Trade.mqh>
@@ -27,12 +27,14 @@
 //--- enums
 enum ENUM_DIR     { DIR_LONG=0, DIR_SHORT=1 };
 enum ENUM_ENTRY   { ENTRY_EQUALN=0, ENTRY_TRSPLIT=1 };
+enum ENUM_FIRST_ENTRY { FIRST_MARKET=0, FIRST_SKIP_MISSED=1 };
 enum ENUM_TPMODE  { TP_BREAKOUT=0, TP_AVG=1 };
 
 //--- inputs ---------------------------------------------------------
 input group "=== 전략 방향 / 진입 ==="
 input ENUM_DIR     InpDir         = DIR_LONG;      // 방향
 input ENUM_ENTRY   InpEntryMode   = ENTRY_TRSPLIT; // 진입방식 (등분N / TR분할)
+input ENUM_FIRST_ENTRY InpFirstEntryMode = FIRST_MARKET; // 1차 진입: 시장가 / 놓치면 스킵
 input int          InpSplitCount  = 3;             // 분할수 (N 또는 TR차수, 1=단일)
 input ENUM_TPMODE  InpTPMode      = TP_BREAKOUT;   // 익절기준 (돌파봉가 / 평단)
 input double       InpSL_x        = 1.5;           // 손절폭 ×TR
@@ -158,6 +160,14 @@ int CountMyPendings()
      }
    return cnt;
   }
+
+double TargetTP(bool isShort, double avgPrice)
+  {
+   if(InpTPMode==TP_AVG)
+      return isShort ? avgPrice - InpTP_x*g_brkTR : avgPrice + InpTP_x*g_brkTR;
+   return isShort ? g_brkL - InpTP_x*g_brkTR : g_brkH + InpTP_x*g_brkTR;
+  }
+
 void DeleteMyPendings()
   {
    for(int i=OrdersTotal()-1;i>=0;i--)
@@ -227,7 +237,15 @@ void PlaceEntryOrders()
    double lotsArr[4]; lotsArr[0]=InpLot1; lotsArr[1]=InpLot2; lotsArr[2]=InpLot3; lotsArr[3]=InpLot4;
    int    dig = (int)SymbolInfoInteger(_Symbol,SYMBOL_DIGITS);
    double orderSL = NormalizeDouble(g_SL,dig);
-   double breakoutTP = isShort ? g_brkL - InpTP_x*g_brkTR : g_brkH + InpTP_x*g_brkTR;
+   double plannedVol=0, plannedCost=0;
+   for(int k=0;k<N;k++)
+     {
+      double lot=(k<4)?lotsArr[k]:lotsArr[3];
+      plannedVol+=lot;
+      plannedCost+=prices[k]*lot;
+     }
+   double plannedAvg = (plannedVol>0 ? plannedCost/plannedVol : prices[0]);
+   double targetTP = TargetTP(isShort,plannedAvg);
    double ask = SymbolInfoDouble(_Symbol,SYMBOL_ASK);
    double bid = SymbolInfoDouble(_Symbol,SYMBOL_BID);
    ArrayResize(g_orderPrices,N);
@@ -237,17 +255,31 @@ void PlaceEntryOrders()
       double p=NormalizeDouble(prices[k],dig);
       g_orderPrices[k]=p;
       double lot=(k<4)?lotsArr[k]:lotsArr[3];
-      double tpRaw = (InpTPMode==TP_AVG)
-                     ? (isShort ? p - InpTP_x*g_brkTR : p + InpTP_x*g_brkTR)
-                     : breakoutTP;
-      double orderTP=NormalizeDouble(tpRaw,dig);
+      double orderTP=NormalizeDouble(targetTP,dig);
       bool ok=false;
       bool skipped=false;
       if(k==0)
         {
-         // Breakout signal is already confirmed here. The first tranche enters now.
-         ok = isShort ? g_trade.Sell(lot,_Symbol,0.0,orderSL,orderTP,InpComment)
-                      : g_trade.Buy (lot,_Symbol,0.0,orderSL,orderTP,InpComment);
+         // Most setups enter the first tranche immediately. Some setups can skip it if price
+         // already ran past the planned first entry, then leave only pullback limits active.
+         if(InpFirstEntryMode==FIRST_SKIP_MISSED)
+           {
+            if(isShort)
+              {
+               if(p >= bid) ok=g_trade.SellLimit(lot,p,_Symbol,orderSL,orderTP,ORDER_TIME_GTC,0,InpComment);
+               else        { skipped=true; PrintFormat("1st short skipped @%.*f: SellStop chase disabled",dig,p); }
+              }
+            else
+              {
+               if(p <= ask) ok=g_trade.BuyLimit(lot,p,_Symbol,orderSL,orderTP,ORDER_TIME_GTC,0,InpComment);
+               else        { skipped=true; PrintFormat("1st long skipped @%.*f: BuyStop chase disabled",dig,p); }
+              }
+           }
+         else
+           {
+            ok = isShort ? g_trade.Sell(lot,_Symbol,0.0,orderSL,orderTP,InpComment)
+                         : g_trade.Buy (lot,_Symbol,0.0,orderSL,orderTP,InpComment);
+           }
         }
       else if(isShort)
         {
@@ -367,9 +399,7 @@ void ManageExit()
    double bid=SymbolInfoDouble(_Symbol,SYMBOL_BID);
    double ask=SymbolInfoDouble(_Symbol,SYMBOL_ASK);
 
-   double TP;
-   if(InpTPMode==TP_AVG) TP = isShort ? avg - InpTP_x*g_brkTR : avg + InpTP_x*g_brkTR;
-   else                  TP = isShort ? g_brkL - InpTP_x*g_brkTR : g_brkH + InpTP_x*g_brkTR;
+   double TP=TargetTP(isShort,avg);
 
    // 손절 우선
    if(isShort)
@@ -395,7 +425,9 @@ void ApplyBrokerStops()
    if(g_SL<=0 || g_brkTR<=0) return;          // 상태 없으면 기존 브로커 SL/TP 유지
    double avg=0, vol=0;
    int npos=CountMyPositions(avg,vol);
-   if(npos==0) return;
+   int npend=CountMyPendings();
+   if(npos==0 && npend==0) return;
+   if(InpTPMode==TP_AVG && npos==0) return;
    bool isShort=(InpDir==DIR_SHORT);
    int    dig  =(int)SymbolInfoInteger(_Symbol,SYMBOL_DIGITS);
    double point=SymbolInfoDouble(_Symbol,SYMBOL_POINT);
@@ -403,17 +435,17 @@ void ApplyBrokerStops()
    double bid  =SymbolInfoDouble(_Symbol,SYMBOL_BID);
    double ask  =SymbolInfoDouble(_Symbol,SYMBOL_ASK);
 
-   double tp;
-   if(InpTPMode==TP_AVG) tp = isShort ? avg - InpTP_x*g_brkTR : avg + InpTP_x*g_brkTR;
-   else                  tp = isShort ? g_brkL - InpTP_x*g_brkTR : g_brkH + InpTP_x*g_brkTR;
+   double tp=TargetTP(isShort,avg);
    double sl=NormalizeDouble(g_SL,dig);
    tp=NormalizeDouble(tp,dig);
 
    // 스톱레벨 안쪽이면 이번 틱 보류(주문 거부 방지) — 그동안은 가상청산이 백업
-   if(isShort){ if(sl-ask < stops || bid-tp < stops) return; }
-   else       { if(bid-sl < stops || tp-ask < stops) return; }
+   bool canModifyPositions=true;
+   if(isShort){ if(sl-ask < stops || bid-tp < stops) canModifyPositions=false; }
+   else       { if(bid-sl < stops || tp-ask < stops) canModifyPositions=false; }
 
    double tol=point;
+   if(canModifyPositions)
    for(int i=PositionsTotal()-1;i>=0;i--)
      {
       ulong tkt=PositionGetTicket(i);
@@ -424,6 +456,27 @@ void ApplyBrokerStops()
       double curTP=PositionGetDouble(POSITION_TP);
       if(MathAbs(curSL-sl)>tol || MathAbs(curTP-tp)>tol)
          g_trade.PositionModify(tkt,sl,tp);
+     }
+
+   for(int i=OrdersTotal()-1;i>=0;i--)
+     {
+      ulong tkt=OrderGetTicket(i);
+      if(tkt==0) continue;
+      if(OrderGetString(ORDER_SYMBOL)!=_Symbol) continue;
+      if(OrderGetInteger(ORDER_MAGIC)!=InpMagic) continue;
+      double price=OrderGetDouble(ORDER_PRICE_OPEN);
+      bool pendingStopsOk = isShort ? (sl-price>=stops && price-tp>=stops)
+                                    : (price-sl>=stops && tp-price>=stops);
+      if(!pendingStopsOk) continue;
+      double curSL=OrderGetDouble(ORDER_SL);
+      double curTP=OrderGetDouble(ORDER_TP);
+      if(MathAbs(curSL-sl)>tol || MathAbs(curTP-tp)>tol)
+        {
+         ENUM_ORDER_TYPE_TIME tt=(ENUM_ORDER_TYPE_TIME)OrderGetInteger(ORDER_TYPE_TIME);
+         datetime exp=(datetime)OrderGetInteger(ORDER_TIME_EXPIRATION);
+         double stopLimit=OrderGetDouble(ORDER_PRICE_STOPLIMIT);
+         g_trade.OrderModify(tkt,price,sl,tp,tt,exp,stopLimit);
+        }
      }
   }
 

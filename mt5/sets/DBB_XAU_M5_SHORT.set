@@ -7,10 +7,10 @@
 ; ============================================================
 InpDir=1
 InpEntryMode=0
-InpSplitCount=4
-InpTPMode=1
-InpSL_x=0.5
-InpTP_x=3.0
+InpSplitCount=3
+InpTPMode=0
+InpSL_x=3.0
+InpTP_x=1.25
 InpMAPeriod=200
 InpUseConfirm=false
 InpConfirmWin=5

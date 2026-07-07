@@ -195,6 +195,21 @@ setInterval(()=>{ $("#clock").textContent = new Date().toLocaleTimeString("ko-KR
 
 const LAB_TABS=["compare","allstrat","projection","rolling","signal","underwater","tranche","shannon","rsirev"];
 let activeLabTab="compare";
+/* 탭 그룹: 상단 탭 하나 아래에 서브탭바로 관련 탭을 묶음 (수익율 연구소와 동일 패턴) */
+const TAB_GROUPS={dbb:["doubleb","doublebc"],inflect:["revdb","revdbc","revema","trsig"],neck:["neckline","nlpb"]};
+const groupActive={dbb:"doubleb",inflect:"revdb",neck:"neckline"};
+function showGroup(gid){
+  $$(".tabpane").forEach(p=>p.hidden=true);
+  const wrap=document.getElementById("pane-grp-"+gid); if(wrap)wrap.hidden=false;
+  const p=document.getElementById("pane-"+groupActive[gid]); if(p)p.hidden=false;
+}
+Object.keys(TAB_GROUPS).forEach(gid=>{
+  $$("#grp_"+gid+"_bar button").forEach(b=>b.onclick=()=>{
+    groupActive[gid]=b.dataset.t;
+    $$("#grp_"+gid+"_bar button").forEach(x=>x.classList.toggle("on",x===b));
+    showGroup(gid);
+  });
+});
 $$("#tabbar button").forEach(b=>b.onclick=()=>{
   const t=b.dataset.tab;
   $$("#tabbar button").forEach(x=>x.classList.toggle("on", x===b));
@@ -202,6 +217,8 @@ $$("#tabbar button").forEach(b=>b.onclick=()=>{
     $$(".tabpane").forEach(p=>p.hidden=true);
     const lab=document.getElementById("pane-lab"); if(lab)lab.hidden=false;
     const sub=document.getElementById("pane-"+activeLabTab); if(sub)sub.hidden=false;
+  }else if(t&&t.indexOf("grp-")===0){
+    showGroup(t.slice(4));
   }else{
     $$(".tabpane").forEach(p=>p.hidden = p.id!=="pane-"+t);
     if(t==="saved")renderSavedStrategies();

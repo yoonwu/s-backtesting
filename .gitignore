@@ -1,2 +1,7 @@
 __pycache__/
 *.pyc
+
+# trader secrets
+volswitch/trader/.env
+volswitch/trader/trader.log
+volswitch/trader/trader_state.json

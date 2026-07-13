@@ -28,7 +28,8 @@ def rsi_wilder(close, n=14):
     return 100 - 100 / (1 + up / dn.replace(0, np.nan))
 
 
-def main():
+def compute_state():
+    """QQQ 데이터를 받아 현재 신호 상태 dict를 반환 (트레이더에서도 재사용)."""
     df = yf.download("QQQ", period="3y", auto_adjust=True, progress=False)
     df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
     close = df["Close"].dropna()
@@ -48,7 +49,7 @@ def main():
     exception = (px < ma_ex and rsi14 < EX_RSI) or (dd <= EX_DD)
 
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    state = dict(
+    return dict(
         asof=str(close.index[-1].date()), computed_at=now,
         qqq=round(px, 2), ma150=round(ma_agg, 2), ma200=round(ma_def, 2),
         ma400=round(ma_ex, 2), vol20=round(vol20, 1), rsi14=round(rsi14, 1),
@@ -57,6 +58,11 @@ def main():
         signal_defensive="HOLD" if sig_def else "CASH",
         exception_buy=bool(exception),
     )
+
+
+def main():
+    state = compute_state()
+    exception = state["exception_buy"]
 
     prev = {}
     if os.path.exists(STATE):

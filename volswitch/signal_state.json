@@ -1,0 +1,14 @@
+{
+  "asof": "2026-07-10",
+  "computed_at": "2026-07-13T03:54:38+00:00",
+  "qqq": 725.51,
+  "ma150": 646.42,
+  "ma200": 636.63,
+  "ma400": 578.85,
+  "vol20": 30.0,
+  "rsi14": 53.0,
+  "dd_from_ath": -2.7,
+  "signal_aggressive": "HOLD",
+  "signal_defensive": "CASH",
+  "exception_buy": false
+}

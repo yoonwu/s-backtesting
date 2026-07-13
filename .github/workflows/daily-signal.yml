@@ -1,0 +1,82 @@
+name: volswitch-daily-signal
+
+# 매 거래일 미국장 마감 ~30분 전에 볼스위칭 신호 계산.
+# 신호가 바뀐 날만 GitHub 이슈 생성(→ 이메일/앱 푸시) + 텔레그램(옵션).
+# 주의: cron 스케줄은 저장소의 "기본 브랜치"에 이 파일이 있어야 작동한다.
+#       머지 전에는 Actions 탭에서 수동 실행(workflow_dispatch)으로 테스트.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "35 19 * * 1-5"   # 15:35 ET (서머타임)
+    - cron: "35 20 * * 1-5"   # 15:35 ET (표준시)
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  signal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guard - only within 30min before NYSE close
+        id: guard
+        run: |
+          H=$(TZ=America/New_York date +%H)
+          DOW=$(TZ=America/New_York date +%u)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "run=yes" >> "$GITHUB_OUTPUT"
+          elif [ "$H" = "15" ] && [ "$DOW" -le 5 ]; then
+            echo "run=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-python@v5
+        if: steps.guard.outputs.run == 'yes'
+        with:
+          python-version: "3.12"
+
+      - name: Compute signal
+        if: steps.guard.outputs.run == 'yes'
+        run: |
+          pip install -q yfinance pandas numpy
+          python volswitch/daily_signal.py
+
+      - name: Notify on signal change (GitHub issue)
+        if: steps.guard.outputs.run == 'yes'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -f volswitch/signal_changed.txt ]; then
+            CHANGE=$(cat volswitch/signal_changed.txt)
+            BODY=$(python volswitch/daily_signal.py 2>/dev/null || true)
+            gh issue create \
+              --repo "${{ github.repository }}" \
+              --title "🚨 볼스위칭 신호 변경: ${CHANGE} ($(TZ=America/New_York date +%Y-%m-%d))" \
+              --body "$(cat volswitch/signal_state.json)"
+          fi
+
+      - name: Notify on signal change (Telegram, optional)
+        if: steps.guard.outputs.run == 'yes'
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -f volswitch/signal_changed.txt ] && [ -n "$TG_TOKEN" ] && [ -n "$TG_CHAT" ]; then
+            CHANGE=$(cat volswitch/signal_changed.txt)
+            curl -sS "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+              -d chat_id="${TG_CHAT}" \
+              -d text="🚨 볼스위칭 신호 변경: ${CHANGE} — 오늘 장마감(MOC) 주문 필요. 상세: github.com/${{ github.repository }}/issues"
+          fi
+
+      - name: Commit updated state
+        if: steps.guard.outputs.run == 'yes'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          rm -f volswitch/signal_changed.txt
+          git add volswitch/signal_state.json
+          git commit -m "signal: $(TZ=America/New_York date +%Y-%m-%d) state update" || echo "no change"
+          git push

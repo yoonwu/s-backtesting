@@ -1,0 +1,97 @@
+name: fetch-market-data
+
+# 컨테이너 세션은 금융 데이터 소스로의 아웃바운드가 차단되어 있어서,
+# 인터넷이 열려 있는 GitHub 러너가 대신 일봉을 받아 브랜치에 커밋한다.
+# 트리거: 이 파일이 푸시될 때 + 수동(workflow_dispatch)
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/fetch-data.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download daily OHLCV (yfinance primary, stooq fallback)
+        run: |
+          pip install -q yfinance pandas
+          python - <<'EOF'
+          import sys, time, urllib.request
+          import pandas as pd
+          import yfinance as yf
+
+          OUT = "volswitch/data"
+          import os; os.makedirs(OUT, exist_ok=True)
+
+          # (yahoo ticker, 파일명, stooq symbol, 최소 행수)
+          TICKERS = [
+              ("QQQ",  "qqq",  "qqq.us",  6000),
+              ("TQQQ", "tqqq", "tqqq.us", 3700),
+              ("SOXL", "soxl", "soxl.us", 3600),
+              ("SOXX", "soxx", "soxx.us", 5500),
+              ("^NDX", "ndx",  "%5Endx",  6000),
+          ]
+
+          def from_yf(yt):
+              df = yf.download(yt, period="max", auto_adjust=True, progress=False)
+              if df is None or len(df) == 0:
+                  return None
+              df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
+              df = df.reset_index()[["Date", "Open", "High", "Low", "Close", "Volume"]]
+              df["Date"] = pd.to_datetime(df["Date"]).dt.strftime("%Y-%m-%d")
+              return df
+
+          def from_stooq(sym):
+              url = f"https://stooq.com/q/d/l/?s={sym}&i=d"
+              raw = urllib.request.urlopen(url, timeout=30).read().decode()
+              if not raw.startswith("Date,"):
+                  return None
+              from io import StringIO
+              df = pd.read_csv(StringIO(raw))
+              if "Volume" not in df.columns:
+                  df["Volume"] = 0
+              return df[["Date", "Open", "High", "Low", "Close", "Volume"]]
+
+          failed = []
+          for yt, name, sq, min_rows in TICKERS:
+              df = None
+              try:
+                  df = from_yf(yt)
+              except Exception as e:
+                  print(f"{yt}: yfinance failed ({e})")
+              if df is None or len(df) < min_rows:
+                  print(f"{yt}: falling back to stooq ({sq})")
+                  try:
+                      df = from_stooq(sq)
+                  except Exception as e:
+                      print(f"{yt}: stooq failed ({e})")
+                      df = None
+                  time.sleep(2)
+              if df is None or len(df) < min_rows:
+                  failed.append(yt)
+                  print(f"{yt}: FAILED (rows={0 if df is None else len(df)})")
+                  continue
+              df.to_csv(f"{OUT}/{name}.csv", index=False, float_format="%.6f")
+              print(f"{yt}: {len(df)} rows  {df['Date'].iloc[0]} ~ {df['Date'].iloc[-1]}")
+
+          if failed:
+              sys.exit(f"failed tickers: {failed}")
+          EOF
+
+      - name: Commit data back to branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add volswitch/data/
+          git commit -m "data: QQQ/TQQQ/SOXL/SOXX/NDX daily (adjusted, via Actions runner)" || echo "no changes"
+          git push

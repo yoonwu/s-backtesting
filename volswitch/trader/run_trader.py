@@ -113,9 +113,12 @@ def main():
         st["exception_latch"] = False
 
     # latch=True인 보유는 예외매수 포지션 → 신호가 다시 켜질 때까지 매도하지 않음
+    min_topup = float(os.environ.get("MIN_TOPUP_USD", "1000"))
     action = None
     if hold and not in_market:
         action = ("BUY", "정규 진입: 신호 HOLD, 현금 전량 매수(MOC)")
+    elif hold and in_market and cash is not None and cash >= min_topup:
+        action = ("BUY", f"적립 추가 매수: 신호 HOLD, 입금분 ${cash:,.0f} 매수(MOC)")
     elif not hold and in_market and not st.get("exception_latch"):
         action = ("SELL", "정규 청산: 신호 CASH, 전량 매도(MOC)")
     elif not hold and not in_market and exception and not st.get("exception_latch"):

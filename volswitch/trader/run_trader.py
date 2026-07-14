@@ -34,7 +34,19 @@ from toss_client import TossClient  # noqa: E402
 STATE_FILE = os.path.join(HERE, "trader_state.json")
 SYMBOL = os.environ.get("SYMBOL", "TQQQ")
 DRY = os.environ.get("DRY_RUN", "1") != "0"
-EX_FRAC = float(os.environ.get("EXCEPTION_FRACTION", "0.5"))
+EX_FRAC = float(os.environ.get("EXCEPTION_FRACTION", "1.0"))
+EX_STOP = float(os.environ.get("EXCEPTION_STOP", "0.30"))  # 예외 포지션 추가하락 손절 (0=끔)
+
+
+def parse_price(raw) -> float:
+    """시세 응답에서 현재가 추출. 실 응답 스키마 확인 후 필요시 키 추가."""
+    if isinstance(raw, (int, float)):
+        return float(raw)
+    for k in ("price", "last", "close", "tradePrice", "currentPrice", "lastPrice"):
+        v = raw.get(k) if isinstance(raw, dict) else None
+        if v is not None:
+            return float(v)
+    raise RuntimeError(f"시세 파싱 실패: {str(raw)[:200]}")
 
 
 def notify(msg: str):
@@ -111,11 +123,12 @@ def main():
         print(json.dumps(raw, ensure_ascii=False)[:1500])
     in_market = qty > 0
 
-    # 예외매수 latch 해제: 정규 신호가 켜지면 정상 규칙에 인계
+    # 예외매수 latch 해제: 정규 신호가 켜지면 정상 규칙에 인계 (손절 블록도 해제)
     if hold:
         st["exception_latch"] = False
+        st["exception_blocked"] = False
 
-    # latch=True인 보유는 예외매수 포지션 → 신호가 다시 켜질 때까지 매도하지 않음
+    # latch=True인 보유는 예외매수 포지션 → 정규 재점등 또는 손절까지 유지
     min_topup = float(os.environ.get("MIN_TOPUP_USD", "1000"))
     action = None
     if hold and not in_market:
@@ -124,7 +137,14 @@ def main():
         action = ("BUY", f"적립 추가 매수: 신호 HOLD, 입금분 ${cash:,.0f} 매수(MOC)")
     elif not hold and in_market and not st.get("exception_latch"):
         action = ("SELL", "정규 청산: 신호 CASH, 전량 매도(MOC)")
-    elif not hold and not in_market and exception and not st.get("exception_latch"):
+    elif not hold and in_market and st.get("exception_latch") and EX_STOP > 0:
+        # 예외 포지션 손절 체크: 매수가 대비 추가 -EX_STOP 이탈 시 청산 + 재발동 금지
+        entry = st.get("exception_entry")
+        cur = parse_price(client.price(SYMBOL))
+        if entry and cur < entry * (1 - EX_STOP):
+            action = ("EXSTOP", f"예외 포지션 손절: ${cur:,.2f} < 매수가 ${entry:,.2f}×{1-EX_STOP:.2f} — 전량 매도(MOC)")
+    elif (not hold and not in_market and exception
+          and not st.get("exception_latch") and not st.get("exception_blocked")):
         action = ("EXBUY", f"예외매수: 트리거 발동, 현금 {EX_FRAC:.0%} 매수(MOC)")
 
     line = (f"[볼스위칭 트레이더] {sig['asof']} 신호={sig['signal_aggressive']} "
@@ -141,9 +161,12 @@ def main():
         notify("(DRY-RUN) " + msg)
     else:
         try:
-            if side == "SELL":
+            if side in ("SELL", "EXSTOP"):
                 res = client.order(SYMBOL, "SELL", order_type="MARKET",
                                    qty=qty, tif="CLS")
+                if side == "EXSTOP":
+                    st["exception_latch"] = False
+                    st["exception_blocked"] = True  # 정규 재점등까지 재발동 금지
             else:
                 if cash is None:
                     raise RuntimeError("현금 잔고 파싱 실패 — parse_holdings() 수정 필요")
@@ -152,7 +175,8 @@ def main():
                                    amount=amt, tif="CLS")
             if side == "EXBUY":
                 st["exception_latch"] = True
-            st["position"] = "CASH" if side == "SELL" else SYMBOL
+                st["exception_entry"] = parse_price(client.price(SYMBOL))
+            st["position"] = "CASH" if side in ("SELL", "EXSTOP") else SYMBOL
             notify("✅ " + msg + f"\n주문응답: {json.dumps(res, ensure_ascii=False)[:300]}")
         except Exception as e:
             notify(f"🚨 주문 실패 — 수동 확인 필요!\n{msg}\n오류: {e}")

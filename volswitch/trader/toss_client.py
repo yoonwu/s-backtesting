@@ -52,6 +52,10 @@ class TossClient:
     def holdings(self) -> dict:
         return self._req("GET", "/api/v1/holdings")
 
+    def usd_cash(self) -> float:
+        """주문가능 USD 현금. TODO: probe_cash.ps1로 실제 endpoint 확인 후 확정."""
+        raise RuntimeError("현금 조회 endpoint 미확정 — probe_cash.ps1을 실행해 결과를 공유해 주세요")
+
     def order(self, symbol: str, side: str, *, order_type: str = "MARKET",
               qty=None, amount=None, price=None, tif: str = "CLS") -> dict:
         """side: BUY/SELL. 기본은 MOC(MARKET+CLS).

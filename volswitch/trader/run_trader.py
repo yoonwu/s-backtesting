@@ -73,28 +73,20 @@ def save_state(st: dict):
 
 
 def parse_holdings(raw: dict, symbol: str):
-    """보유 수량·현금(USD) 추출. 실 응답 스키마 확인 후 필요시 수정.
+    """보유 수량·최근가 추출 (토스 실응답: result.items[].quantity 문자열).
 
-    dry-run 첫 실행 시 raw를 그대로 출력하므로, 그 출력을 보고
-    아래 키 후보가 안 맞으면 고쳐서 쓸 것.
+    현금(USD)은 이 엔드포인트에 없음 → 별도 엔드포인트(probe_cash로 확인)에서 조회.
     """
-    qty, cash = 0.0, None
-    items = raw.get("holdings") or raw.get("items") or raw.get("data") or []
-    if isinstance(items, dict):
-        items = items.get("items", [])
+    qty, last = 0.0, None
+    res = raw.get("result", raw) or {}
+    items = res.get("items") or res.get("holdings") or []
     for it in items:
-        sym = it.get("symbol") or it.get("ticker") or it.get("stockCode")
+        sym = it.get("symbol") or it.get("ticker")
         if sym == symbol:
-            qty = float(it.get("quantity") or it.get("qty")
-                        or it.get("holdingQuantity") or 0)
-    cash_obj = raw.get("cash") if isinstance(raw.get("cash"), dict) else {}
-    for k in ("usdCash", "cashUsd", "availableCashUsd", "orderableAmountUsd",
-              "depositUsd", "availableAmount"):
-        v = raw.get(k, cash_obj.get(k))
-        if v is not None:
-            cash = float(v)
-            break
-    return qty, cash
+            qty = float(it.get("quantity") or 0)
+            lp = it.get("lastPrice")
+            last = float(lp) if lp else None
+    return qty, last
 
 
 def main():
@@ -110,7 +102,12 @@ def main():
 
     client = TossClient()
     raw = client.holdings()
-    qty, cash = parse_holdings(raw, SYMBOL)
+    qty, last_price = parse_holdings(raw, SYMBOL)
+    try:
+        cash = client.usd_cash()
+    except Exception as e:
+        cash = None
+        print(f"(현금 조회 실패: {str(e)[:150]})")
 
     # 히스테리시스의 '이전 상태'는 실제 포지션이 진실의 원천
     # (예외매수 latch 보유는 정규 신호상 CASH였으므로 prev_hold=False)
@@ -118,9 +115,6 @@ def main():
     sig = compute_state(prev_hold)
     hold = sig["signal_aggressive"] == "HOLD"
     exception = sig["exception_buy"] and EX_FRAC > 0
-    if DRY:
-        print("--- holdings raw (스키마 확인용) ---")
-        print(json.dumps(raw, ensure_ascii=False)[:1500])
     in_market = qty > 0
 
     # 예외매수 latch 해제: 정규 신호가 켜지면 정상 규칙에 인계 (손절 블록도 해제)
@@ -140,7 +134,7 @@ def main():
     elif not hold and in_market and st.get("exception_latch") and EX_STOP > 0:
         # 예외 포지션 손절 체크: 매수가 대비 추가 -EX_STOP 이탈 시 청산 + 재발동 금지
         entry = st.get("exception_entry")
-        cur = parse_price(client.price(SYMBOL))
+        cur = last_price if last_price else parse_price(client.price(SYMBOL))
         if entry and cur < entry * (1 - EX_STOP):
             action = ("EXSTOP", f"예외 포지션 손절: ${cur:,.2f} < 매수가 ${entry:,.2f}×{1-EX_STOP:.2f} — 전량 매도(MOC)")
     elif (not hold and not in_market and exception

@@ -1,0 +1,70 @@
+//@version=6
+// 볼스위칭 신호 인디케이터 — s-backtesting/volswitch 전략의 트레이딩뷰 시각화
+// 규칙: QQQ 종가 > MA150 AND 20일 실현변동성(연율) < 32% → HOLD(TQQQ), 아니면 CASH
+// 예외매수: (QQQ < MA400 AND RSI14 < 30) OR 고점대비 -40%
+// 어떤 차트(TQQQ 등)에 올려도 신호는 QQQ 일봉 기준으로 계산된다.
+indicator("볼스위칭 신호 (QQQ MA150 + vol<32)", overlay = true)
+
+maLen    = input.int(150,   "추세 MA 기간 (공격형 150 / 방어형 200)")
+volWin   = input.int(20,    "변동성 윈도우 (일)")
+volTh    = input.float(32.0, "변동성 임계값 % (공격형 32 / 방어형 28)")
+exMaLen  = input.int(400,   "예외매수: MA 기간")
+exRsiTh  = input.float(30.0, "예외매수: RSI14 기준")
+exDdTh   = input.float(40.0, "예외매수: 고점대비 낙폭 %")
+showMa   = input.bool(false, "QQQ MA 라인 표시 (QQQ 차트에서만 켤 것)")
+
+// ---- QQQ 일봉 기준 계산 (pandas와 일치: 표본표준편차 보정 sqrt(n/(n-1))) ----
+calc() =>
+    ret  = close / close[1] - 1
+    vol  = ta.stdev(ret, volWin) * math.sqrt(volWin / (volWin - 1.0)) * math.sqrt(252) * 100
+    ma   = ta.sma(close, maLen)
+    exMa = ta.sma(close, exMaLen)
+    rsi  = ta.rsi(close, 14)
+    var float ath = na
+    ath := na(ath) ? close : math.max(ath, close)
+    dd = (close / ath - 1) * 100
+    [close, ma, vol, exMa, rsi, dd]
+
+[qC, qMa, qVol, qExMa, qRsi, qDd] = request.security("NASDAQ:QQQ", "D", calc())
+
+hold      = qC > qMa and qVol < volTh
+exception = (qC < qExMa and qRsi < exRsiTh) or (qDd <= -exDdTh)
+
+// ---- 시각화 ----
+bgcolor(hold ? color.new(color.green, 88) : color.new(color.red, 93))
+plot(showMa ? qMa : na,   "QQQ MA(추세)", color = color.orange, linewidth = 2)
+plot(showMa ? qExMa : na, "QQQ MA(예외)", color = color.gray)
+
+entry  = hold and not hold[1]
+exit_  = not hold and hold[1]
+exBuy  = exception and not exception[1] and not hold
+plotshape(entry, "진입(MOC 매수)",  shape.triangleup,   location.belowbar, color.green,  size = size.small)
+plotshape(exit_, "청산(MOC 매도)",  shape.triangledown, location.abovebar, color.red,    size = size.small)
+plotshape(exBuy, "예외매수 트리거", shape.diamond,      location.belowbar, color.orange, size = size.small)
+
+// ---- 상태 테이블 (signal_state.json과 동일 항목) ----
+var table t = table.new(position.top_right, 2, 7, border_width = 1)
+if barstate.islast
+    stateTxt = hold ? "HOLD" : "CASH"
+    stateCol = hold ? color.new(color.green, 60) : color.new(color.red, 60)
+    table.cell(t, 0, 0, "신호",        bgcolor = stateCol, text_color = color.white)
+    table.cell(t, 1, 0, stateTxt,      bgcolor = stateCol, text_color = color.white, text_size = size.large)
+    table.cell(t, 0, 1, "QQQ")
+    table.cell(t, 1, 1, str.tostring(qC, "#.##"))
+    table.cell(t, 0, 2, "MA" + str.tostring(maLen))
+    table.cell(t, 1, 2, str.tostring(qMa, "#.##") + (qC > qMa ? "  위 ✓" : "  아래 ✗"))
+    table.cell(t, 0, 3, str.tostring(volWin) + "일 변동성")
+    table.cell(t, 1, 3, str.tostring(qVol, "#.#") + "%" + (qVol < volTh ? " ✓" : " ✗"))
+    table.cell(t, 0, 4, "RSI14")
+    table.cell(t, 1, 4, str.tostring(qRsi, "#.#"))
+    table.cell(t, 0, 5, "고점대비")
+    table.cell(t, 1, 5, str.tostring(qDd, "#.#") + "%")
+    table.cell(t, 0, 6, "예외매수",
+         bgcolor = exception ? color.new(color.orange, 40) : na)
+    table.cell(t, 1, 6, exception ? "⚠ 발동" : "미발동",
+         bgcolor = exception ? color.new(color.orange, 40) : na)
+
+// ---- 알림 (생성 시 "봉 마감 시 1회"로 설정할 것) ----
+alertcondition(entry, "볼스위칭 진입",     "볼스위칭: CASH→HOLD — 오늘 장마감 MOC 전량 매수")
+alertcondition(exit_, "볼스위칭 청산",     "볼스위칭: HOLD→CASH — 오늘 장마감 MOC 전량 매도")
+alertcondition(exBuy, "볼스위칭 예외매수", "볼스위칭: 예외매수 트리거 발동 — 사전 결정 비중만 매수")

@@ -27,23 +27,27 @@ for k in ("price", "last", "close", "tradePrice", "currentPrice", "lastPrice"):
 if not cur:
     sys.exit(f"현재가 파싱 실패: {str(px_raw)[:300]}")
 
-limit = round(cur * 0.5, 2)
-print(f"{SYMBOL} 현재가 ${cur} → 테스트 지정가 ${limit} (체결 불가)")
-if input("1주 지정가 매수 후 즉시 취소합니다. 진행? (y 입력): ").strip().lower() != "y":
+def place_and_cancel(side: str, limit: float):
+    print(f"\n--- {side} 1주 @ ${limit} (체결 불가 가격) ---")
+    order = client.order(SYMBOL, side, order_type="LIMIT", qty=1,
+                         price=limit, tif="DAY")
+    print("✅ 접수:", json.dumps(order, ensure_ascii=False)[:400])
+    res_o = order.get("result", order)
+    oid = res_o.get("orderId") or res_o.get("id")
+    if not oid:
+        sys.exit("⚠ orderId를 못 찾음 — 위 응답 공유 + 앱에서 주문 직접 취소!")
+    time.sleep(1)
+    cancel = client._req("POST", f"/api/v1/orders/{oid}/cancel", json={})
+    print("✅ 취소:", json.dumps(cancel, ensure_ascii=False)[:300])
+
+
+buy_limit = round(cur * 0.5, 2)    # 현재가 절반 매수 → 체결 불가
+sell_limit = round(cur * 2.0, 2)   # 현재가 2배 매도 → 체결 불가
+print(f"{SYMBOL} 현재가 ${cur}")
+print(f"테스트: 매수 1주 @ ${buy_limit} / 매도 1주 @ ${sell_limit} — 둘 다 접수 직후 취소")
+if input("진행? (y 입력): ").strip().lower() != "y":
     sys.exit("취소했습니다.")
 
-order = client.order(SYMBOL, "BUY", order_type="LIMIT", qty=1,
-                     price=limit, tif="DAY")
-print("✅ 주문 접수 응답:")
-print(json.dumps(order, ensure_ascii=False, indent=2)[:800])
-
-res_o = order.get("result", order)
-oid = res_o.get("orderId") or res_o.get("id")
-if not oid:
-    sys.exit("⚠ orderId를 응답에서 못 찾음 — 위 응답을 공유해 주세요. (앱에서 주문을 직접 취소하세요!)")
-
-time.sleep(1)
-cancel = client._req("POST", f"/api/v1/orders/{oid}/cancel", json={})
-print("✅ 취소 응답:")
-print(json.dumps(cancel, ensure_ascii=False, indent=2)[:500])
-print("\n주문·취소 API 검증 완료. 앱의 주문내역에서 '취소됨' 상태도 확인해 보세요.")
+place_and_cancel("BUY", buy_limit)
+place_and_cancel("SELL", sell_limit)
+print("\n✅ 매수·매도 주문 + 취소 전부 검증 완료. 앱 주문내역에서 '취소됨' 2건 확인해 보세요.")

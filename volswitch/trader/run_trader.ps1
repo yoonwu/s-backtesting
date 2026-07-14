@@ -1,4 +1,4 @@
-# 볼스위칭 봇 실행기 (Windows) — .env를 읽어 환경변수로 만들고 봇 실행
+# 볼스위칭 봇 실행기 (Windows) — .env 로드 → 봇 실행 → trader.log에 기록
 Set-Location $PSScriptRoot
 if (-not (Test-Path ".env")) {
     Write-Host ".env 파일이 없습니다. copy .env.example .env 후 키를 채우세요." -ForegroundColor Red
@@ -9,7 +9,6 @@ Get-Content .env | ForEach-Object {
         [System.Environment]::SetEnvironmentVariable($Matches[1].Trim(), $Matches[2].Trim())
     }
 }
-python run_trader.py
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "봇 실행 중 오류 발생 (위 메시지 확인)" -ForegroundColor Red
-}
+$log = Join-Path $PSScriptRoot "trader.log"
+"`n[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] ----- 실행 -----" | Out-File -Append -Encoding utf8 $log
+python run_trader.py 2>&1 | Tee-Object -FilePath $log -Append

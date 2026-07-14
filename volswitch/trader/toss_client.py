@@ -53,29 +53,16 @@ class TossClient:
         return self._req("GET", "/api/v1/holdings")
 
     def usd_cash(self) -> float:
-        """매수 가능 USD 현금 (GET /api/v1/buying-power)."""
+        """매수 가능 USD 현금.
+
+        실응답: {"result": {"currency": "USD", "cashBuyingPower": "3.64"}}
+        """
         raw = self._req("GET", "/api/v1/buying-power?currency=USD")
-
-        def find_usd(node):
-            if isinstance(node, dict):
-                for k, v in node.items():
-                    if k.lower() == "usd" and v is not None:
-                        return float(v)
-                for v in node.values():
-                    r = find_usd(v)
-                    if r is not None:
-                        return r
-            elif isinstance(node, list):
-                for v in node:
-                    r = find_usd(v)
-                    if r is not None:
-                        return r
-            return None
-
-        usd = find_usd(raw)
-        if usd is None:
-            raise RuntimeError(f"buying-power 응답에서 usd를 못 찾음: {str(raw)[:300]}")
-        return usd
+        res = raw.get("result", raw) or {}
+        v = res.get("cashBuyingPower")
+        if v is None:
+            raise RuntimeError(f"buying-power 응답에서 cashBuyingPower 없음: {str(raw)[:300]}")
+        return float(v)
 
     def order(self, symbol: str, side: str, *, order_type: str = "MARKET",
               qty=None, amount=None, price=None, tif: str = "CLS") -> dict:

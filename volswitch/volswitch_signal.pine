@@ -47,11 +47,15 @@ calc() =>
 exception = (qC < qExMa and qRsi < exRsiTh) or (qDd <= -exDdTh)
 
 // ---- 시각화 ----
+// MA를 차트 심볼 단위로 환산해서 그림: 라인 = 차트가격 × (QQQ_MA / QQQ가격).
+// QQQ 차트에서는 원값 그대로이고, TQQQ/NDX 등 다른 차트에서는 "QQQ가 MA에
+// 닿는 순간 라인이 차트 가격에 닿는" 비율 보존 형태로 표시된다.
+ratio = close / qC
 bgcolor(hold ? color.new(color.green, 88) : color.new(color.red, 93))
-plot(showMa ? qMa : na,   "QQQ MA(추세)",   color = color.orange, linewidth = 2)
-plot(showMa ? qMa2 : na,  "QQQ 비교 MA#2",  color = color.blue)
-plot(showMa ? qMa3 : na,  "QQQ 비교 MA#3",  color = color.purple)
-plot(showMa ? qExMa : na, "QQQ MA(예외매수)", color = color.gray)
+plot(showMa ? qMa * ratio : na,   "MA(추세, 차트단위 환산)", color = color.orange, linewidth = 2)
+plot(showMa ? qMa2 * ratio : na,  "비교 MA#2",             color = color.blue)
+plot(showMa ? qMa3 * ratio : na,  "비교 MA#3",             color = color.purple)
+plot(showMa ? qExMa * ratio : na, "MA(예외매수)",           color = color.gray)
 
 entry  = hold and not hold[1]
 exit_  = not hold and hold[1]

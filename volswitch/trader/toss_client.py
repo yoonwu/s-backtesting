@@ -64,6 +64,12 @@ class TossClient:
             raise RuntimeError(f"buying-power 응답에서 cashBuyingPower 없음: {str(raw)[:300]}")
         return float(v)
 
+    def krw_cash(self) -> float:
+        """원화 매수가능금액 (환전 대기 자금 감지용 — API에 환전 기능은 없음)."""
+        raw = self._req("GET", "/api/v1/buying-power?currency=KRW")
+        res = raw.get("result", raw) or {}
+        return float(res.get("cashBuyingPower") or 0)
+
     def order(self, symbol: str, side: str, *, order_type: str = "MARKET",
               qty=None, amount=None, price=None, tif: str = "CLS") -> dict:
         """side: BUY/SELL. 기본은 MOC(MARKET+CLS).

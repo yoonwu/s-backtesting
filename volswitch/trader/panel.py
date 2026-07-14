@@ -129,6 +129,12 @@ class Panel(tk.Tk):
                             if i.get("symbol") == os.environ.get("SYMBOL", "TQQQ")), 0.0)
                 cash = c.usd_cash()
                 acct = f"보유 TQQQ {qty:.4g}주  ·  현금 ${cash:,.2f}"
+                try:
+                    krw = c.krw_cash()
+                    if krw >= 100000:
+                        acct += f"  ·  ⚠원화 ₩{krw:,.0f} (앱에서 환전 필요!)"
+                except Exception:
+                    pass
             except Exception as e:
                 acct = f"계좌 조회 실패: {str(e)[:60]}"
             txt = ("신호: HOLD — TQQQ 보유 구간" if hold

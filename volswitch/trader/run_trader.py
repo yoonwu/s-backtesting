@@ -112,6 +112,12 @@ def main():
     except Exception as e:
         cash = None
         print(f"(현금 조회 실패: {str(e)[:150]})")
+    try:
+        krw = client.krw_cash()
+        if krw >= 500000:  # 환전 안 된 원화 발견 → 알림 (API에 환전 기능 없음)
+            notify(f"⚠ 토스 계좌에 원화 ₩{krw:,.0f}가 환전 대기 중 — 앱에서 달러로 환전해야 봇이 매수에 사용합니다")
+    except Exception:
+        pass
 
     # 히스테리시스의 '이전 상태'는 실제 포지션이 진실의 원천
     # (예외매수 latch 보유는 정규 신호상 CASH였으므로 prev_hold=False)

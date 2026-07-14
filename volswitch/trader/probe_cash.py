@@ -1,33 +1,36 @@
 #!/usr/bin/env python3
-"""현금(예수금/주문가능금액) 조회 endpoint 탐색 도구."""
+"""orderable-amount endpoint 파라미터 탐색 (에러 전문을 그대로 출력)."""
 import json
 import os
 import sys
+
+import requests
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from toss_client import TossClient  # noqa: E402
 
 client = TossClient()
-candidates = [
-    "/api/v1/accounts/cash",
-    "/api/v1/cash",
-    "/api/v1/deposits",
-    "/api/v1/accounts/deposit",
-    "/api/v1/balance",
-    "/api/v1/accounts/balance",
-    "/api/v1/orderable-amount",
-    "/api/v1/orders/orderable-amount?symbol=TQQQ",
-    "/api/v1/buyable-amount?symbol=TQQQ",
+token = client._token()
+H = {"Authorization": f"Bearer {token}",
+     "X-Tossinvest-Account": client.account}
+BASE = client.base + "/api/v1/orders/orderable-amount"
+
+gets = [
+    "?symbol=TQQQ",
+    "?symbol=TQQQ&orderType=MARKET",
+    "?symbol=TQQQ&side=BUY",
+    "?symbol=TQQQ&orderType=LIMIT&price=100",
+    "?symbol=TQQQ&price=100",
 ]
-found = False
-for path in candidates:
-    try:
-        res = client._req("GET", path)
-        print(f"✅ {path}:")
-        print(json.dumps(res, ensure_ascii=False, indent=2)[:1200])
-        print()
-        found = True
-    except Exception as e:
-        print(f"✗ {path}: {str(e)[:110]}")
-if not found:
-    print("\n전부 실패 — 개발자센터 문서에서 '예수금/주문가능금액' API 경로를 봐주세요.")
+for qs in gets:
+    r = requests.get(BASE + qs, headers=H, timeout=15)
+    tag = "✅" if r.status_code == 200 else "✗"
+    print(f"{tag} GET {qs} → {r.status_code}")
+    print("   " + r.text[:500])
+    print()
+    if r.status_code == 200:
+        break
+else:
+    r = requests.post(BASE, headers=H, json={"symbol": "TQQQ"}, timeout=15)
+    print(f"POST body={{symbol}} → {r.status_code}")
+    print("   " + r.text[:500])

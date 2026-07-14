@@ -12,7 +12,7 @@ import requests
 
 class TossClient:
     def __init__(self):
-        self.base = os.environ.get("TOSS_API_BASE", "https://api.tossinvest.com")
+        self.base = os.environ.get("TOSS_API_BASE", "https://openapi.tossinvest.com")
         self.cid = os.environ["TOSS_CLIENT_ID"]
         self.secret = os.environ["TOSS_CLIENT_SECRET"]
         self.account = os.environ["TOSS_ACCOUNT_SEQ"]

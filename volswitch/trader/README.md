@@ -28,7 +28,7 @@ cp .env.example .env   # 키 입력
 TOSS_CLIENT_ID=발급받은키
 TOSS_CLIENT_SECRET=발급받은시크릿
 TOSS_ACCOUNT_SEQ=계좌번호seq
-# TOSS_API_BASE=https://api.tossinvest.com   # 개발자센터 문서의 실제 host로 확인!
+TOSS_API_BASE=https://openapi.tossinvest.com
 TRADER_ENABLED=1
 DRY_RUN=1                # 검증 끝나기 전까지 절대 0으로 바꾸지 말 것
 SYMBOL=TQQQ

@@ -165,9 +165,14 @@ def main():
         notify("(DRY-RUN) " + msg)
     else:
         try:
+            # 토스 API는 MOC 미지원 → LOC(지정가+CLS)로 종가 체결.
+            # 공격적 지정가(매도 -10%/매수 +10%)라 사실상 항상 종가에 체결되며,
+            # 종가가 지정가보다 불리하게 폭주한 날만 미체결(다음날 재시도)된다.
+            px = parse_price(client.price(SYMBOL))
             if side in ("SELL", "EXSTOP"):
-                res = client.order(SYMBOL, "SELL", order_type="MARKET",
-                                   qty=qty, tif="CLS")
+                limit = round(px * 0.90, 2)
+                res = client.order(SYMBOL, "SELL", order_type="LIMIT",
+                                   qty=qty, price=limit, tif="CLS")
                 if side == "EXSTOP":
                     st["exception_latch"] = False
                     st["exception_blocked"] = True  # 정규 재점등까지 재발동 금지
@@ -175,17 +180,12 @@ def main():
                 if cash is None:
                     raise RuntimeError("현금(buying-power) 조회 실패 — 주문 불가")
                 amt = cash * (EX_FRAC if side == "EXBUY" else 0.995)
-                try:
-                    res = client.order(SYMBOL, "BUY", order_type="MARKET",
-                                       amount=amt, tif="CLS")
-                except RuntimeError:
-                    # 금액주문 거부 시(비정규장/MOC 미허용 등) 정수 수량 주문으로 폴백
-                    px = parse_price(client.price(SYMBOL))
-                    q = int(amt / px)
-                    if q < 1:
-                        raise
-                    res = client.order(SYMBOL, "BUY", order_type="MARKET",
-                                       qty=q, tif="CLS")
+                limit = round(px * 1.10, 2)
+                q = int(amt / limit)
+                if q < 1:
+                    raise RuntimeError(f"현금 ${amt:,.0f}로 1주(${limit}) 매수 불가")
+                res = client.order(SYMBOL, "BUY", order_type="LIMIT",
+                                   qty=q, price=limit, tif="CLS")
             if side == "EXBUY":
                 st["exception_latch"] = True
                 st["exception_entry"] = parse_price(client.price(SYMBOL))

@@ -54,7 +54,7 @@ class TossClient:
 
     def usd_cash(self) -> float:
         """매수 가능 USD 현금 (GET /api/v1/buying-power)."""
-        raw = self._req("GET", "/api/v1/buying-power")
+        raw = self._req("GET", "/api/v1/buying-power?currency=USD")
 
         def find_usd(node):
             if isinstance(node, dict):

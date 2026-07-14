@@ -39,13 +39,17 @@ EX_STOP = float(os.environ.get("EXCEPTION_STOP", "0.30"))  # 예외 포지션 �
 
 
 def parse_price(raw) -> float:
-    """시세 응답에서 현재가 추출. 실 응답 스키마 확인 후 필요시 키 추가."""
+    """/api/v1/prices 응답에서 현재가 추출."""
     if isinstance(raw, (int, float)):
         return float(raw)
-    for k in ("price", "last", "close", "tradePrice", "currentPrice", "lastPrice"):
-        v = raw.get(k) if isinstance(raw, dict) else None
-        if v is not None:
-            return float(v)
+    res = raw.get("result", raw) if isinstance(raw, dict) else raw
+    if isinstance(res, list) and res:
+        res = res[0]
+    if isinstance(res, dict):
+        for k in ("price", "last", "close", "tradePrice", "currentPrice", "lastPrice"):
+            v = res.get(k)
+            if v is not None:
+                return float(v)
     raise RuntimeError(f"시세 파싱 실패: {str(raw)[:200]}")
 
 
@@ -163,10 +167,19 @@ def main():
                     st["exception_blocked"] = True  # 정규 재점등까지 재발동 금지
             else:
                 if cash is None:
-                    raise RuntimeError("현금 잔고 파싱 실패 — parse_holdings() 수정 필요")
+                    raise RuntimeError("현금(buying-power) 조회 실패 — 주문 불가")
                 amt = cash * (EX_FRAC if side == "EXBUY" else 0.995)
-                res = client.order(SYMBOL, "BUY", order_type="MARKET",
-                                   amount=amt, tif="CLS")
+                try:
+                    res = client.order(SYMBOL, "BUY", order_type="MARKET",
+                                       amount=amt, tif="CLS")
+                except RuntimeError:
+                    # 금액주문 거부 시(비정규장/MOC 미허용 등) 정수 수량 주문으로 폴백
+                    px = parse_price(client.price(SYMBOL))
+                    q = int(amt / px)
+                    if q < 1:
+                        raise
+                    res = client.order(SYMBOL, "BUY", order_type="MARKET",
+                                       qty=q, tif="CLS")
             if side == "EXBUY":
                 st["exception_latch"] = True
                 st["exception_entry"] = parse_price(client.price(SYMBOL))

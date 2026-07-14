@@ -45,25 +45,47 @@ class TossClient:
             raise RuntimeError(f"{method} {path} → {r.status_code}: {r.text[:300]}")
         return r.json() if r.text else {}
 
-    # --- endpoints ---
+    # --- endpoints (공식 문서 확인: 2026-07) ---
     def price(self, symbol: str) -> dict:
-        return self._req("GET", f"/api/v1/stocks/{symbol}/price")
+        return self._req("GET", f"/api/v1/prices?symbols={symbol}")
 
     def holdings(self) -> dict:
         return self._req("GET", "/api/v1/holdings")
 
     def usd_cash(self) -> float:
-        """주문가능 USD 현금. TODO: probe_cash.ps1로 실제 endpoint 확인 후 확정."""
-        raise RuntimeError("현금 조회 endpoint 미확정 — probe_cash.ps1을 실행해 결과를 공유해 주세요")
+        """매수 가능 USD 현금 (GET /api/v1/buying-power)."""
+        raw = self._req("GET", "/api/v1/buying-power")
+
+        def find_usd(node):
+            if isinstance(node, dict):
+                for k, v in node.items():
+                    if k.lower() == "usd" and v is not None:
+                        return float(v)
+                for v in node.values():
+                    r = find_usd(v)
+                    if r is not None:
+                        return r
+            elif isinstance(node, list):
+                for v in node:
+                    r = find_usd(v)
+                    if r is not None:
+                        return r
+            return None
+
+        usd = find_usd(raw)
+        if usd is None:
+            raise RuntimeError(f"buying-power 응답에서 usd를 못 찾음: {str(raw)[:300]}")
+        return usd
 
     def order(self, symbol: str, side: str, *, order_type: str = "MARKET",
               qty=None, amount=None, price=None, tif: str = "CLS") -> dict:
         """side: BUY/SELL. 기본은 MOC(MARKET+CLS).
 
-        qty: 수량 기반 주문. amount: 금액 기반(US MARKET 전용, 소수점 매수).
+        qty: 수량 기반 주문. amount: 금액 기반(US, 정규장 한정, 소수점 가능).
         """
         body = {"symbol": symbol, "side": side,
-                "orderType": order_type, "timeInForce": tif}
+                "orderType": order_type, "timeInForce": tif,
+                "confirmHighValueOrder": True}  # 1억원 이상 주문 사전 확인 플래그
         if qty is not None:
             body["quantity"] = qty
         if amount is not None:

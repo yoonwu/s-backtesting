@@ -96,13 +96,16 @@ def main():
         print("오늘 이미 실행됨 → 종료 (중복 주문 방지)")
         return
 
-    sig = compute_state()
-    hold = sig["signal_aggressive"] == "HOLD"
-    exception = sig["exception_buy"] and EX_FRAC > 0
-
     client = TossClient()
     raw = client.holdings()
     qty, cash = parse_holdings(raw, SYMBOL)
+
+    # 히스테리시스의 '이전 상태'는 실제 포지션이 진실의 원천
+    # (예외매수 latch 보유는 정규 신호상 CASH였으므로 prev_hold=False)
+    prev_hold = qty > 0 and not st.get("exception_latch")
+    sig = compute_state(prev_hold)
+    hold = sig["signal_aggressive"] == "HOLD"
+    exception = sig["exception_buy"] and EX_FRAC > 0
     if DRY:
         print("--- holdings raw (스키마 확인용) ---")
         print(json.dumps(raw, ensure_ascii=False)[:1500])

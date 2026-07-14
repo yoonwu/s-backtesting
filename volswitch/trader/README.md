@@ -63,7 +63,7 @@ CRON_TZ=America/New_York
 
 ## 4. 전략 파라미터 (run_trader.py 기준)
 
-- 정규: QQQ > MA150 & 20일 변동성 < 32% → TQQQ 100%, 아니면 현금
+- 정규(히스테리시스): 진입 QQQ>MA150×1.005 & vol<32% / 청산 QQQ<MA150×0.995 or vol>36%
 - 예외매수: 현금 상태에서 (QQQ<400일선 & RSI14<30) 또는 고점대비 −40% → 현금의 50% 매수,
   정규 신호 재점등 시 정상 규칙에 인계 (latch)
 - 근거와 검증: `../results.md`, `../README.md`

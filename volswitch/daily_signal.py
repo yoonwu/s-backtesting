@@ -17,6 +17,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 STATE = os.path.join(HERE, "signal_state.json")
 
 MA_AGG, VOL_AGG = 150, 32.0      # 공격형 (운영 기준)
+VOL_OUT, MA_BUF = 36.0, 0.005    # 히스테리시스: 청산 vol>36, MA ±0.5% (2026-07 검증 채택)
 MA_DEF, VOL_DEF = 200, 28.0      # 방어형 (참고 표시)
 EX_MA, EX_RSI, EX_DD = 400, 30.0, -0.40  # 예외매수 트리거
 
@@ -28,8 +29,12 @@ def rsi_wilder(close, n=14):
     return 100 - 100 / (1 + up / dn.replace(0, np.nan))
 
 
-def compute_state():
-    """QQQ 데이터를 받아 현재 신호 상태 dict를 반환 (트레이더에서도 재사용)."""
+def compute_state(prev_hold=None):
+    """QQQ 데이터로 현재 신호 상태 dict 반환 (트레이더에서도 재사용).
+
+    prev_hold: 직전 포지션 상태 (True=보유중, False=현금, None=미상→진입조건 적용).
+    히스테리시스 때문에 상태에 따라 신호가 달라진다.
+    """
     df = yf.download("QQQ", period="3y", auto_adjust=True, progress=False)
     df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
     close = df["Close"].dropna()
@@ -44,7 +49,13 @@ def compute_state():
     rsi14 = float(rsi_wilder(close).iloc[-1])
     dd = px / float(close.cummax().iloc[-1]) - 1
 
-    sig_agg = px > ma_agg and vol20 < VOL_AGG
+    # 히스테리시스: 이전 상태(prev_hold)에 따라 진입/청산 문턱이 다름
+    entry_ok = px > ma_agg * (1 + MA_BUF) and vol20 < VOL_AGG
+    exit_now = px < ma_agg * (1 - MA_BUF) or vol20 > VOL_OUT
+    if prev_hold is True:
+        sig_agg = not exit_now
+    else:  # False 또는 None(초기): 엄격한 진입 조건 적용
+        sig_agg = entry_ok
     sig_def = px > ma_def and vol20 < VOL_DEF
     exception = (px < ma_ex and rsi14 < EX_RSI) or (dd <= EX_DD)
 
@@ -61,13 +72,13 @@ def compute_state():
 
 
 def main():
-    state = compute_state()
-    exception = state["exception_buy"]
-
     prev = {}
     if os.path.exists(STATE):
         with open(STATE) as f:
             prev = json.load(f)
+    prev_hold = {"HOLD": True, "CASH": False}.get(prev.get("signal_aggressive"))
+    state = compute_state(prev_hold)
+    exception = state["exception_buy"]
 
     changed = (prev.get("signal_aggressive") != state["signal_aggressive"]
                or prev.get("exception_buy") != state["exception_buy"])

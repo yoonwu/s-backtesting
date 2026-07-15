@@ -40,7 +40,7 @@ function run(p, T){
   let eq=1, bh=1, pos=0, pkS=1, pkB=1, mddS=0, mddB=0, sw=0, inD=0, nD=0, started=false;
   const cS=[], cB=[], dts=[];
   for(let i=1;i<T.d.length;i++){
-    const dt=T.d[i]; if(dt<p.start) continue;
+    const dt=T.d[i]; if(dt<p.start) continue; if(p.end && dt>p.end) break;
     const prevSig=sigMap[T.d[i-1]]??0;
     if(!started){ started=true; pos=prevSig; }
     const r=T.c[i]/T.c[i-1]-1, chg=Math.abs(prevSig-pos);
@@ -65,19 +65,20 @@ let ROWS=[], SORT={k:"mar", d:-1}, BENCH=null, LASTP=null, chart=null;
 function sweep(){
   const btn=$id("vw_run"); btn.disabled=true; btn.textContent="계산 중…";
   setTimeout(()=>{
-    const asset=$id("vw_asset").value, start=$id("vw_start").value;
+    const asset=$id("vw_asset").value, start=$id("vw_start").value, end=$id("vw_end").value;
     const T=tradeSeries(asset);
+    BENCH=null;
     const ma0=+$id("vw_ma0").value, ma1=+$id("vw_ma1").value, mas=Math.max(1,+$id("vw_mas").value);
     const v0=+$id("vw_v0").value, v1=+$id("vw_v1").value, vs=Math.max(1,+$id("vw_vs").value);
     const voff=+$id("vw_voff").value, buf=+$id("vw_buf").value;
     ROWS=[];
     for(let ma=ma0; ma<=ma1; ma+=mas)
       for(let vin=v0; vin<=v1; vin+=vs){
-        const r=run({ma,vin,voff,buf,start}, T);
+        const r=run({ma,vin,voff,buf,start,end}, T);
         ROWS.push({ma,vin,vout:vin+voff,cagr:r.cagr,mdd:r.mdd,mar:r.mar,mult:r.mult,sw:r.sw,exp:r.exp});
         if(!BENCH) BENCH={cagr:r.bcagr,mdd:r.bmdd,mar:r.bmar,mult:r.bmult,yrs:r.yrs};
       }
-    LASTP={voff,buf,start,asset};
+    LASTP={voff,buf,start,end,asset};
     SORT={k:"mar",d:-1};
     render();
     btn.disabled=false; btn.textContent="전수조사 실행";
@@ -126,7 +127,7 @@ function render(){
 function showCurve(row){
   if(typeof Chart==="undefined"){ $id("vw_chartbox").style.display="none"; return; }
   const T=tradeSeries(LASTP.asset);
-  const r=run({ma:row.ma,vin:row.vin,voff:LASTP.voff,buf:LASTP.buf,start:LASTP.start}, T);
+  const r=run({ma:row.ma,vin:row.vin,voff:LASTP.voff,buf:LASTP.buf,start:LASTP.start,end:LASTP.end}, T);
   const step=Math.max(1,Math.floor(r.dts.length/900));
   const labels=[], dS=[], dB=[];
   for(let i=0;i<r.dts.length;i+=step){ labels.push(r.dts[i]); dS.push(r.cS[i]); dB.push(r.cB[i]); }
@@ -143,5 +144,5 @@ function showCurve(row){
 }
 
 $id("vw_run").onclick=sweep;
-$id("vw_asset").onchange=()=>{ $id("vw_start").value = $id("vw_asset").value==="syn" ? "1999-10-12" : "2010-02-11"; BENCH=null; };
+$id("vw_asset").onchange=()=>{ $id("vw_start").value = $id("vw_asset").value==="syn" ? "1999-10-12" : "2010-02-11"; $id("vw_end").value=""; BENCH=null; };
 })();

@@ -47,12 +47,12 @@ def set_env_key(key: str, val: str):
 
 
 def last_run() -> str:
+    """마지막 실행 = 로그 파일의 최종 수정 시각 (인코딩 무관, 항상 정확)."""
     if not os.path.exists(LOG_PATH):
         return "기록 없음"
-    for ln in reversed(open(LOG_PATH, encoding="utf-8", errors="ignore").readlines()):
-        if "----- 실행" in ln:
-            return ln.replace("----- 실행 -----", "").strip("[] -\n")
-    return "기록 없음"
+    import datetime
+    mt = datetime.datetime.fromtimestamp(os.path.getmtime(LOG_PATH))
+    return mt.strftime("%Y-%m-%d %H:%M")
 
 
 def log_tail(n=60) -> str:

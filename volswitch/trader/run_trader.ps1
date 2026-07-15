@@ -9,6 +9,8 @@ Get-Content .env | ForEach-Object {
         [System.Environment]::SetEnvironmentVariable($Matches[1].Trim(), $Matches[2].Trim())
     }
 }
+$env:PYTHONIOENCODING = "utf-8"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $log = Join-Path $PSScriptRoot "trader.log"
 "`n[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] ----- 실행 -----" | Out-File -Append -Encoding utf8 $log
 python run_trader.py 2>&1 | Tee-Object -FilePath $log -Append

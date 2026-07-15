@@ -5,7 +5,7 @@ const D = window.VS_DATA;
 if(!D){ console.warn("volswitch-data.js 없음"); return; }
 
 const $id = s=>document.getElementById(s);
-const OP = {ma:150, vin:32, voff:4, buf:0.5}; // 실계좌 운영 스펙
+const OP = {ma:169, vin:32, voff:4, buf:0.5}; // 실계좌 운영 스펙 (2026-07-16 개정)
 
 /* --- QQQ 지표 사전 준비 --- */
 const Q = (()=>{ const q=D.qqq, n=q.c.length, ret=new Array(n).fill(0);

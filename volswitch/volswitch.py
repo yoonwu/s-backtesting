@@ -14,7 +14,7 @@
 
 사용 예:
     python volswitch.py                          # 방어형 프리셋 (MA200, vol<28)
-    python volswitch.py --preset aggressive      # 공격형 (MA150, vol<32)
+    python volswitch.py --preset aggressive      # 공격형 (MA169, vol<32)
     python volswitch.py --trade SOXL --signal SOXX
     python volswitch.py --grid                   # 파라미터 능선 스캔
     python volswitch.py --synthetic              # QQQ로 합성 3x를 만들어 닷컴 구간 포함 검증
@@ -32,7 +32,7 @@ DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 PRESETS = {
     # 이전 리서치(mumae-data)의 능선 중심값들
     "defensive":  dict(ma=200, vol_th=28.0),
-    "aggressive": dict(ma=150, vol_th=32.0),
+    "aggressive": dict(ma=169, vol_th=32.0),  # 2026-07-16 전수조사로 150→169 개정
 }
 
 TRADING_DAYS = 252

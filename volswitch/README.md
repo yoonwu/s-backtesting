@@ -12,7 +12,7 @@ AND QQQ 20일 실현변동성(연율) < 28%    ← 변동성 필터
 ```
 
 - 신호는 하루 1번, 종가 기준으로 계산. 장 마감 무렵 MOC 주문으로 체결(lag=1).
-- 공격형 프리셋: MA150 & vol<32% (`--preset aggressive`)
+- 공격형 프리셋: MA169 & vol<32% (`--preset aggressive`) — 2026-07-16 전수조사로 150→169 개정
 - SOXL 버전: 신호자산을 SOXX(반도체 지수 ETF)로 (`--trade SOXL --signal SOXX`)
 
 ## 왜 이 두 필터인가

@@ -16,7 +16,7 @@ import yfinance as yf
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATE = os.path.join(HERE, "signal_state.json")
 
-MA_AGG, VOL_AGG = 150, 32.0      # 공격형 (운영 기준)
+MA_AGG, VOL_AGG = 169, 32.0      # 공격형 (운영 기준, 2026-07-16 1일단위 전수조사로 150→169 채택)
 VOL_OUT, MA_BUF = 36.0, 0.005    # 히스테리시스: 청산 vol>36, MA ±0.5% (2026-07 검증 채택)
 MA_DEF, VOL_DEF = 200, 28.0      # 방어형 (참고 표시)
 EX_MA, EX_RSI, EX_DD = 400, 30.0, -0.40  # 예외매수 트리거
@@ -62,7 +62,7 @@ def compute_state(prev_hold=None):
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     return dict(
         asof=str(close.index[-1].date()), computed_at=now,
-        qqq=round(px, 2), ma150=round(ma_agg, 2), ma200=round(ma_def, 2),
+        qqq=round(px, 2), ma_agg=round(ma_agg, 2), ma200=round(ma_def, 2),
         ma400=round(ma_ex, 2), vol20=round(vol20, 1), rsi14=round(rsi14, 1),
         dd_from_ath=round(dd * 100, 1),
         signal_aggressive="HOLD" if sig_agg else "CASH",
@@ -89,11 +89,11 @@ def main():
     lines = [
         f"## 볼스위칭 신호 — {state['asof']} 기준",
         "",
-        f"| 공격형(MA150, vol<32) | **{state['signal_aggressive']}** |",
+        f"| 공격형(MA{MA_AGG}, vol<{VOL_AGG:.0f}) | **{state['signal_aggressive']}** |",
         "|---|---|",
         f"| 방어형(MA200, vol<28) 참고 | {state['signal_defensive']} |",
         f"| 예외매수(400MA↓&RSI<30 or −40%) | {'⚠️ 발동' if exception else '미발동'} |",
-        f"| QQQ | {state['qqq']} (MA150 {state['ma150']}, MA200 {state['ma200']}) |",
+        f"| QQQ | {state['qqq']} (MA{MA_AGG} {state['ma_agg']}, MA200 {state['ma200']}) |",
         f"| 20일 변동성 | {state['vol20']}% |",
         f"| RSI14 / 고점대비 | {state['rsi14']} / {state['dd_from_ath']}% |",
     ]

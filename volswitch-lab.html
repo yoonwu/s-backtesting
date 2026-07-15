@@ -51,8 +51,8 @@ tr.best td{color:var(--brass);font-weight:700}
 
 <div class="card"><div class="eyebrow">파라미터</div>
  <div class="controls">
-  <div class="ctl"><label>추세 이동평균 <output id="o-ma">150</output>일</label>
-   <input type="range" id="p-ma" min="50" max="300" step="5" value="150"></div>
+  <div class="ctl"><label>추세 이동평균 <output id="o-ma">169</output>일</label>
+   <input type="range" id="p-ma" min="50" max="300" step="1" value="169"></div>
   <div class="ctl"><label>진입 변동성 &lt; <output id="o-vin">32</output>%</label>
    <input type="range" id="p-vin" min="16" max="45" step="1" value="32"></div>
   <div class="ctl"><label>청산 변동성 &gt; <output id="o-vout">36</output>%</label>
@@ -76,7 +76,7 @@ tr.best td{color:var(--brass);font-weight:700}
   <button class="primary" onclick="runAndRender()">백테스트 실행</button>
   <button class="primary" onclick="gridScan()">그리드 스캔 (MA × vol 일괄)</button>
   <button onclick="maScan()">MA 50~300 스캔</button>
-  <button onclick="preset()">운영값 리셋 (MA150 · 32/36 · ±0.5%)</button>
+  <button onclick="preset()">운영값 리셋 (MA169 · 32/36 · ±0.5%)</button>
  </div>
 </div>
 
@@ -167,7 +167,7 @@ function params(){ return {ma:+$('p-ma').value, vin:+$('p-vin').value, vout:+$('
   buf:+$('p-buf').value, asset:$('p-asset').value, start:$('p-start').value}; }
 ['ma','vin','vout','buf','voloff'].forEach(k=>$('p-'+k).oninput=()=>{$('o-'+k).textContent=$('p-'+k).value});
 $('p-asset').onchange=()=>{ $('p-start').value=$('p-asset').value==='syn'?'1999-10-12':'2010-02-11'; };
-function preset(){ $('p-ma').value=150;$('p-vin').value=32;$('p-vout').value=36;$('p-buf').value=0.5;
+function preset(){ $('p-ma').value=169;$('p-vin').value=32;$('p-vout').value=36;$('p-buf').value=0.5;
   ['ma','vin','vout','buf'].forEach(k=>$('o-'+k).textContent=$('p-'+k).value); runAndRender(); }
 function fmt(v,d=1){return v.toFixed(d)}
 function runAndRender(){

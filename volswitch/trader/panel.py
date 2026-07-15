@@ -75,20 +75,21 @@ def env_state() -> dict:
 
 
 def spark_series():
-    """최근 ~6개월 QQQ 종가 + MA150 + 레짐(히스테리시스) — 히어로 차트용."""
+    """최근 ~6개월 QQQ 종가 + 운영 MA + 레짐(히스테리시스) — 히어로 차트용."""
     import numpy as np
     import yfinance as yf
+    from daily_signal import MA_AGG, MA_BUF, VOL_AGG, VOL_OUT
     df = yf.download("QQQ", period="2y", auto_adjust=True, progress=False)
     df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
     close = df["Close"].dropna()
-    ma = close.rolling(150).mean()
+    ma = close.rolling(MA_AGG).mean()
     vol = close.pct_change().rolling(20).std() * np.sqrt(252) * 100
     on, regime = False, []
     for c, m, v in zip(close, ma, vol):
         if not (np.isnan(m) or np.isnan(v)):
-            if not on and c > m * 1.005 and v < 32:
+            if not on and c > m * (1 + MA_BUF) and v < VOL_AGG:
                 on = True
-            elif on and (c < m * 0.995 or v > 36):
+            elif on and (c < m * (1 - MA_BUF) or v > VOL_OUT):
                 on = False
         regime.append(on)
     n = 130
@@ -344,7 +345,7 @@ pre{background:var(--card2);border:1px solid var(--line);border-radius:10px;padd
    preserveAspectRatio="none" role="img" aria-label="QQQ 6개월 추이와 전략 레짐"></svg>
   <div id="tip"></div></div>
  <div class="legend"><span><i style="border-color:#aeb6c4"></i>QQQ</span>
-  <span><i style="border-color:#5b6270;border-top-style:dashed"></i>MA150</span>
+  <span><i style="border-color:#5b6270;border-top-style:dashed"></i>MA169</span>
   <span><i style="border-color:var(--up)"></i>보유 구간</span>
   <span><i style="border-color:var(--dn)"></i>현금 구간</span></div>
  <div class="metrics" id="metrics"></div>
@@ -438,7 +439,7 @@ async function load(force){
       :'현금 대기 구간 — 봇이 시장 밖에서 재진입 조건을 기다립니다';
     $('asof').textContent='기준일 '+s.asof;
     $('metrics').innerHTML=[
-      ['QQQ',s.qqq],['MA150 밴드',(s.ma150*0.995).toFixed(0)+'–'+(s.ma150*1.005).toFixed(0)],
+      ['QQQ',s.qqq],['MA169 밴드',(s.ma_agg*0.995).toFixed(0)+'–'+(s.ma_agg*1.005).toFixed(0)],
       ['변동성 20일',s.vol20+'%'],['진입 · 청산','<32% · >36%'],
       ['RSI14',s.rsi14],['고점대비',s.dd_from_ath+'%']]
       .map(([k,v])=>`<div class="metric"><div class="k">${k}</div><div class="v num">${v}</div></div>`).join('');

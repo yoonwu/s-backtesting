@@ -19,8 +19,11 @@ header{display:flex;justify-content:space-between;align-items:baseline;margin-bo
 .ctl label{display:block;font-size:11px;color:var(--sub);margin-bottom:4px}
 .ctl output{color:var(--brass);font-weight:700;font-family:var(--mono)}
 input[type=range]{width:100%;accent-color:#c9a353}
-select,input[type=date]{width:100%;background:var(--card2);color:var(--ink);border:1px solid var(--line);
+select,input[type=date],input[type=text]{width:100%;background:var(--card2);color:var(--ink);border:1px solid var(--line);
  border-radius:8px;padding:7px 9px;font:600 12.5px Pretendard,sans-serif;color-scheme:dark}
+td.gcell{text-align:center;cursor:pointer;line-height:1.35}
+td.gcell:hover{outline:1px solid var(--brass)}
+td.gcell.best{outline:2px solid var(--brass)}
 button{font:700 13px Pretendard,sans-serif;color:var(--ink);background:var(--card2);
  border:1px solid var(--line);border-radius:9px;padding:10px 18px;cursor:pointer}
 button:hover{background:#1a2029}
@@ -61,10 +64,19 @@ tr.best td{color:var(--brass);font-weight:700}
     <option value="syn">합성 3x (1999~, 닷컴 포함)</option></select></div>
   <div class="ctl"><label>시작일</label><input type="date" id="p-start" value="2010-02-11"></div>
  </div>
+ <div class="controls" style="margin-top:14px">
+  <div class="ctl" style="grid-column:span 2"><label>그리드: MA 목록 (쉼표 구분)</label>
+   <input type="text" id="p-malist" value="100,125,150,175,200,225,250"></div>
+  <div class="ctl"><label>진입 vol 목록</label>
+   <input type="text" id="p-vollist" value="24,28,32,36"></div>
+  <div class="ctl"><label>청산 vol = 진입 + <output id="o-voloff">4</output></label>
+   <input type="range" id="p-voloff" min="0" max="10" step="1" value="4"></div>
+ </div>
  <div class="btnrow">
   <button class="primary" onclick="runAndRender()">백테스트 실행</button>
-  <button onclick="maScan()">MA 50~300 전부 스캔</button>
-  <button onclick="preset()">운영값으로 리셋 (MA150 · 32/36 · ±0.5%)</button>
+  <button class="primary" onclick="gridScan()">그리드 스캔 (MA × vol 일괄)</button>
+  <button onclick="maScan()">MA 50~300 스캔</button>
+  <button onclick="preset()">운영값 리셋 (MA150 · 32/36 · ±0.5%)</button>
  </div>
 </div>
 
@@ -153,7 +165,7 @@ function run(p){
 const $=id=>document.getElementById(id);
 function params(){ return {ma:+$('p-ma').value, vin:+$('p-vin').value, vout:+$('p-vout').value,
   buf:+$('p-buf').value, asset:$('p-asset').value, start:$('p-start').value}; }
-['ma','vin','vout','buf'].forEach(k=>$('p-'+k).oninput=()=>{$('o-'+k).textContent=$('p-'+k).value});
+['ma','vin','vout','buf','voloff'].forEach(k=>$('p-'+k).oninput=()=>{$('o-'+k).textContent=$('p-'+k).value});
 $('p-asset').onchange=()=>{ $('p-start').value=$('p-asset').value==='syn'?'1999-10-12':'2010-02-11'; };
 function preset(){ $('p-ma').value=150;$('p-vin').value=32;$('p-vout').value=36;$('p-buf').value=0.5;
   ['ma','vin','vout','buf'].forEach(k=>$('o-'+k).textContent=$('p-'+k).value); runAndRender(); }
@@ -191,6 +203,41 @@ function drawCurve(r){
    +`<path d="${path(r.curveS)}" fill="none" stroke="#c9a353" stroke-width="2"/>`
    +`<text x="${W-4}" y="${Y(r.curveS[n-1])-6}" text-anchor="end" font-size="11" fill="#c9a353" font-weight="700">×${r.curveS[n-1].toFixed(1)}</text>`
    +`<text x="${W-4}" y="${Y(r.curveB[n-1])+14}" text-anchor="end" font-size="11" fill="#5b6270">×${r.curveB[n-1].toFixed(1)}</text>`;
+}
+function gridScan(){
+  const base=params();
+  const mas=$('p-malist').value.split(',').map(s=>+s.trim()).filter(x=>x>=20);
+  const vins=$('p-vollist').value.split(',').map(s=>+s.trim()).filter(x=>x>=5);
+  const off=+$('p-voloff').value;
+  if(!mas.length||!vins.length){alert('MA/vol 목록을 확인하세요');return}
+  const rows=[]; let best=null;
+  for(const ma of mas){
+    const cells=[];
+    for(const vin of vins){
+      const r=run({...base,ma,vin,vout:vin+off});
+      const c={ma,vin,cagr:r.S.cagr,mdd:r.S.mdd,mar:r.S.mar};
+      if(!best||c.mar>best.mar)best=c;
+      cells.push(c);
+    }
+    rows.push({ma,cells});
+  }
+  const mars=rows.flatMap(r=>r.cells.map(c=>c.mar));
+  const lo=Math.min(...mars),hi=Math.max(...mars);
+  const shade=m=>`rgba(47,191,113,${(0.05+0.32*(m-lo)/(hi-lo+1e-9)).toFixed(3)})`;
+  $('scanhdr').textContent=`그리드 스캔 — 행=MA · 열=진입vol (청산=진입+${off} · 버퍼 ±${base.buf}%) · 셀 = MAR / CAGR·MDD · 클릭=적용`;
+  $('table').innerHTML='<table><tr><th style="text-align:left">MA＼vol</th>'
+   +vins.map(v=>`<th style="text-align:center">&lt;${v}%</th>`).join('')+'</tr>'
+   +rows.map(r=>`<tr><td>${r.ma}일</td>`+r.cells.map(c=>
+     `<td class="gcell ${c===best?'best':''}" style="background:${shade(c.mar)}"
+       onclick="applyCell(${c.ma},${c.vin},${off})"><b>${c.mar.toFixed(2)}</b><br>
+       <span style="font-size:10px;color:var(--sub)">${c.cagr.toFixed(0)}%·${c.mdd.toFixed(0)}%</span></td>`
+    ).join('')+'</tr>').join('')+'</table>';
+}
+function applyCell(ma,vin,off){
+  $('p-ma').value=ma;$('p-vin').value=vin;$('p-vout').value=vin+off;
+  ['ma','vin','vout'].forEach(k=>$('o-'+k).textContent=$('p-'+k).value);
+  runAndRender();
+  window.scrollTo({top:0,behavior:'smooth'});
 }
 function maScan(){
   const base=params(); const rows=[];

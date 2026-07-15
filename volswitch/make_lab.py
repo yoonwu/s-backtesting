@@ -277,6 +277,10 @@ function maScan(){
 preset();
 </script></body></html>"""
 
+DATA_JS = os.path.join(os.path.dirname(HERE), "volswitch-data.js")
+open(DATA_JS, "w").write("window.VS_DATA=" + json.dumps(DATA, separators=(",", ":")) + ";")
+print(f"OK → {DATA_JS}")
+
 rng = f"QQQ {DATA['qqq']['d'][0]}~{DATA['qqq']['d'][-1]} · TQQQ {DATA['tqqq']['d'][0]}~"
 html = HTML.replace("__DATA__", json.dumps(DATA, separators=(",", ":")))
 html = html.replace("__DATA_RANGE__", rng)

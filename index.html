@@ -249,6 +249,7 @@
       <button data-tab="break120">120선 눌림목<span class="sub">MA120-Pullback</span></button>
       <button data-tab="diverge">다이버전스<span class="sub">RSI Divergence</span></button>
       <button data-tab="autofilter">자동매매필터<span class="sub">Strategy Filter</span></button>
+      <button data-tab="volsw">볼스위칭<span class="sub">Vol-Switch</span></button>
       <button data-tab="paper">가상매매<span class="sub">Paper Lot</span></button>
       <button data-tab="saved">⭐ 저장된 전략 <span class="badge" id="tab_saved_badge"></span><span class="sub">Saved</span></button>
       <button data-tab="board">비교 보드 <span class="badge" id="tab_board_badge"></span><span class="sub">Board</span></button>
@@ -1822,6 +1823,45 @@
     </section>
   </div>
 
+  <div class="tabpane" id="pane-volsw" hidden>
+    <div class="grid">
+      <section class="card">
+        <h2>볼스위칭 전수조사</h2>
+        <div class="intro"><b>QQQ 추세(MA) + 20일 변동성</b> 필터로 TQQQ↔현금을 스위칭하는 전략.
+        범위를 주면 <b>모든 이평선×vol 조합을 전수조사</b>해 순위표로 보여줍니다.
+        실계좌 운영 스펙은 <b>MA150 · 진입&lt;32 · 청산&gt;36 · 버퍼 ±0.5%</b> (⚙ 표시).</div>
+        <div class="field"><label>매매자산</label>
+          <select id="vw_asset">
+            <option value="tqqq">TQQQ 실측 (2010~)</option>
+            <option value="syn">합성 3x (1999~ · 닷컴 포함)</option>
+          </select></div>
+        <div class="field"><label>시작일</label><input type="date" id="vw_start" value="2010-02-11"></div>
+        <div class="field"><label>MA 범위 — 시작 / 끝 / 간격</label>
+          <div class="row3"><input type="number" id="vw_ma0" value="50"><input type="number" id="vw_ma1" value="300"><input type="number" id="vw_mas" value="25"></div></div>
+        <div class="field"><label>진입 변동성 범위(%) — 시작 / 끝 / 간격</label>
+          <div class="row3"><input type="number" id="vw_v0" value="20"><input type="number" id="vw_v1" value="40"><input type="number" id="vw_vs" value="4"></div></div>
+        <div class="row2">
+          <div class="field"><label>청산 vol = 진입 +</label><input type="number" id="vw_voff" value="4"></div>
+          <div class="field"><label>MA 버퍼 (±%)</label><input type="number" id="vw_buf" value="0.5" step="0.1"></div>
+        </div>
+        <button class="runbtn" id="vw_run">전수조사 실행</button>
+        <div class="hint">체결: 신호일 종가(실계좌 봇의 LOC와 동일) · 비용 편도 5bp · 현금 연 4% ·
+        신호는 QQQ 종가 기준 · 헤더 클릭 = 정렬 · 행 클릭 = 자산곡선</div>
+      </section>
+      <section class="card">
+        <h2>결과 — 유리했던 조합 순위 <span class="mono" id="vw_count" style="color:var(--ink-faint);font-size:11px"></span></h2>
+        <div class="intro" id="vw_best" style="display:none"></div>
+        <div class="ytable-wrap" style="max-height:440px"><table class="ytable" id="vw_table"><tbody>
+          <tr><td style="text-align:left;color:var(--ink-faint)">왼쪽에서 [전수조사 실행]을 눌러주세요.</td></tr>
+        </tbody></table></div>
+        <div id="vw_chartbox" style="display:none;margin-top:18px">
+          <canvas id="vw_chart" height="120"></canvas>
+          <div class="hint">선택 조합(초록) vs Buy&amp;Hold(회색) · 로그 스케일 · 다른 행 클릭으로 변경</div>
+        </div>
+      </section>
+    </div>
+  </div>
+
   <div class="tabpane" id="pane-paper" hidden>
     <div class="grid">
       <section class="card">
@@ -1917,6 +1957,8 @@
 </div>
 
 <script src="leverage-lab.js?v=20260707d"></script>
+<script src="volswitch-data.js"></script>
+<script src="volswitch-tab.js"></script>
 <script>
 /* ============ 다이버전스 탭: 사전 계산된 그리드서치 결과 뷰어 ============ */
 (function(){

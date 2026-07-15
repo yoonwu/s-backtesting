@@ -169,6 +169,53 @@ def build_status(force=False) -> dict:
     return out
 
 
+def build_history() -> dict:
+    """체결 내역(토스 주문 API) + 자체 장부(journal.jsonl)."""
+    os.environ.update(read_env())
+    out = {"journal": [], "trades": [], "trades_error": None}
+    jp = os.path.join(HERE, "journal.jsonl")
+    if os.path.exists(jp):
+        for ln in open(jp, encoding="utf-8", errors="ignore"):
+            try:
+                out["journal"].append(json.loads(ln))
+            except Exception:
+                pass
+        out["journal"] = out["journal"][-500:]
+    try:
+        from toss_client import TossClient
+        c = TossClient()
+        items = []
+        for q in ("?status=CLOSED", "?status=DONE", ""):
+            try:
+                r = c._req("GET", f"/api/v1/orders{q}")
+                lst = r.get("result", r) or []
+                if isinstance(lst, dict):
+                    lst = lst.get("items") or lst.get("orders") or []
+                if lst:
+                    items = lst
+                    break
+            except Exception as e:
+                out["trades_error"] = str(e)[:150]
+        def g(o, *keys):
+            for k in keys:
+                if o.get(k) is not None:
+                    return o.get(k)
+            return None
+        out["trades"] = [{
+            "date": g(o, "orderedAt", "createdAt", "orderDateTime", "dateTime", "timestamp"),
+            "side": g(o, "side"),
+            "symbol": g(o, "symbol"),
+            "qty": g(o, "filledQuantity", "executedQuantity", "quantity", "qty"),
+            "price": g(o, "filledPrice", "executedPrice", "averagePrice", "price"),
+            "status": g(o, "status", "orderStatus"),
+        } for o in items[:60]]
+        if items:
+            out["trades_error"] = None
+    except Exception as e:
+        out["trades_error"] = str(e)[:150]
+    return out
+
+
 HTML = r"""<!doctype html><html lang="ko"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>볼스위칭 조종석</title>
@@ -259,6 +306,22 @@ button:hover{background:#1a1f28}
 button:focus-visible{outline:2px solid var(--brass);outline-offset:1px}
 button.stop{color:#f0a3a6;border-color:rgba(224,85,90,.3)}
 button.golive{color:var(--brass);border-color:rgba(201,163,83,.35)}
+.tabs{display:flex;gap:6px;margin-bottom:14px}
+.tab{border:1px solid var(--line);border-radius:999px;padding:6px 16px;font-size:12.5px;
+ font-weight:700;color:var(--sub);cursor:pointer;background:var(--card2)}
+.tab.active{color:var(--brass);border-color:rgba(201,163,83,.4);background:rgba(201,163,83,.08)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{font-size:10px;color:var(--mut);letter-spacing:.08em;text-align:left;font-weight:600;
+ padding:4px 8px 8px 0;border-bottom:1px solid var(--line)}
+td{padding:7px 8px 7px 0;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+.tag{font-size:10.5px;font-weight:700;border-radius:6px;padding:1px 7px}
+.tag.dep{background:rgba(91,141,239,.12);color:#7ea3f5}
+.tag.wd{background:var(--dn-dim);color:var(--dn)}
+.tag.trade{background:var(--up-dim);color:var(--up)}
+.tag.manual{background:rgba(217,161,60,.12);color:#d9a13c}
+.note{font-size:11px;color:var(--mut);margin-top:10px;line-height:1.6}
+.tablewrap{overflow-x:auto}
 footer{color:var(--mut);font-size:11px;text-align:center;margin-top:20px;line-height:1.8}
 pre{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;
  font:11px/1.7 var(--mono);color:var(--sub);overflow-x:auto;white-space:pre-wrap;
@@ -267,6 +330,11 @@ pre{background:var(--card2);border:1px solid var(--line);border-radius:10px;padd
 </style></head><body>
 <header><div class="wordmark">VOL·SWITCH<small>조종석</small></div>
  <div class="asof num" id="asof"></div></header>
+<div class="tabs">
+ <span class="tab active" id="tab-dash" onclick="showTab('dash')">대시보드</span>
+ <span class="tab" id="tab-hist" onclick="showTab('hist')">히스토리</span>
+</div>
+<div id="view-dash">
 
 <div class="card" id="hero">
  <div class="staterow" id="staterow"><span class="pulse"></span>
@@ -296,6 +364,20 @@ pre{background:var(--card2);border:1px solid var(--line);border-radius:10px;padd
 <div class="card"><div class="eyebrow">봇</div>
  <div class="botline" id="botline"></div>
  <div class="actions" id="actions"></div>
+</div>
+
+</div>
+
+<div id="view-hist" style="display:none">
+ <div class="card"><div class="eyebrow">체결 내역 (토스)</div>
+  <div class="tablewrap" id="trades"><span class="skel">조회 중…</span></div></div>
+ <div class="card"><div class="eyebrow">자산 일지 (봇 기록)</div>
+  <svg id="equity" width="100%" height="70" viewBox="0 0 660 70" preserveAspectRatio="none"
+   style="display:none;margin-bottom:10px"></svg>
+  <div class="tablewrap" id="ledger"><span class="skel">조회 중…</span></div>
+  <div class="note">입출금은 토스 API에 조회 기능이 없어 봇의 일일 스냅샷으로 추정합니다 —
+   매매 없이 현금이 변한 날을 <span class="tag dep">입금 추정</span>/<span class="tag wd">출금 추정</span>으로 표시.
+   기록은 봇 가동일부터 쌓입니다.</div></div>
 </div>
 
 <footer>조회 전용 · 5분 캐시 · 10분 자동 갱신 · 이 페이지는 내 컴퓨터 안에서만 열립니다<br>
@@ -400,6 +482,64 @@ async function toggleLog(){
   if(p.style.display==='block'){p.style.display='none';return}
   p.textContent=await(await fetch('/api/log')).text();p.style.display='block';
 }
+let histLoaded=false;
+function showTab(t){
+  $('view-dash').style.display=t==='dash'?'':'none';
+  $('view-hist').style.display=t==='hist'?'':'none';
+  $('tab-dash').classList.toggle('active',t==='dash');
+  $('tab-hist').classList.toggle('active',t==='hist');
+  if(t==='hist'&&!histLoaded){histLoaded=true;loadHistory()}
+}
+async function loadHistory(){
+  const d=await(await fetch('/api/history')).json();
+  // 체결 내역
+  if(d.trades&&d.trades.length){
+    $('trades').innerHTML='<table><tr><th>일시</th><th>구분</th><th>수량</th><th>가격</th><th>상태</th></tr>'
+      +d.trades.map(t=>`<tr><td class="num">${(t.date??'').toString().slice(0,16).replace('T',' ')}</td>
+       <td><span class="badge ${t.side}">${t.side==='BUY'?'매수':t.side==='SELL'?'매도':t.side??'?'}</span></td>
+       <td class="num">${t.qty??'—'}주</td><td class="num">${t.price?'$'+Number(t.price).toFixed(2):'—'}</td>
+       <td style="color:var(--sub)">${t.status??''}</td></tr>`).join('')+'</table>';
+  } else {
+    $('trades').innerHTML='<span class="empty">'+(d.trades_error?'조회 실패: '+d.trades_error
+      :'체결 내역이 아직 없습니다 (봇 매매가 생기면 여기 쌓입니다)')+'</span>';
+  }
+  // 자산 일지: 일별 마지막 스냅샷 + 변동 추정
+  const snaps=(d.journal||[]).filter(j=>j.type==='snapshot'&&j.cash!=null);
+  const tradesTs=new Set((d.journal||[]).filter(j=>j.type==='trade').map(j=>(j.ts||'').slice(0,10)));
+  const byday={};snaps.forEach(sn=>byday[(sn.ts||'').slice(0,10)]=sn);
+  const days=Object.keys(byday).sort();
+  let rows='',prev=null;const eq=[];
+  for(const day of days){
+    const sn=byday[day];
+    const val=(sn.qty||0)*(sn.price||0)+(sn.cash||0);
+    if(sn.price)eq.push(val);
+    let tag='';
+    if(prev){
+      const dc=sn.cash-prev.cash,dq=(sn.qty||0)-(prev.qty||0);
+      if(tradesTs.has(day)) tag='<span class="tag trade">봇 매매</span>';
+      else if(Math.abs(dq)>0.001) tag='<span class="tag manual">수동 매매?</span>';
+      else if(dc>1) tag=`<span class="tag dep">입금 추정 +$${dc.toFixed(2)}</span>`;
+      else if(dc<-1) tag=`<span class="tag wd">출금 추정 -$${Math.abs(dc).toFixed(2)}</span>`;
+    }
+    rows=`<tr><td class="num">${day}</td><td>${sn.signal??''}</td>
+      <td class="num">${sn.qty??'—'}주</td><td class="num">$${(sn.cash??0).toFixed(2)}</td>
+      <td class="num">${sn.price?'$'+val.toFixed(0):'—'}</td><td>${tag}
+      ${sn.mode==='dry'?'<span style="color:var(--mut);font-size:10px">모의</span>':''}</td></tr>`+rows;
+    prev=sn;
+  }
+  $('ledger').innerHTML=rows?'<table><tr><th>날짜</th><th>신호</th><th>보유</th><th>현금</th><th>슬리브 자산</th><th>변동</th></tr>'+rows+'</table>'
+    :'<span class="empty">아직 스냅샷이 없습니다 — 매일 새벽 봇이 한 줄씩 기록합니다</span>';
+  // 자산 추이 스파크라인
+  if(eq.length>=2){
+    const W=660,Hh=70,lo=Math.min(...eq)*0.99,hi=Math.max(...eq)*1.01;
+    const X=i=>i/(eq.length-1)*W,Y=v=>6+(1-(v-lo)/(hi-lo))*(Hh-14);
+    const pth=eq.map((v,i)=>(i?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)).join(' ');
+    $('equity').innerHTML=`<path d="${pth} L ${W} ${Hh} L 0 ${Hh} Z" fill="rgba(47,191,113,.08)"/>
+      <path d="${pth}" fill="none" stroke="var(--up)" stroke-width="2"/>
+      <circle cx="${X(eq.length-1)}" cy="${Y(eq[eq.length-1])}" r="3" fill="#eceef2"/>`;
+    $('equity').style.display='block';
+  }
+}
 load();setInterval(()=>load(),600000);
 </script></body></html>"""
 
@@ -419,6 +559,8 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path.startswith("/api/status"):
             self._send(json.dumps(build_status(force="force" in self.path)))
+        elif self.path.startswith("/api/history"):
+            self._send(json.dumps(build_history()))
         elif self.path.startswith("/api/log"):
             self._send(log_tail(), "text/plain")
         else:

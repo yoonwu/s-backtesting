@@ -22,7 +22,7 @@
 import json
 import os
 import sys
-from datetime import date
+from datetime import date, datetime
 
 import requests
 
@@ -62,6 +62,16 @@ def notify(msg: str):
                           data={"chat_id": chat, "text": msg}, timeout=10)
         except Exception as e:
             print(f"(텔레그램 실패: {e})")
+
+
+def journal(entry: dict):
+    """자체 장부(journal.jsonl): 일일 스냅샷 + 매매 이벤트 영구 기록."""
+    entry["ts"] = datetime.now().isoformat(timespec="seconds")
+    try:
+        with open(os.path.join(HERE, "journal.jsonl"), "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception as e:
+        print(f"(장부 기록 실패: {e})")
 
 
 def load_state() -> dict:
@@ -112,6 +122,7 @@ def main():
     except Exception as e:
         cash = None
         print(f"(현금 조회 실패: {str(e)[:150]})")
+    krw = None
     try:
         krw = client.krw_cash()
         if krw >= 500000:  # 환전 안 된 원화 발견 → 알림 (API에 환전 기능 없음)
@@ -153,8 +164,13 @@ def main():
 
     line = (f"[볼스위칭 트레이더] {sig['asof']} 신호={sig['signal_aggressive']} "
             f"예외={sig['exception_buy']} 보유 {SYMBOL}={qty} 현금USD={cash}")
+    snap = dict(type="snapshot", asof=sig["asof"], signal=sig["signal_aggressive"],
+                qty=qty, cash=cash, krw=krw, price=last_price,
+                mode="dry" if DRY else "live",
+                action=(action[0] if action else None))
     if action is None:
         print(line + " → 변경 없음")
+        journal(snap)
         st["last_run"] = today
         save_state(st)
         return
@@ -190,11 +206,17 @@ def main():
                 st["exception_latch"] = True
                 st["exception_entry"] = parse_price(client.price(SYMBOL))
             st["position"] = "CASH" if side in ("SELL", "EXSTOP") else SYMBOL
+            oid = (res.get("result", res) or {}).get("orderId")
+            journal(dict(type="trade", side=side, symbol=SYMBOL,
+                         qty=(qty if side in ("SELL", "EXSTOP") else q),
+                         limit=limit, ref_price=px, order_id=oid, desc=desc))
             notify("✅ " + msg + f"\n주문응답: {json.dumps(res, ensure_ascii=False)[:300]}")
         except Exception as e:
+            journal(dict(type="error", side=side, error=str(e)[:200]))
             notify(f"🚨 주문 실패 — 수동 확인 필요!\n{msg}\n오류: {e}")
             raise
 
+    journal(snap)
     st["last_run"] = today
     save_state(st)
 

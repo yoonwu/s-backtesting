@@ -7,3 +7,4 @@ volswitch/trader/trader.log
 volswitch/trader/trader_state.json
 volswitch/trader/token.json
 volswitch/trader/journal.jsonl
+volswitch/trader/principal.json

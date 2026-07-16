@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""볼스위칭 조종석 v4 — 로컬 웹 대시보드 (http://127.0.0.1:8756).
+"""볼스위칭 조종석 v5 — 로컬 웹 대시보드 (http://127.0.0.1:8756).
 
 panel.bat 실행 → 브라우저 자동 오픈. 조회 전용 + 봇 스위치. 주문 기능 없음.
+v5: 원금(누적 입금)·총수익 분리 표시 + 히스토리 탭 현재가 스트립.
 """
 import json
 import os
@@ -74,6 +75,80 @@ def env_state() -> dict:
             "dry": env.get("DRY_RUN", "1") != "0"}
 
 
+PRINCIPAL_PATH = os.path.join(HERE, "principal.json")
+
+
+def load_json(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def journal_daily():
+    """journal.jsonl → 날짜별 마지막 스냅샷 + 그날 봇 체결 참조가 (날짜순)."""
+    jp = os.path.join(HERE, "journal.jsonl")
+    snaps, tpx = {}, {}
+    if not os.path.exists(jp):
+        return []
+    for ln in open(jp, encoding="utf-8", errors="ignore"):
+        try:
+            j = json.loads(ln)
+        except Exception:
+            continue
+        day = (j.get("ts") or "")[:10]
+        if not day:
+            continue
+        if j.get("type") == "snapshot" and j.get("cash") is not None:
+            snaps[day] = j
+        elif j.get("type") == "trade" and j.get("ref_price"):
+            tpx.setdefault(day, []).append(fnum(j.get("ref_price")))
+    out = []
+    for day in sorted(snaps):
+        sn = snaps[day]
+        px = sum(tpx[day]) / len(tpx[day]) if day in tpx else fnum(sn.get("price"))
+        out.append({"day": day, "cash": fnum(sn.get("cash")),
+                    "qty": fnum(sn.get("qty")), "px": px})
+    return out
+
+
+def deposit_flows(after_day: str):
+    """일별 입출금 재구성: 흐름 = Δ현금 + Δ수량×체결가 근사.
+
+    순수 시세 변동은 0, 입금(환전)은 +, 출금은 −, 매매는 상쇄되어 ≈0.
+    같은 날 '입금+매수'도 수량 증가분의 매수대금으로 잡아낸다. |흐름|≤$20는 노이즈로 무시.
+    """
+    days, flows, prev = journal_daily(), [], None
+    for d in days:
+        if prev and d["day"] > after_day:
+            f = (d["cash"] - prev["cash"]) + (d["qty"] - prev["qty"]) * (d["px"] or prev["px"] or 0)
+            if abs(f) > 20:
+                flows.append({"day": d["day"], "usd": round(f, 2)})
+        prev = d
+    return flows
+
+
+def build_wealth(account: dict, usd) -> dict:
+    """원금(누적 입금) vs 수익 분해. 시드는 최초 1회 '보유원가+현금'으로 자동 생성."""
+    usd = fnum(usd)
+    total = fnum(account.get("value")) + usd
+    seed = load_json(PRINCIPAL_PATH)
+    if not seed or not fnum(seed.get("usd")):
+        seed = {"usd": round(fnum(account.get("qty")) * fnum(account.get("avg")) + usd, 2),
+                "date": time.strftime("%Y-%m-%d"),
+                "note": "자동 초기화 = 보유원가 + 달러현금 (조종석에서 보정 가능)"}
+        with open(PRINCIPAL_PATH, "w", encoding="utf-8") as f:
+            json.dump(seed, f, ensure_ascii=False, indent=1)
+    flows = deposit_flows(seed.get("date", "1970-01-01"))
+    principal = fnum(seed["usd"]) + sum(f["usd"] for f in flows)
+    profit = total - principal
+    return {"total": round(total, 2), "principal": round(principal, 2),
+            "profit": round(profit, 2),
+            "profit_rate": round(profit / principal * 100, 2) if principal > 0 else 0.0,
+            "seed": seed, "recent_flows": flows[-8:]}
+
+
 def spark_series():
     """최근 ~6개월 QQQ 종가 + 운영 MA + 레짐(히스테리시스) — 히어로 차트용."""
     import numpy as np
@@ -141,6 +216,10 @@ def build_status(force=False) -> dict:
             out["usd"] = c.usd_cash()
         except Exception:
             out["usd"] = None
+        try:
+            out["wealth"] = build_wealth(out["account"], out["usd"])
+        except Exception as e:
+            out["wealth_error"] = str(e)[:120]
         try:
             out["krw"] = c.krw_cash()
         except Exception:
@@ -357,6 +436,7 @@ pre{background:var(--card2);border:1px solid var(--line);border-radius:10px;padd
  <div class="subline" id="acctsub"></div>
  <div class="tiles" id="tiles"></div>
  <div class="krwwarn" id="krwwarn"></div>
+ <div class="note" id="pnote"></div>
 </div>
 
 <div class="card"><div class="eyebrow">진행 중 주문</div><div id="orders">
@@ -370,6 +450,8 @@ pre{background:var(--card2);border:1px solid var(--line);border-radius:10px;padd
 </div>
 
 <div id="view-hist" style="display:none">
+ <div class="card" id="histhead" style="display:none"><div class="eyebrow">지금</div>
+  <div class="tiles" id="histtiles" style="margin-top:0"></div></div>
  <div class="card"><div class="eyebrow">체결 내역 (토스)</div>
   <div class="tablewrap" id="trades"><span class="skel">조회 중…</span></div></div>
  <div class="card"><div class="eyebrow">자산 일지 (봇 기록)</div>
@@ -445,16 +527,29 @@ async function load(force){
       .map(([k,v])=>`<div class="metric"><div class="k">${k}</div><div class="v num">${v}</div></div>`).join('');
   }
   drawChart(d.spark);
-  const a=d.account;
-  if(a){
+  const a=d.account,w=d.wealth;
+  if(a&&w){
+    $('value').textContent=money(w.total);
+    $('pl').className='delta num '+(w.profit>=0?'up':'dn');
+    $('pl').textContent=`${w.profit>=0?'▲':'▼'} ${money(Math.abs(w.profit))} (${pct(w.profit_rate)})`;
+    $('acctsub').innerHTML=`총자산 = 평가금+달러현금 · ${d.symbol} ${a.qty}주 · 오늘 <span class="num" style="color:${a.day>=0?'var(--up)':'var(--dn)'}">${money(a.day)} (${pct(a.day_rate)})</span>`;
+    const pc=w.profit>=0?'var(--up)':'var(--dn)';
+    $('tiles').innerHTML=[
+      ['원금 (누적 입금)',money(w.principal,0),'border-color:rgba(201,163,83,.45)'],
+      ['총수익',`<span style="color:${pc}">${(w.profit>=0?'+':'−')+money(Math.abs(w.profit),0).slice(1)} · ${pct(w.profit_rate)}</span>`,`border-color:${w.profit>=0?'rgba(47,191,113,.35)':'rgba(224,85,90,.35)'}`],
+      ['이번 포지션 손익',`<span style="color:${a.pl>=0?'var(--up)':'var(--dn)'}">${money(a.pl,0)} (${pct(a.pl_rate)})</span>`],
+      ['달러 현금',money(d.usd)],
+      ['평단가',money(a.avg)],['현재가',money(a.last)],
+      ['수량',a.qty+'주'],['오늘',`<span style="color:${a.day>=0?'var(--up)':'var(--dn)'}">${pct(a.day_rate)}</span>`]]
+      .map(([k,v,st])=>`<div class="tile" style="${st??''}"><div class="k">${k}</div><div class="v num">${v}</div></div>`).join('');
+    $('krwwarn').textContent=(d.krw>=100000)?`⚠ 환전 대기 원화 ₩${Number(d.krw).toLocaleString()} — 토스 앱에서 환전해야 봇이 사용합니다 (원화는 원금·총자산에 미포함)`:'';
+    $('pnote').innerHTML=`원금은 봇 일지의 입·출금을 자동 누적합니다 (시작: ${w.seed.date} $${Number(w.seed.usd).toLocaleString()}) ·
+      <a href="#" onclick="fixPrincipal(${w.principal});return false" style="color:var(--brass)">원금 보정</a>`;
+  } else if(a){
     $('value').textContent=money(a.value);
     $('pl').className='delta num '+(a.pl>=0?'up':'dn');
     $('pl').textContent=`${a.pl>=0?'▲':'▼'} ${money(Math.abs(a.pl))} (${pct(a.pl_rate)})`;
-    $('acctsub').innerHTML=`${d.symbol} ${a.qty}주 · 오늘 <span class="num" style="color:${a.day>=0?'var(--up)':'var(--dn)'}">${money(a.day)} (${pct(a.day_rate)})</span>`;
-    $('tiles').innerHTML=[['평단가',money(a.avg)],['현재가',money(a.last)],
-      ['달러 현금',money(d.usd)],['수량',a.qty+'주']]
-      .map(([k,v])=>`<div class="tile"><div class="k">${k}</div><div class="v num">${v}</div></div>`).join('');
-    $('krwwarn').textContent=(d.krw>=100000)?`⚠ 환전 대기 원화 ₩${Number(d.krw).toLocaleString()} — 토스 앱에서 환전해야 봇이 사용합니다`:'';
+    $('acctsub').innerHTML=`${d.symbol} ${a.qty}주 · 오늘 <span class="num">${money(a.day)} (${pct(a.day_rate)})</span>`;
   } else if(d.account_error){$('value').textContent='조회 실패';$('acctsub').textContent=d.account_error}
   $('orders').innerHTML=(d.orders&&d.orders.length)?d.orders.map(o=>
     `<div class="order"><span><span class="badge ${o.side}">${o.side==='BUY'?'매수':'매도'}</span>
@@ -471,6 +566,12 @@ async function load(force){
     `<button class="${e.enabled?'stop':''}" onclick="act('bot')">${e.enabled?'봇 끄기':'봇 켜기'}</button>
      <button class="${e.dry?'golive':''}" onclick="act('mode')">${e.dry?'실전 전환':'모의로 복귀'}</button>
      <button onclick="load(true)">새로고침</button>`;
+}
+async function fixPrincipal(cur){
+  const v=prompt('원금(지금까지 넣은 돈, 달러 환산 총액)을 직접 입력하세요.\n이후 입·출금은 다시 자동으로 누적됩니다.',Math.round(cur));
+  if(!v||isNaN(+v))return;
+  await fetch('/api/principal',{method:'POST',body:JSON.stringify({usd:+v})});
+  load(true);
 }
 async function act(kind){
   const e=(await(await fetch('/api/status')).json()).env;
@@ -492,7 +593,19 @@ function showTab(t){
   if(t==='hist'&&!histLoaded){histLoaded=true;loadHistory()}
 }
 async function loadHistory(){
-  const d=await(await fetch('/api/history')).json();
+  const [d,st]=await Promise.all([
+    (await fetch('/api/history')).json(),
+    (await fetch('/api/status')).json()]);
+  // 현재가·원금·수익 스트립
+  if(st&&st.account){
+    const a=st.account,w=st.wealth;
+    const items=[[st.symbol+' 현재가',`${money(a.last)} <span style="color:${a.day_rate>=0?'var(--up)':'var(--dn)'};font-size:12px">${pct(a.day_rate)}</span>`],
+                 ['평단가',money(a.avg)]];
+    if(w){items.push(['원금 (누적 입금)',money(w.principal,0)],
+      ['총수익',`<span style="color:${w.profit>=0?'var(--up)':'var(--dn)'}">${money(w.profit,0)} · ${pct(w.profit_rate)}</span>`]);}
+    $('histtiles').innerHTML=items.map(([k,v])=>`<div class="tile"><div class="k">${k}</div><div class="v num">${v}</div></div>`).join('');
+    $('histhead').style.display='';
+  }
   // 체결 내역
   if(d.trades&&d.trades.length){
     $('trades').innerHTML='<table><tr><th>일시</th><th>구분</th><th>수량</th><th>가격</th><th>상태</th></tr>'
@@ -572,6 +685,20 @@ class H(BaseHTTPRequestHandler):
             set_env_key("TRADER_ENABLED", "0" if env_state()["enabled"] else "1")
         elif self.path == "/api/toggle-mode":
             set_env_key("DRY_RUN", "1" if not env_state()["dry"] else "0")
+        elif self.path == "/api/principal":
+            # 원금 수동 보정: 입력값 = 오늘까지의 누적 입금 총액.
+            # 시드 날짜를 오늘로 당겨 과거 자동 감지분과 이중계산되지 않게 한다.
+            n = int(self.headers.get("Content-Length") or 0)
+            try:
+                body = json.loads(self.rfile.read(n) or b"{}")
+                usd = float(body.get("usd"))
+                seed = {"usd": round(usd, 2), "date": time.strftime("%Y-%m-%d"),
+                        "note": "수동 보정"}
+                with open(PRINCIPAL_PATH, "w", encoding="utf-8") as f:
+                    json.dump(seed, f, ensure_ascii=False, indent=1)
+                _cache["t"] = 0.0
+            except Exception:
+                pass
         self._send("{}")
 
 

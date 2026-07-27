@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KEYWORD LAB — 네이버 검색량·경쟁도 전수 스캔</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --line: #262b35; --text: #e6e9ef;
+    --dim: #8b93a3; --accent: #5aa9ff; --good: #3ddc84; --warn: #ffb020; --bad: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Malgun Gothic", sans-serif;
+  }
+  header { padding: 18px 20px 12px; border-bottom: 1px solid var(--line); }
+  h1 { margin: 0 0 4px; font-size: 17px; letter-spacing: .02em; }
+  .meta { color: var(--dim); font-size: 12px; }
+  .wrap { padding: 16px 20px 60px; }
+
+  .cards { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; min-width: 130px; }
+  .card .k { color: var(--dim); font-size: 11px; }
+  .card .v { font-size: 19px; font-weight: 600; margin-top: 2px; }
+
+  .filters { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+             padding: 12px 14px; display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 14px; }
+  .f { display: flex; flex-direction: column; gap: 4px; }
+  .f label { color: var(--dim); font-size: 11px; }
+  input, select, button {
+    background: #0d1016; color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 6px 9px; font: inherit; font-size: 12px;
+  }
+  input:focus, select:focus { outline: 1px solid var(--accent); }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; min-width: 860px; background: var(--panel); }
+  th, td { padding: 7px 10px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { position: sticky; top: 0; background: #1b1f28; cursor: pointer; user-select: none; font-weight: 600; font-size: 12px; }
+  th:hover { color: var(--accent); }
+  th.sorted::after { content: ' ▾'; color: var(--accent); }
+  th.sorted.asc::after { content: ' ▴'; }
+  td.kw, th.kw { text-align: left; white-space: normal; min-width: 200px; }
+  tbody tr:hover { background: #1d222c; }
+  .rank { color: var(--dim); text-align: right; width: 46px; }
+  .comp-낮음 { color: var(--good); }
+  .comp-중간 { color: var(--warn); }
+  .comp-높음 { color: var(--bad); }
+  .bar { display: inline-block; height: 8px; background: var(--accent); border-radius: 2px; vertical-align: middle; opacity: .55; }
+  .empty { padding: 40px; text-align: center; color: var(--dim); }
+  a { color: var(--accent); }
+  code { background: #0d1016; padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>KEYWORD LAB</h1>
+  <div class="meta" id="meta">데이터를 불러오는 중…</div>
+</header>
+
+<div class="wrap">
+  <div class="cards" id="cards"></div>
+
+  <div class="filters">
+    <div class="f"><label>키워드 포함</label><input id="fInc" placeholder="예: 제작" size="14"></div>
+    <div class="f"><label>키워드 제외</label><input id="fExc" placeholder="예: 중고,무료" size="14"></div>
+    <div class="f"><label>최소 월검색량</label><input id="fMin" type="number" value="300" size="7"></div>
+    <div class="f"><label>최대 월검색량</label><input id="fMax" type="number" placeholder="제한없음" size="7"></div>
+    <div class="f"><label>경쟁도</label>
+      <select id="fComp">
+        <option value="">전체</option>
+        <option value="낮음">낮음만</option>
+        <option value="낮음,중간">낮음+중간</option>
+      </select>
+    </div>
+    <div class="f"><label>&nbsp;</label><button id="btnCsv">CSV 내보내기</button></div>
+    <div class="f"><label>&nbsp;</label><button id="btnReset">초기화</button></div>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr>
+          <th class="rank">#</th>
+          <th class="kw" data-k="keyword">키워드</th>
+          <th data-k="total">월 검색량</th>
+          <th data-k="pc">PC</th>
+          <th data-k="mobile">모바일</th>
+          <th data-k="mobileShare">모바일 비중</th>
+          <th data-k="comp">경쟁도</th>
+          <th data-k="adDepth">광고 경쟁</th>
+          <th data-k="opportunity" class="sorted">기회 점수</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+  <div class="empty" id="empty" style="display:none"></div>
+</div>
+
+<script src="data.js" onerror="window.__noData=1"></script>
+<script>
+(function () {
+  'use strict';
+
+  var DATA = window.KEYWORD_DATA;
+  var meta = document.getElementById('meta');
+
+  if (!DATA || !DATA.rows || !DATA.rows.length) {
+    meta.innerHTML = '데이터가 없습니다. 먼저 <code>node scan.js --seed "에코백,파우치"</code> 를 실행하세요.';
+    document.getElementById('empty').style.display = 'block';
+    document.getElementById('empty').textContent = 'data.js 가 없거나 비어 있습니다.';
+    return;
+  }
+
+  var rows = DATA.rows;
+  var sortKey = 'opportunity';
+  var sortAsc = false;
+  var view = [];
+
+  meta.textContent =
+    '씨앗: ' + DATA.seeds.join(', ') +
+    '  ·  깊이 ' + DATA.depth +
+    '  ·  API 호출 ' + DATA.apiCalls + '회' +
+    '  ·  생성 ' + new Date(DATA.generatedAt).toLocaleString('ko-KR');
+
+  function num(n) { return n.toLocaleString('ko-KR'); }
+
+  function apply() {
+    var inc = document.getElementById('fInc').value.trim();
+    var exc = document.getElementById('fExc').value.trim();
+    var min = Number(document.getElementById('fMin').value) || 0;
+    var maxRaw = document.getElementById('fMax').value;
+    var max = maxRaw === '' ? Infinity : Number(maxRaw);
+    var comps = document.getElementById('fComp').value;
+    var compSet = comps ? comps.split(',') : null;
+
+    var incList = inc ? inc.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : [];
+    var excList = exc ? exc.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : [];
+
+    view = rows.filter(function (r) {
+      if (r.total < min || r.total > max) return false;
+      if (compSet && compSet.indexOf(r.comp) === -1) return false;
+      if (incList.length && !incList.some(function (w) { return r.keyword.indexOf(w) >= 0; })) return false;
+      if (excList.length && excList.some(function (w) { return r.keyword.indexOf(w) >= 0; })) return false;
+      return true;
+    });
+
+    view.sort(function (a, b) {
+      var x = a[sortKey], y = b[sortKey];
+      if (typeof x === 'string') return sortAsc ? x.localeCompare(y) : y.localeCompare(x);
+      return sortAsc ? x - y : y - x;
+    });
+
+    render();
+  }
+
+  function render() {
+    var maxTotal = view.reduce(function (m, r) { return Math.max(m, r.total); }, 1);
+    var sumTotal = view.reduce(function (s, r) { return s + r.total; }, 0);
+    var lowComp = view.filter(function (r) { return r.comp === '낮음'; }).length;
+
+    document.getElementById('cards').innerHTML =
+      card('표시 중', num(view.length) + ' / ' + num(rows.length)) +
+      card('합계 월검색량', num(sumTotal)) +
+      card('경쟁도 낮음', num(lowComp) + '개') +
+      card('최고 기회점수', view.length ? num(Math.round(view[0].opportunity)) : '-');
+
+    var html = view.slice(0, 800).map(function (r, i) {
+      var w = Math.max(2, Math.round(r.total / maxTotal * 60));
+      return '<tr>' +
+        '<td class="rank">' + (i + 1) + '</td>' +
+        '<td class="kw">' + esc(r.keyword) + '</td>' +
+        '<td>' + num(r.total) + ' <span class="bar" style="width:' + w + 'px"></span></td>' +
+        '<td>' + num(r.pc) + '</td>' +
+        '<td>' + num(r.mobile) + '</td>' +
+        '<td>' + Math.round(r.mobileShare * 100) + '%</td>' +
+        '<td class="comp-' + esc(r.comp) + '">' + esc(r.comp || '-') + '</td>' +
+        '<td>' + r.adDepth + '</td>' +
+        '<td><b>' + num(Math.round(r.opportunity)) + '</b></td>' +
+        '</tr>';
+    }).join('');
+
+    document.getElementById('tbody').innerHTML = html;
+    var empty = document.getElementById('empty');
+    if (!view.length) { empty.style.display = 'block'; empty.textContent = '조건에 맞는 키워드가 없습니다.'; }
+    else if (view.length > 800) { empty.style.display = 'block'; empty.textContent = '상위 800개만 표시했습니다. 필터를 좁히거나 CSV로 받으세요.'; }
+    else { empty.style.display = 'none'; }
+  }
+
+  function card(k, v) {
+    return '<div class="card"><div class="k">' + k + '</div><div class="v">' + v + '</div></div>';
+  }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('th[data-k]'), function (th) {
+    th.addEventListener('click', function () {
+      var k = th.getAttribute('data-k');
+      if (sortKey === k) sortAsc = !sortAsc; else { sortKey = k; sortAsc = false; }
+      Array.prototype.forEach.call(document.querySelectorAll('th'), function (h) {
+        h.classList.remove('sorted', 'asc');
+      });
+      th.classList.add('sorted');
+      if (sortAsc) th.classList.add('asc');
+      apply();
+    });
+  });
+
+  ['fInc', 'fExc', 'fMin', 'fMax', 'fComp'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', apply);
+  });
+
+  document.getElementById('btnReset').addEventListener('click', function () {
+    document.getElementById('fInc').value = '';
+    document.getElementById('fExc').value = '';
+    document.getElementById('fMin').value = '300';
+    document.getElementById('fMax').value = '';
+    document.getElementById('fComp').value = '';
+    apply();
+  });
+
+  document.getElementById('btnCsv').addEventListener('click', function () {
+    var head = ['키워드', '월검색량', 'PC', '모바일', '모바일비중', '경쟁도', '광고경쟁', '기회점수'];
+    var lines = [head.join(',')].concat(view.map(function (r) {
+      return ['"' + r.keyword.replace(/"/g, '""') + '"', r.total, r.pc, r.mobile,
+              r.mobileShare, r.comp, r.adDepth, r.opportunity].join(',');
+    }));
+    var blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'keywords.csv';
+    a.click();
+  });
+
+  apply();
+})();
+</script>
+</body>
+</html>

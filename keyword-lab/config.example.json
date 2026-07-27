@@ -1,0 +1,7 @@
+{
+  "_설명": "이 파일을 config.json 으로 복사한 뒤 값을 채우세요. config.json 은 git 에 올라가지 않습니다.",
+  "_발급": "searchad.naver.com 로그인 > 도구 > API 사용관리 > 네이버 검색광고 API 서비스 신청",
+  "customerId": "여기에 내 계정 ID (숫자. 네이버 아이디가 아님)",
+  "apiKey": "여기에 액세스라이선스",
+  "secretKey": "여기에 비밀키"
+}

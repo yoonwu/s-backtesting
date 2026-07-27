@@ -6,12 +6,13 @@
  * 제작사례 포트폴리오를 게시판(용량 제한) 대신 0원 상품으로 쌓아두고
  * 갤러리처럼 보여주기 위한 용도.
  *
- * 적용:
- *   <script src="/web/upload/portfolio-lightbox.js"></script>
- * 설정(선택, 위 script 태그보다 먼저 선언):
- *   <script>
- *     var PORTFOLIO_LIGHTBOX_CONFIG = { categoryNos: [24, 25] };
- *   </script>
+ * 적용: 스킨에 script 태그로 불러오거나, 인라인으로 붙여넣는다.
+ *   외부 파일:  script[src="/web/upload/portfolio-lightbox.js"]
+ *   설정(선택): window.PORTFOLIO_LIGHTBOX_CONFIG = { categoryNos: [24, 25] }
+ *               (이 파일보다 먼저 선언되어야 한다)
+ *
+ * 주의: 이 파일 안에는 script 종료 태그 문자열을 절대 쓰지 말 것.
+ *       HTML 에 인라인으로 붙여넣을 때 그 지점에서 script 태그가 끊긴다.
  */
 (function () {
   'use strict';

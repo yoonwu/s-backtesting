@@ -2,12 +2,11 @@
      제작사례 포트폴리오 라이트박스
      상품 분류(목록) 페이지 HTML 맨 아래에 이 블록 전체를 붙여넣으세요.
 
-     ★ 아래 categoryNos 의 숫자를 반드시 본인 분류 번호로 바꾸세요.
-       (제작사례 메뉴 클릭 후 주소창의 /category/제작사례/NN/ 에서 NN)
-       여러 개면 [24, 25] 처럼 쉼표로 나열.
+     분류 번호 62 = 제작사례▪portfolio 로 이미 설정돼 있습니다.
+     다른 분류에도 적용하려면 [62, 63] 처럼 쉼표로 추가하세요.
      ========================================================= -->
 <script>
-  var PORTFOLIO_LIGHTBOX_CONFIG = { categoryNos: [24] };
+  var PORTFOLIO_LIGHTBOX_CONFIG = { categoryNos: [62] };  // 제작사례▪portfolio
 </script>
 <script>
 /*!

@@ -1,6 +1,6 @@
 <section class="section" data-ez-module="html/1" data-ez-name="CUSTOM HTML" data-ez-type="plain" data-ez="contents-0e33qxj-1">
 <script>
-  var PORTFOLIO_LIGHTBOX_CONFIG = { categoryNos: [62] };  /* 62 = 제작사례 portfolio */
+  var PORTFOLIO_LIGHTBOX_CONFIG = { categoryNos: [62] };
 </script>
 <script>
 /* 제작사례 포트폴리오 라이트박스 - 상품 목록 썸네일 클릭 시 확대 뷰어 */
@@ -172,40 +172,63 @@
 
   var viewer = null;
 
+  // 주의: innerHTML 로 마크업 문자열을 쓰지 않는다.
+  // 카페24 EZ 편집기의 커스텀 HTML 섹션은 스크립트 안의 태그 문자열까지
+  // 실제 마크업으로 파싱해버려서 코드가 망가진다. 전부 createElement 로 조립한다.
+  function el(tag, cls) {
+    var node = document.createElement(tag);
+    if (cls) node.className = cls;
+    return node;
+  }
+
   function buildViewer() {
-    var overlay = document.createElement('div');
-    overlay.className = 'plb-overlay';
+    var overlay = el('div', 'plb-overlay');
     overlay.setAttribute('role', 'dialog');
     overlay.setAttribute('aria-modal', 'true');
-    overlay.innerHTML =
-      '<div class="plb-stage">' +
-        '<span class="plb-count"></span>' +
-        '<div class="plb-spinner"></div>' +
-        '<img class="plb-img" alt="">' +
-        '<p class="plb-title"></p>' +
-      '</div>' +
-      '<button type="button" class="plb-btn plb-close" aria-label="닫기">&times;</button>' +
-      '<button type="button" class="plb-btn plb-prev" aria-label="이전">&#10094;</button>' +
-      '<button type="button" class="plb-btn plb-next" aria-label="다음">&#10095;</button>';
+
+    var stage = el('div', 'plb-stage');
+    var count = el('span', 'plb-count');
+    var spinner = el('div', 'plb-spinner');
+    var img = el('img', 'plb-img');
+    img.setAttribute('alt', '');
+    var title = el('p', 'plb-title');
+    stage.appendChild(count);
+    stage.appendChild(spinner);
+    stage.appendChild(img);
+    stage.appendChild(title);
+    overlay.appendChild(stage);
+
+    function makeButton(cls, label, glyph) {
+      var b = el('button', 'plb-btn ' + cls);
+      b.type = 'button';
+      b.setAttribute('aria-label', label);
+      b.appendChild(document.createTextNode(glyph));
+      overlay.appendChild(b);
+      return b;
+    }
+    var closeBtn = makeButton('plb-close', '닫기', '×');   // ×
+    var prevBtn = makeButton('plb-prev', '이전', '❮');     // ❮
+    var nextBtn = makeButton('plb-next', '다음', '❯');     // ❯
+
     document.body.appendChild(overlay);
 
     var v = {
       root: overlay,
-      img: overlay.querySelector('.plb-img'),
-      count: overlay.querySelector('.plb-count'),
-      title: overlay.querySelector('.plb-title'),
-      spinner: overlay.querySelector('.plb-spinner'),
+      img: img,
+      count: count,
+      title: title,
+      spinner: spinner,
       images: [],
       index: 0,
       seq: 0,
       fallbackHref: ''
     };
 
-    overlay.querySelector('.plb-close').addEventListener('click', close);
-    overlay.querySelector('.plb-prev').addEventListener('click', function (e) {
+    closeBtn.addEventListener('click', close);
+    prevBtn.addEventListener('click', function (e) {
       e.stopPropagation(); step(-1);
     });
-    overlay.querySelector('.plb-next').addEventListener('click', function (e) {
+    nextBtn.addEventListener('click', function (e) {
       e.stopPropagation(); step(1);
     });
     // 배경(이미지 바깥) 클릭 시 닫기

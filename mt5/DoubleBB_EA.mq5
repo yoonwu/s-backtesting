@@ -19,7 +19,7 @@
 //|   · 손절·익절 동시 = 손절 우선. 동시 1포지션.                      |
 //+------------------------------------------------------------------+
 #property copyright "LEVERAGE LAB"
-#property version   "1.06"
+#property version   "1.07"
 #property strict
 
 #include <Trade/Trade.mqh>
@@ -228,6 +228,13 @@ void PlaceEntryOrders()
    int    dig = (int)SymbolInfoInteger(_Symbol,SYMBOL_DIGITS);
    double ask = SymbolInfoDouble(_Symbol,SYMBOL_ASK);
    double bid = SymbolInfoDouble(_Symbol,SYMBOL_BID);
+   double slN = NormalizeDouble(g_SL,dig);
+   // 진입 즉시 브로커측 SL/TP를 주문에 실어 부착 → EA 재시작/재컴파일로 상태(g_SL 등)가
+   // 날아가도 브로커가 SL/TP를 계속 잡아줌(무방비 창 제거). 평단익절(TP_AVG)은 체결 누적
+   // 전엔 평단 미확정이라 TP=0으로 두고 ApplyBrokerStops가 체결 반영해 부착.
+   double tpN = (InpTPMode==TP_BREAKOUT)
+                ? NormalizeDouble(isShort ? g_brkL - InpTP_x*g_brkTR : g_brkH + InpTP_x*g_brkTR, dig)
+                : 0.0;
    ArrayResize(g_orderPrices,N);
    int okCount=0;
    for(int k=0;k<N;k++)
@@ -242,14 +249,14 @@ void PlaceEntryOrders()
       if(isShort)
         {
          // 숏: 현재가보다 위(되돌림 자리)면 SellLimit, 아래면 시장가 즉시매도
-         if(p >= bid) ok=g_trade.SellLimit(lot,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
-         else         ok=g_trade.Sell     (lot,_Symbol,0.0,0,0,InpComment);
+         if(p >= bid) ok=g_trade.SellLimit(lot,p,_Symbol,slN,tpN,ORDER_TIME_GTC,0,InpComment);
+         else         ok=g_trade.Sell     (lot,_Symbol,0.0,slN,tpN,InpComment);
         }
       else
         {
          // 롱: 현재가보다 아래(되돌림 자리)면 BuyLimit, 위면 시장가 즉시매수
-         if(p <= ask) ok=g_trade.BuyLimit(lot,p,_Symbol,0,0,ORDER_TIME_GTC,0,InpComment);
-         else         ok=g_trade.Buy     (lot,_Symbol,0.0,0,0,InpComment);
+         if(p <= ask) ok=g_trade.BuyLimit(lot,p,_Symbol,slN,tpN,ORDER_TIME_GTC,0,InpComment);
+         else         ok=g_trade.Buy     (lot,_Symbol,0.0,slN,tpN,InpComment);
         }
       if(!ok) PrintFormat("주문 실패 차수%d @%.*f (%s)",k,dig,p,g_trade.ResultRetcodeDescription());
       else    okCount++;

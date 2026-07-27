@@ -52,6 +52,7 @@ const DETAIL_EMPTY = `<html><body><div id="prdDetail"></div></body></html>`;
 const server = http.createServer((req, res) => {
   const url = req.url.split('?')[0];
   if (url === '/lb.js') { res.writeHead(200, {'Content-Type':'application/javascript'}); return res.end(SCRIPT); }
+  if (url === '/web/product/big/202401/a1.png') { res.writeHead(404); return res.end('no big'); }  // big 원본 없음
   if (url.endsWith('.png') || url.endsWith('.gif')) { res.writeHead(200, {'Content-Type':'image/png'}); return res.end(PNG); }
   if (url.startsWith('/product/eco/2/')) { res.writeHead(200,{'Content-Type':'text/html'}); return res.end(DETAIL_EMPTY); }
   if (url.startsWith('/product/')) { res.writeHead(200,{'Content-Type':'text/html'}); return res.end(DETAIL.replace(/PORT/g, server.address().port)); }
@@ -95,10 +96,16 @@ const server = http.createServer((req, res) => {
   await page.waitForTimeout(150);
   ok('다음 이동 후 카운터 2/6', (await page.locator('.plb-count').textContent()).trim() === '2 / 6');
   const second = await shownSrc();
-  ok('추가이미지 tiny->big 승격: ' + second, /\/web\/product\/big\/202401\/a1\.png/.test(second));
+  ok('big 원본이 없으면 원래 URL 로 폴백: ' + second, /\/web\/product\/tiny\/202401\/a1\.png/.test(second));
+
+  // 4-1. big 이 존재하는 이미지는 그대로 big 사용
+  await page.locator('.plb-next').click();
+  await page.waitForTimeout(150);
+  const third = await shownSrc();
+  ok('big 이 있으면 tiny->big 승격 유지: ' + third, /\/web\/product\/big\/202401\/a2\.png/.test(third));
 
   // 5. lazy(ec-data-src) 수집 + loading.gif/아이콘 제외
-  for (let i = 0; i < 3; i++) { await page.locator('.plb-next').click(); await page.waitForTimeout(150); }
+  for (let i = 0; i < 2; i++) { await page.locator('.plb-next').click(); await page.waitForTimeout(150); }
   const fifth = await shownSrc();
   ok('lazy(ec-data-src) 이미지 수집됨: ' + fifth, /\/web\/upload\/p2\.png/.test(fifth));
 

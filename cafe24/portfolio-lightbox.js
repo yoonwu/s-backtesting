@@ -71,13 +71,24 @@
     return s;
   }
 
-  // /web/product/tiny|small|medium/... -> /web/product/big/...
-  function toBig(url) {
-    return url.replace(/\/web\/product\/(tiny|small|medium)\//, '/web/product/big/');
+  // 카페24 상품 이미지 경로: /web/product/{tiny|small|medium|big}/...
+  //                          /web/product/extra/{tiny|small|medium|big}/... (추가이미지)
+  var SIZE_RE = /\/web\/product\/((?:extra\/)?)(tiny|small|medium|big)\//;
+
+  // 크기별 파일이 항상 다 생성돼 있지는 않다(big 이 없는 상품이 실제로 있음).
+  // 큰 것부터 후보를 만들어 순차로 시도하고, 마지막에 원래 URL 을 반드시 남긴다.
+  function sizeCandidates(url) {
+    var m = url.match(SIZE_RE);
+    if (!m) return [url];
+    var out = [];
+    ['big', 'medium', 'small', 'tiny'].forEach(function (sz) {
+      var u = url.replace(SIZE_RE, '/web/product/' + m[1] + sz + '/');
+      if (out.indexOf(u) === -1) out.push(u);
+    });
+    if (out.indexOf(url) === -1) out.push(url);
+    return out;
   }
 
-  // big 승격본을 먼저 시도하되, 그 파일이 없는 쇼핑몰도 있으므로
-  // 원본 URL 을 예비(alt)로 함께 들고 다닌다.
   function collectImages(doc) {
     var seen = {};
     var out = [];
@@ -90,8 +101,8 @@
         var key = src.split('?')[0];
         if (seen[key]) return;
         seen[key] = 1;
-        var big = toBig(src);
-        out.push(big === src ? { src: src } : { src: big, alt: src });
+        var cands = sizeCandidates(src);
+        out.push({ src: cands[0], alts: cands.slice(1) });
       });
     });
     return out;
@@ -100,14 +111,14 @@
   function cacheGet(no) {
     if (!USE_CACHE) return null;
     try {
-      var raw = sessionStorage.getItem('plb2:' + no);
+      var raw = sessionStorage.getItem('plb3:' + no);
       return raw ? JSON.parse(raw) : null;
     } catch (e) { return null; }
   }
 
   function cacheSet(no, images) {
     if (!USE_CACHE) return;
-    try { sessionStorage.setItem('plb2:' + no, JSON.stringify(images)); } catch (e) {}
+    try { sessionStorage.setItem('plb3:' + no, JSON.stringify(images)); } catch (e) {}
   }
 
   function fetchImages(href, no) {
@@ -227,11 +238,21 @@
     return v;
   }
 
+  // 어떤 크기로도 못 받는 이미지는 목록에서 빼고 다음 장으로 넘어간다.
+  function dropCurrent() {
+    var v = viewer;
+    if (v.images.length <= 1) { close(); return; }
+    v.images.splice(v.index, 1);
+    if (v.index >= v.images.length) v.index = 0;
+    render();
+  }
+
   function render() {
     var v = viewer;
     var item = v.images[v.index];
     var seq = ++v.seq;
-    var usedAlt = false;
+    var chain = [item.src].concat(item.alts || []);
+    var i = 0;
 
     v.img.classList.remove('is-ready');
     v.spinner.classList.add('is-on');
@@ -240,17 +261,20 @@
     var loader = new Image();
     loader.onload = function () {
       if (seq !== v.seq) return;          // 그 사이 다른 장으로 넘어갔으면 무시
+      item.src = loader.src;              // 성공한 URL 로 고정
+      item.alts = [];
       v.img.src = loader.src;
       v.img.classList.add('is-ready');
       v.spinner.classList.remove('is-on');
     };
     loader.onerror = function () {
       if (seq !== v.seq) return;
-      // big 승격본이 없는 경우 원본 URL 로 한 번 더 시도
-      if (!usedAlt && item.alt) { usedAlt = true; loader.src = item.alt; return; }
+      i += 1;
+      if (i < chain.length) { loader.src = chain[i]; return; }
       v.spinner.classList.remove('is-on');
+      dropCurrent();
     };
-    loader.src = item.src;
+    loader.src = chain[0];
 
     // 다음 이미지 미리 받아두기
     var next = v.images[v.index + 1];

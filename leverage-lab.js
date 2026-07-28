@@ -193,7 +193,7 @@ function pauseUI(){ return new Promise(resolve=>setTimeout(resolve,0)); }
 ["c_end","r_end","s_end","u_end","t_end","p_end","sh_end","a_end","rs_end"].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=today(); });
 setInterval(()=>{ $("#clock").textContent = new Date().toLocaleTimeString("ko-KR",{hour12:false}); },1000);
 
-const LAB_TABS=["compare","allstrat","projection","rolling","signal","underwater","tranche","shannon","rsirev"];
+const LAB_TABS=["compare","allstrat","projection","rolling","signal","underwater","tranche","shannon","rsirev","dcatime"];
 let activeLabTab="compare";
 /* 탭 그룹: 상단 탭 하나 아래에 서브탭바로 관련 탭을 묶음 (수익율 연구소와 동일 패턴) */
 const TAB_GROUPS={dbb:["doubleb","doublebc"],inflect:["revdb","revdbc","revema","trsig"],neck:["neckline","nlpb"]};
@@ -5770,6 +5770,151 @@ function drawRSI(rCurve,holdCurve,log){
     };
     el("nk_reload").onclick=()=>{CACHE={};statusMsg("캐시 비움");};
     el("nk_run").onclick=run;
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);else init();
+})();
+
+/* ===== DCA TIMING LAB (적립타이밍) =====
+ * 기초자산 일봉 → 일간 리밸런싱 레버리지 ETF 합성(변동성 끌림 반영) →
+ * 동일 월예산을 7가지 타이밍 룰로 투입 비교. 미투입 예산은 현금 이월.
+ */
+(function(){
+  const el=id=>document.getElementById(id);
+  function rsi14(c){
+    const n=c.length,out=new Array(n);let ag=0,al=0;
+    for(let i=0;i<n;i++){
+      const d=i===0?0:c[i]-c[i-1],g=d>0?d:0,l=d<0?-d:0;
+      if(i===0){ag=g;al=l;}else{ag+=(g-ag)/14;al+=(l-al)/14;}
+      out[i]=100-100/(1+ag/(al===0?1e-12:al));
+    }
+    return out;
+  }
+  function sma(c,p){
+    const n=c.length,out=new Array(n).fill(null);let s=0;
+    for(let i=0;i<n;i++){s+=c[i];if(i>=p)s-=c[i-p];if(i>=p-1)out[i]=s/p;}
+    return out;
+  }
+  function errMsg(m){el("dt_err").textContent=m||"";}
+  function statusMsg(m){el("dt_status").textContent=m||"";}
+
+  async function run(){
+    errMsg("");
+    const btn=el("dt_run");btn.disabled=true;
+    try{
+      const sym=(el("dt_sym").value||"").trim();
+      const lev=Math.max(1,+el("dt_lev").value||2);
+      const fromY=Math.max(1990,+el("dt_from").value||2005);
+      const B=Math.max(1,+el("dt_budget").value||50)*10000;
+      if(!sym)throw new Error("심볼을 입력하세요");
+      statusMsg("데이터 불러오는 중… (야후, 브라우저에서 직접)");
+      const to=new Date().toISOString().slice(0,10);
+      const u=`${PROXY}/?yahoo=${encodeURIComponent(sym)}&from=${fromY}-01-01&to=${to}&interval=1d`;
+      const r=await fetch(u);
+      const j=await r.json();
+      if(!r.ok||!j.data||j.data.length<500)throw new Error(j.error||"데이터 부족(500봉 미만) — 심볼/기간 확인");
+      const rows=j.data.filter(x=>x.close>0);
+      const dates=rows.map(x=>x.date), c=rows.map(x=>+x.close);
+      const n=c.length;
+      statusMsg(`${sym} ${dates[0]} ~ ${dates[n-1]} · ${n.toLocaleString()}일 · 레버리지 ${lev}배 합성 중…`);
+      // 합성 레버리지 NAV
+      const nav=new Array(n);nav[0]=100;
+      for(let i=1;i<n;i++){
+        const rr=c[i]/c[i-1]-1;
+        nav[i]=Math.max(nav[i-1]*(1+lev*rr),1e-8);
+      }
+      // 지표 (기초자산 기준)
+      const rsi=rsi14(c), ma200=sma(c,200);
+      const hi252=new Array(n).fill(null);
+      for(let i=0;i<n;i++){let h=-Infinity;for(let k=Math.max(0,i-251);k<=i;k++)if(c[k]>h)h=c[k];hi252[i]=h;}
+      // ETF 일수익률·변동성(레버리지 반영)
+      const er=new Array(n).fill(0);
+      for(let i=1;i<n;i++)er[i]=nav[i]/nav[i-1]-1;
+      const sig20=new Array(n).fill(null);
+      for(let i=20;i<n;i++){
+        let s=0,s2=0;for(let k=i-19;k<=i;k++){s+=er[k];s2+=er[k]*er[k];}
+        sig20[i]=Math.sqrt(Math.max(0,s2/20-(s/20)*(s/20)));
+      }
+      const sigMed120=new Array(n).fill(null);
+      for(let i=140;i<n;i++){
+        const w=[];for(let k=i-119;k<=i;k++)if(sig20[k]!=null)w.push(sig20[k]);
+        w.sort((a,b)=>a-b);sigMed120[i]=w[Math.floor(w.length/2)];
+      }
+      const month=dates.map(d=>d.slice(0,7));
+      const isM1=dates.map((d,i)=>i===0||month[i]!==month[i-1]);
+      const hot=i=>{let k2=0;for(let k=Math.max(1,i-19);k<=i;k++)if(Math.abs(er[k])>=0.15)k2++;return k2>=3;};
+
+      const RULES=[
+        {key:"A",name:"A. 월초 무조건 (기준선)",f:(i,cash)=>isM1[i]?cash:0},
+        {key:"B",name:"B. RSI30 이하만",f:(i,cash)=>rsi[i]<30?Math.min(cash,3*B):0},
+        {key:"C",name:"C. 낙폭 티어 (-20/-35/-50%)",f:(i,cash)=>{
+          if(!isM1[i])return 0;
+          const dd=c[i]/hi252[i]-1;
+          if(dd<=-0.5)return Math.min(cash,3*B);
+          if(dd<=-0.35)return Math.min(cash,2*B);
+          if(dd<=-0.2)return Math.min(cash,B);
+          return 0;}},
+        {key:"D",name:"D. 200일선 아래만",f:(i,cash)=>isM1[i]&&ma200[i]!=null&&c[i]<ma200[i]?cash:0},
+        {key:"E",name:"E. 200일선 위만",f:(i,cash)=>isM1[i]&&ma200[i]!=null&&c[i]>ma200[i]?cash:0},
+        {key:"F",name:"F. 변동성 필터 (폭풍 보류)",f:(i,cash)=>isM1[i]&&!hot(i)?cash:0},
+        {key:"G",name:"G. 폭풍뒤줍기 (낙폭-30%+진정)",f:(i,cash)=>{
+          if(sigMed120[i]==null)return 0;
+          const dd=c[i]/hi252[i]-1;
+          return (dd<=-0.3&&sig20[i]<sigMed120[i])?Math.min(cash,3*B):0;}},
+      ];
+      const out=[];
+      for(const R of RULES){
+        let cash=0,shares=0,contrib=0,cost=0;
+        let peak=0,mdd=0,buys=0;
+        for(let i=0;i<n;i++){
+          if(isM1[i]){cash+=B;contrib+=B;}
+          const a=Math.max(0,Math.min(R.f(i,cash),cash));
+          if(a>0){shares+=a/nav[i];cash-=a;cost+=a;buys++;}
+          const v=shares*nav[i]+cash;
+          if(v>peak)peak=v;
+          if(peak>0){const dd2=v/peak-1;if(dd2<mdd)mdd=dd2;}
+        }
+        const val=shares*nav[n-1]+cash;
+        out.push({name:R.name,contrib,val,mult:val/contrib,cash,buys,
+          avg:shares>0?cost/shares:0,navEnd:nav[n-1],mdd,
+          deployed:cost/contrib});
+      }
+      render(out,sym,dates[0],dates[n-1],lev);
+      statusMsg(`완료 — ${sym} · ${dates[0]}~${dates[n-1]} · 합성 ${lev}배 (실제 ETF와 보수·추적오차만큼 차이)`);
+    }catch(e){errMsg("⚠ "+e.message);statusMsg("");}
+    finally{btn.disabled=false;}
+  }
+  function render(out,sym,d0,d1,lev){
+    const won=v=>v>=1e8?(v/1e8).toFixed(2)+"억":Math.round(v/1e4).toLocaleString()+"만";
+    const best=[...out].sort((a,b)=>b.mult-a.mult)[0];
+    let html=`<div class="db-best">최고 타이밍: <b>${best.name}</b> → 배수 <b>${best.mult.toFixed(2)}x</b> (투입 ${won(best.contrib)} → ${won(best.val)}) · ${sym} ${d0}~${d1} · ${lev}배 합성</div>
+    <div class="ctable-wrap"><table class="ctable"><thead><tr>
+      <th><div class="th-main">타이밍 룰</div></th>
+      <th><div class="th-main">누적예산</div></th><th><div class="th-main">실투입 비율</div></th>
+      <th><div class="th-main">최종 평가</div></th><th><div class="th-main">배수</div></th>
+      <th><div class="th-main">슬리브 MDD</div></th><th><div class="th-main">매수 횟수</div></th>
+      <th><div class="th-main">잔여 현금</div></th>
+    </tr></thead><tbody>`;
+    for(const r of [...out].sort((a,b)=>b.mult-a.mult)){
+      html+=`<tr class="${r===best?"db-hot":""}">
+        <td class="name">${r.name}</td>
+        <td class="num mono">${won(r.contrib)}</td>
+        <td class="num">${(100*r.deployed).toFixed(0)}%</td>
+        <td class="num mono">${won(r.val)}</td>
+        <td class="num ${r.mult>=1?"pos":"neg"}" style="font-weight:700">${r.mult.toFixed(2)}x</td>
+        <td class="num neg">${(100*r.mdd).toFixed(0)}%</td>
+        <td class="num">${r.buys}</td>
+        <td class="num mono">${won(r.cash)}</td>
+      </tr>`;
+    }
+    html+=`</tbody></table></div>
+    <div class="note" style="margin-top:12px"><b>읽는 법</b> · 배수=총예산 대비 최종가치(현금 포함) — 타이밍 룰끼리 공정 비교.
+    실투입 비율이 낮은 룰은 조건이 안 와서 현금으로 논 것(기회비용 포함된 결과임).
+    MDD는 슬리브 전체(현금+평가) 기준. ⚠ 합성 ETF는 보수·추적오차·호가 미반영 — 룰 간 상대 비교용.</div>`;
+    el("dt_results").innerHTML=html;
+  }
+  function init(){
+    if(!el("dt_run"))return;
+    el("dt_run").onclick=run;
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);else init();
 })();

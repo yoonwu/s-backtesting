@@ -802,6 +802,7 @@ def audit():
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     except Exception:
         pass
+    os.environ.update(read_env())          # .env 로드 (토스 키)
     seed = load_json(PRINCIPAL_PATH) or {}
     print(f"시드   : {seed.get('date','(없음)')}  ${fnum(seed.get('usd')):,.2f}  {seed.get('note','')}")
     try:

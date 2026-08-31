@@ -93,6 +93,10 @@ def parse_holdings(raw: dict, symbol: str):
     """
     qty, last = 0.0, None
     res = raw.get("result", raw) or {}
+    if not isinstance(res, dict) or ("items" not in res and "holdings" not in res):
+        # 응답 형식이 깨졌는데 qty=0으로 진행하면 (1) 보유 중인데 매도 신호를 놓치고
+        # (2) 장부에 '전량 청산'처럼 기록돼 원금 계산이 망가진다 → 즉시 중단.
+        raise RuntimeError(f"보유 조회 응답 형식 이상 — 매매·기록 중단: {str(raw)[:200]}")
     items = res.get("items") or res.get("holdings") or []
     for it in items:
         sym = it.get("symbol") or it.get("ticker")
@@ -166,6 +170,7 @@ def main():
             f"예외={sig['exception_buy']} 보유 {SYMBOL}={qty} 현금USD={cash}")
     snap = dict(type="snapshot", asof=sig["asof"], signal=sig["signal_aggressive"],
                 qty=qty, cash=cash, krw=krw, price=last_price,
+                holdings_ok=True,          # 조회 성공분만 원금 재구성에 사용
                 mode="dry" if DRY else "live",
                 action=(action[0] if action else None))
     if action is None:

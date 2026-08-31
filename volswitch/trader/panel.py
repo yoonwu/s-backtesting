@@ -759,6 +759,10 @@ class H(BaseHTTPRequestHandler):
 
 def audit():
     """CLI 감사: 원금이 왜 그 숫자인지 날짜별로 전부 출력."""
+    try:                                   # 윈도우 cmd(cp949)에서 한글/기호 깨짐·크래시 방지
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
     seed = load_json(PRINCIPAL_PATH) or {}
     after = seed.get("date", "1970-01-01")
     print(f"시드: {seed.get('date','(없음)')} ${fnum(seed.get('usd')):,.2f}  ({seed.get('note','')})")
@@ -779,7 +783,7 @@ def audit():
           f"= ${fnum(seed.get('usd')) + tot:,.2f}")
     sus = [r for r in rows if r["kind"] == "suspect"]
     if sus:
-        print(f"\n⚠ 확인필요 {len(sus)}건 (결제지연/조회오류로 보고 원금에서 제외했습니다):")
+        print(f"\n[확인필요] {len(sus)}건 (결제지연/조회오류로 보고 원금에서 제외했습니다):")
         for r in sus:
             print(f"   {r['day']}  ${r['usd']:,.2f}  체결 {r['traded']:.0f}주 / 미기록 {r['resid_qty']:.0f}주")
         print("   이 중 진짜 입금이 있으면 조종석 [원금 보정]으로 총액을 직접 넣으세요.")

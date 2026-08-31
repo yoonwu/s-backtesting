@@ -211,34 +211,41 @@ def realized_pnl(seed: dict):
     return realized, traded
 
 
-def build_wealth(account: dict, usd) -> dict:
-    """원금 = 총자산 − 평가손익 − 실현손익.
+def build_wealth(account: dict, usd, summary=None) -> dict:
+    """원금·총수익을 **토스가 계산한 계좌 총수익률**로 확정한다.
 
-    입금·출금은 손익이 아니라서 이 항등식에서 자동으로 원금에 남는다.
-    (구버전은 Δ현금·Δ수량으로 입금을 '추정'했는데, 매수가능현금은 미결제·
-     오버나이트 갭에 요동쳐서 스위칭 때마다 가짜 입금이 쌓였다.)
+    holdings 응답의 items 바깥에 계좌 단위 profitLoss.rate(=총수익률)가 있다.
+    이 값은 봇 설치 이전의 실현손익까지 이미 반영된, 토스 앱과 같은 숫자다.
+
+        원금 = 총자산 / (1 + 총수익률)      총수익 = 총자산 − 원금
+
+    (구버전은 원금을 현금흐름으로 '추정'해서 스위칭마다 가짜 입금이 쌓였고,
+     그 다음 버전은 봇 일지로 실현손익을 재구성했는데 일지 시작 이전 손익을
+     알 수 없었다. 이제 추정이 없다.)
     """
     usd = fnum(usd)
-    total = fnum(account.get("value")) + usd
+    summary = summary or {}
+    val = fnum(summary.get("value")) or fnum(account.get("value"))
+    total = val + usd
     qty, avg, last = fnum(account.get("qty")), fnum(account.get("avg")), fnum(account.get("last"))
-    seed = load_json(PRINCIPAL_PATH)
-    if not seed or not fnum(seed.get("usd")):
-        seed = {"usd": round(qty * avg + usd, 2), "date": time.strftime("%Y-%m-%d"),
-                "note": "자동 초기화 = 보유원가 + 달러현금"}
-        with open(PRINCIPAL_PATH, "w", encoding="utf-8") as f:
-            json.dump(seed, f, ensure_ascii=False, indent=1)
-    if seed.get("fixed"):                      # 수동 보정분은 그 값을 원금으로 고정
-        principal = fnum(seed["usd"])
-        unreal = real = 0.0
-    else:
-        unreal = qty * (last - avg) if (qty and avg and last) else fnum(account.get("pl"))
-        real, _ = realized_pnl(seed)
-        principal = total - unreal - real
+    unreal = fnum(summary.get("pl")) or (qty * (last - avg) if (qty and avg and last) else 0.0)
+    rate = fnum(summary.get("rate"))
+    rate_net = fnum(summary.get("rate_net"))
+    seed = load_json(PRINCIPAL_PATH) or {}
+    src = "toss"
+    if seed.get("fixed") and fnum(seed.get("usd")) > 0:
+        principal, src = fnum(seed["usd"]), "manual"
+    elif rate > -0.999:
+        principal = total / (1.0 + rate)
+    else:                                   # 토스 값이 없을 때만 최후 폴백
+        principal, src = total - unreal, "fallback"
     profit = total - principal
     return {"total": round(total, 2), "principal": round(principal, 2),
             "profit": round(profit, 2),
             "profit_rate": round(profit / principal * 100, 2) if principal > 0 else 0.0,
-            "unrealized": round(unreal, 2), "realized": round(real, 2),
+            "unrealized": round(unreal, 2),
+            "realized": round(profit - unreal, 2),
+            "rate_net": round(rate_net * 100, 2), "source": src,
             "seed": seed, "recent_flows": [], "suspect": []}
 
 
@@ -295,6 +302,17 @@ def build_status(force=False) -> dict:
         c = TossClient()
         raw = c.holdings()
         res = raw.get("result", {}) or {}
+        # ── 계좌 단위 요약 (items 바깥). 토스가 계산한 '총수익률'이 여기 있다.
+        _mv, _pl = (res.get("marketValue") or {}), (res.get("profitLoss") or {})
+        out["summary"] = {
+            "purchase": fnum((res.get("totalPurchaseAmount") or {}).get("usd")),
+            "value": fnum((_mv.get("amount") or {}).get("usd")),
+            "value_net": fnum((_mv.get("amountAfterCost") or {}).get("usd")),
+            "pl": fnum((_pl.get("amount") or {}).get("usd")),
+            "pl_net": fnum((_pl.get("amountAfterCost") or {}).get("usd")),
+            "rate": fnum(_pl.get("rate")),
+            "rate_net": fnum(_pl.get("rateAfterCost")),
+        }
         it = next((i for i in res.get("items", []) if i.get("symbol") == symbol), {})
         pl, dpl = it.get("profitLoss") or {}, it.get("dailyProfitLoss") or {}
         out["account"] = {
@@ -310,7 +328,7 @@ def build_status(force=False) -> dict:
         except Exception:
             out["usd"] = None
         try:
-            out["wealth"] = build_wealth(out["account"], out["usd"])
+            out["wealth"] = build_wealth(out["account"], out["usd"], out.get("summary"))
         except Exception as e:
             out["wealth_error"] = str(e)[:120]
         try:
@@ -636,9 +654,12 @@ async function load(force){
       ['수량',a.qty+'주'],['오늘',`<span style="color:${a.day>=0?'var(--up)':'var(--dn)'}">${pct(a.day_rate)}</span>`]]
       .map(([k,v,st])=>`<div class="tile" style="${st??''}"><div class="k">${k}</div><div class="v num">${v}</div></div>`).join('');
     $('krwwarn').textContent=(d.krw>=100000)?`⚠ 환전 대기 원화 ₩${Number(d.krw).toLocaleString()} — 토스 앱에서 환전해야 봇이 사용합니다 (원화는 원금·총자산에 미포함)`:'';
-    $('pnote').innerHTML=`원금 = 총자산 − 평가손익(${money(w.unrealized)}) − 실현손익(${money(w.realized)}) ·
-      입·출금은 손익이 아니므로 자동으로 원금에 반영됩니다 (기준: ${w.seed.date}${w.seed.fixed?' · 수동고정':''}) ·
-      <a href="#" onclick="fixPrincipal(${w.principal});return false" style="color:var(--brass)">원금 보정</a>`;
+    $('pnote').innerHTML=(w.source==='toss'
+        ? `원금·수익은 <b>토스가 계산한 계좌 총수익률</b>을 그대로 씁니다 (수수료 반영 시 ${pct(w.rate_net)}) ·
+           평가손익 ${money(w.unrealized)} + 실현손익 ${money(w.realized)}`
+        : (w.source==='manual' ? `원금 수동 고정값 사용 중 (${w.seed.date})`
+                               : `⚠ 토스 총수익률을 못 읽어 근사치로 계산 중`))
+      + ` · <a href="#" onclick="fixPrincipal(${w.principal});return false" style="color:var(--brass)">원금 보정</a>`;
   } else if(a){
     $('value').textContent=money(a.value);
     $('pl').className='delta num '+(a.pl>=0?'up':'dn');
@@ -797,48 +818,55 @@ class H(BaseHTTPRequestHandler):
 
 
 def audit():
-    """CLI 감사: 원금이 어떻게 계산됐는지 분해해서 출력."""
+    """CLI 감사: 토스 원본값 → 원금·수익 분해."""
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     except Exception:
         pass
-    os.environ.update(read_env())          # .env 로드 (토스 키)
-    seed = load_json(PRINCIPAL_PATH) or {}
-    print(f"시드   : {seed.get('date','(없음)')}  ${fnum(seed.get('usd')):,.2f}  {seed.get('note','')}")
+    os.environ.update(read_env())
     try:
         from toss_client import TossClient
         c = TossClient()
         res = (c.holdings().get("result") or {})
-        sym = os.environ.get("SYMBOL", "TQQQ")
-        it = next((i for i in res.get("items", []) if i.get("symbol") == sym), {})
-        acc = {"qty": fnum(it.get("quantity")), "avg": fnum(it.get("averagePurchasePrice")),
-               "last": fnum(it.get("lastPrice")),
-               "value": fnum((it.get("marketValue") or {}).get("amount")),
-               "pl": fnum((it.get("profitLoss") or {}).get("amount"))}
         usd = c.usd_cash()
     except Exception as e:
         print(f"토스 조회 실패: {e}")
         return
-    w = build_wealth(acc, usd)
-    real, traded = realized_pnl(seed)
-    print(f"\n총자산 : ${w['total']:,.2f}   (평가금 ${acc['value']:,.2f} + 현금 ${usd:,.2f})")
-    print(f"  ­ 평가손익 : ${w['unrealized']:>12,.2f}   ({acc['qty']:.0f}주 × (현재 ${acc['last']:.2f} − 평단 ${acc['avg']:.2f}))")
-    print(f"  ­ 실현손익 : ${w['realized']:>12,.2f}   (시드 이후 봇 체결 {traded:,.0f}달러어치 매매로 확정된 손익)")
-    print(f"  = 원 금   : ${w['principal']:>12,.2f}")
-    print(f"    총수익  : ${w['profit']:>12,.2f}  ({w['profit_rate']:+.2f}%)")
-    print("\n[체결 이력]")
-    days = journal_daily()
-    after = seed.get("date", "1970-01-01")
+    sym = os.environ.get("SYMBOL", "TQQQ")
+    it = next((i for i in res.get("items", []) if i.get("symbol") == sym), {})
+    mv, pl = (res.get("marketValue") or {}), (res.get("profitLoss") or {})
+    summary = {"purchase": fnum((res.get("totalPurchaseAmount") or {}).get("usd")),
+               "value": fnum((mv.get("amount") or {}).get("usd")),
+               "value_net": fnum((mv.get("amountAfterCost") or {}).get("usd")),
+               "pl": fnum((pl.get("amount") or {}).get("usd")),
+               "pl_net": fnum((pl.get("amountAfterCost") or {}).get("usd")),
+               "rate": fnum(pl.get("rate")), "rate_net": fnum(pl.get("rateAfterCost"))}
+    acc = {"qty": fnum(it.get("quantity")), "avg": fnum(it.get("averagePurchasePrice")),
+           "last": fnum(it.get("lastPrice")),
+           "value": fnum((it.get("marketValue") or {}).get("amount"))}
+    w = build_wealth(acc, usd, summary)
+    print("[토스 원본 — holdings 계좌요약]")
+    print(f"  총평가금액   ${summary['value']:>12,.2f}   (수수료반영 ${summary['value_net']:,.2f})")
+    print(f"  매입금액     ${summary['purchase']:>12,.2f}")
+    print(f"  평가손익     ${summary['pl']:>12,.2f}   (수수료반영 ${summary['pl_net']:,.2f})")
+    print(f"  총수익률     {summary['rate']*100:>12.2f}%  (수수료반영 {summary['rate_net']*100:.2f}%)  ← 토스 앱과 같은 값")
+    print(f"  달러현금     ${usd:>12,.2f}")
+    print()
+    print("[조종석 계산]")
+    print(f"  총자산       ${w['total']:>12,.2f}   (평가금 + 현금)")
+    print(f"  원 금        ${w['principal']:>12,.2f}   = 총자산 / (1 + 총수익률)   [{w['source']}]")
+    print(f"  총수익       ${w['profit']:>12,.2f}   ({w['profit_rate']:+.2f}%)")
+    print(f"    ├ 평가손익 ${w['unrealized']:>12,.2f}   (현재 들고 있는 포지션)")
+    print(f"    └ 실현손익 ${w['realized']:>12,.2f}   (지금까지 매매로 확정 — 봇 설치 이전분 포함)")
+    print()
+    print("[봇 체결 이력]")
     n = 0
-    for d in days:
-        if d["day"] < after:
-            continue
+    for d in journal_daily():
         for t in d["trades"]:
             n += 1
             print(f"  {d['day']}  {'매수' if t['qty'] > 0 else '매도'} {abs(t['qty']):>6.0f}주 @ ${t['px']:,.2f}")
     if not n:
-        print("  (시드 이후 체결 없음 — 실현손익 0)")
-    print("\n※ 실현손익은 봇 주문 시점가(ref_price) 기준이라 실제 체결가와 소폭 차이날 수 있습니다.")
+        print("  (기록 없음)")
 
 
 if __name__ == "__main__":

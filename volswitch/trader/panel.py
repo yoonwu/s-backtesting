@@ -3,6 +3,8 @@
 
 panel.bat 실행 → 브라우저 자동 오픈. 조회 전용 + 봇 스위치. 주문 기능 없음.
 v5: 원금(누적 입금)·총수익 분리 표시 + 히스토리 탭 현재가 스트립.
+v5.1: 입출금 재구성을 체결 당일가 기준으로 수정(오버나이트 갭이 가짜 원금으로
+      쌓이던 버그) + 결제지연/조회오류 흐름 격리 + `--audit` 감사 모드.
 """
 import json
 import os
@@ -87,9 +89,13 @@ def load_json(path):
 
 
 def journal_daily():
-    """journal.jsonl → 날짜별 마지막 스냅샷 + 그날 봇 체결 참조가 (날짜순)."""
+    """journal.jsonl → 날짜별 마지막 스냅샷 + 그날의 봇 체결 목록 (날짜순).
+
+    스냅샷은 '그날 매매 직전' 상태다(run_trader가 주문 전 값으로 기록).
+    따라서 D일 스냅샷 → D+1일 스냅샷 사이의 변화는 'D일의 체결'이 만든다.
+    """
     jp = os.path.join(HERE, "journal.jsonl")
-    snaps, tpx = {}, {}
+    snaps, trades = {}, {}
     if not os.path.exists(jp):
         return []
     for ln in open(jp, encoding="utf-8", errors="ignore"):
@@ -101,32 +107,73 @@ def journal_daily():
         if not day:
             continue
         if j.get("type") == "snapshot" and j.get("cash") is not None:
+            if j.get("holdings_ok") is False:      # 보유 조회 실패분은 신뢰 불가
+                continue
             snaps[day] = j
         elif j.get("type") == "trade" and j.get("ref_price"):
-            tpx.setdefault(day, []).append(fnum(j.get("ref_price")))
+            side = (j.get("side") or "").upper()
+            q = fnum(j.get("qty"))
+            if q <= 0:
+                continue
+            sign = -1.0 if side in ("SELL", "EXSTOP") else 1.0   # +1 매수 / -1 매도
+            trades.setdefault(day, []).append({"qty": sign * q, "px": fnum(j.get("ref_price"))})
     out = []
     for day in sorted(snaps):
         sn = snaps[day]
-        px = sum(tpx[day]) / len(tpx[day]) if day in tpx else fnum(sn.get("price"))
-        out.append({"day": day, "cash": fnum(sn.get("cash")),
-                    "qty": fnum(sn.get("qty")), "px": px})
+        tl = trades.get(day, [])
+        out.append({"day": day, "cash": fnum(sn.get("cash")), "qty": fnum(sn.get("qty")),
+                    "px": fnum(sn.get("price")), "trades": tl,
+                    "trade_qty": sum(t["qty"] for t in tl),
+                    "trade_cash": sum(t["qty"] * t["px"] for t in tl)})
     return out
 
 
-def deposit_flows(after_day: str):
-    """일별 입출금 재구성: 흐름 = Δ현금 + Δ수량×체결가 근사.
+# 한 날짜의 흐름이 총자산의 이 비율을 넘으면 '입금'이 아니라 결제지연·조회오류로 보고
+# 자동 반영하지 않는다 (패널에 '확인 필요'로 표시). 실제 대규모 입금은 [원금 보정] 사용.
+SUSPECT_FRAC = 0.25
+NOISE_USD = 50.0
 
-    순수 시세 변동은 0, 입금(환전)은 +, 출금은 −, 매매는 상쇄되어 ≈0.
-    같은 날 '입금+매수'도 수량 증가분의 매수대금으로 잡아낸다. |흐름|≤$20는 노이즈로 무시.
+
+def flow_ledger(after_day: str = "1970-01-01"):
+    """일별 입출금 재구성 (검증용 원장).
+
+    핵심: 수량 변화는 **체결 당일의 실제 기준가**로 상계한다.
+    (구버전은 다음날 스냅샷 가격으로 곱해서, 3배 ETF의 오버나이트 갭이
+     그대로 '가짜 입금'으로 쌓였다 — 전략이 맞을수록 원금이 부풀어오르는 버그.)
+
+        흐름 = Δ현금 + (전일 체결의 현금영향 상계) + (기록 없는 수량변화 × 현재가)
+
+    · 봇 매매: 상계되어 0
+    · 진짜 입금(환전): 순수 현금 증가로 남음
+    · 앱에서 직접 매매: 기록이 없으니 잔여수량으로 잡혀 근사 상계
+    · 결제지연(T+1)·조회오류: 총자산 대비 과도한 흐름 → suspect로 격리
     """
-    days, flows, prev = journal_daily(), [], None
+    days, rows, prev = journal_daily(), [], None
     for d in days:
-        if prev and d["day"] > after_day:
-            f = (d["cash"] - prev["cash"]) + (d["qty"] - prev["qty"]) * (d["px"] or prev["px"] or 0)
-            if abs(f) > 20:
-                flows.append({"day": d["day"], "usd": round(f, 2)})
+        if prev is not None:
+            resid_qty = (d["qty"] - prev["qty"]) - prev["trade_qty"]
+            px = d["px"] or prev["px"] or 0.0
+            f = (d["cash"] - prev["cash"]) + prev["trade_cash"] + resid_qty * px
+            total = d["qty"] * px + d["cash"]
+            cap = max(SUSPECT_FRAC * total, NOISE_USD * 4)
+            if abs(f) <= NOISE_USD:
+                kind = "noise"
+            elif abs(f) > cap:
+                kind = "suspect"
+            else:
+                kind = "flow"
+            rows.append({"day": d["day"], "usd": round(f, 2), "kind": kind,
+                         "counted": kind == "flow" and d["day"] > after_day,
+                         "resid_qty": round(resid_qty, 4),
+                         "traded": round(prev["trade_qty"], 4), "px": px,
+                         "cash": d["cash"], "qty": d["qty"]})
         prev = d
-    return flows
+    return rows
+
+
+def deposit_flows(after_day: str):
+    """원금에 반영할 확정 입출금만."""
+    return [{"day": r["day"], "usd": r["usd"]} for r in flow_ledger(after_day) if r["counted"]]
 
 
 def build_wealth(account: dict, usd) -> dict:
@@ -140,13 +187,17 @@ def build_wealth(account: dict, usd) -> dict:
                 "note": "자동 초기화 = 보유원가 + 달러현금 (조종석에서 보정 가능)"}
         with open(PRINCIPAL_PATH, "w", encoding="utf-8") as f:
             json.dump(seed, f, ensure_ascii=False, indent=1)
-    flows = deposit_flows(seed.get("date", "1970-01-01"))
+    after = seed.get("date", "1970-01-01")
+    ledger = flow_ledger(after)
+    flows = [{"day": r["day"], "usd": r["usd"]} for r in ledger if r["counted"]]
+    suspect = [{"day": r["day"], "usd": r["usd"]} for r in ledger
+               if r["kind"] == "suspect" and r["day"] > after]
     principal = fnum(seed["usd"]) + sum(f["usd"] for f in flows)
     profit = total - principal
     return {"total": round(total, 2), "principal": round(principal, 2),
             "profit": round(profit, 2),
             "profit_rate": round(profit / principal * 100, 2) if principal > 0 else 0.0,
-            "seed": seed, "recent_flows": flows[-8:]}
+            "seed": seed, "recent_flows": flows[-8:], "suspect": suspect[-6:]}
 
 
 def spark_series():
@@ -543,8 +594,12 @@ async function load(force){
       ['수량',a.qty+'주'],['오늘',`<span style="color:${a.day>=0?'var(--up)':'var(--dn)'}">${pct(a.day_rate)}</span>`]]
       .map(([k,v,st])=>`<div class="tile" style="${st??''}"><div class="k">${k}</div><div class="v num">${v}</div></div>`).join('');
     $('krwwarn').textContent=(d.krw>=100000)?`⚠ 환전 대기 원화 ₩${Number(d.krw).toLocaleString()} — 토스 앱에서 환전해야 봇이 사용합니다 (원화는 원금·총자산에 미포함)`:'';
+    const sus=(w.suspect||[]);
     $('pnote').innerHTML=`원금은 봇 일지의 입·출금을 자동 누적합니다 (시작: ${w.seed.date} $${Number(w.seed.usd).toLocaleString()}) ·
-      <a href="#" onclick="fixPrincipal(${w.principal});return false" style="color:var(--brass)">원금 보정</a>`;
+      <a href="#" onclick="fixPrincipal(${w.principal});return false" style="color:var(--brass)">원금 보정</a>`
+      +(sus.length?`<br><span style="color:var(--dn)">⚠ 확인필요 ${sus.length}건 — 결제지연·조회오류로 보이는 흐름은 원금에서 제외했습니다 (`
+        +sus.map(f=>`${f.day} ${f.usd>=0?'+':'−'}$${Math.abs(f.usd).toLocaleString()}`).join(', ')
+        +`). 이 중 진짜 입금이 있으면 [원금 보정]으로 총액을 넣으세요.</span>`:'');
   } else if(a){
     $('value').textContent=money(a.value);
     $('pl').className='delta num '+(a.pl>=0?'up':'dn');
@@ -702,7 +757,38 @@ class H(BaseHTTPRequestHandler):
         self._send("{}")
 
 
+def audit():
+    """CLI 감사: 원금이 왜 그 숫자인지 날짜별로 전부 출력."""
+    seed = load_json(PRINCIPAL_PATH) or {}
+    after = seed.get("date", "1970-01-01")
+    print(f"시드: {seed.get('date','(없음)')} ${fnum(seed.get('usd')):,.2f}  ({seed.get('note','')})")
+    rows = flow_ledger(after)
+    if not rows:
+        print("journal.jsonl 에 비교할 스냅샷이 2일치 미만입니다.")
+        return
+    print(f"\n{'날짜':11s} {'흐름$':>11s} {'판정':8s} {'체결수량':>9s} {'미기록수량':>10s} "
+          f"{'현금$':>10s} {'수량':>8s} {'가격$':>8s}")
+    tot = 0.0
+    for r in rows:
+        mark = {"flow": "원금반영", "suspect": "확인필요", "noise": "무시"}[r["kind"]]
+        if r["counted"]:
+            tot += r["usd"]
+        print(f"{r['day']:11s} {r['usd']:11,.2f} {mark:8s} {r['traded']:9.2f} "
+              f"{r['resid_qty']:10.2f} {r['cash']:10,.2f} {r['qty']:8.2f} {r['px']:8.2f}")
+    print(f"\n원금 = 시드 ${fnum(seed.get('usd')):,.2f} + 반영흐름 ${tot:,.2f} "
+          f"= ${fnum(seed.get('usd')) + tot:,.2f}")
+    sus = [r for r in rows if r["kind"] == "suspect"]
+    if sus:
+        print(f"\n⚠ 확인필요 {len(sus)}건 (결제지연/조회오류로 보고 원금에서 제외했습니다):")
+        for r in sus:
+            print(f"   {r['day']}  ${r['usd']:,.2f}  체결 {r['traded']:.0f}주 / 미기록 {r['resid_qty']:.0f}주")
+        print("   이 중 진짜 입금이 있으면 조종석 [원금 보정]으로 총액을 직접 넣으세요.")
+
+
 if __name__ == "__main__":
+    if "--audit" in sys.argv:
+        audit()
+        sys.exit(0)
     url = f"http://127.0.0.1:{PORT}"
     try:
         srv = ThreadingHTTPServer(("127.0.0.1", PORT), H)

@@ -176,28 +176,70 @@ def deposit_flows(after_day: str):
     return [{"day": r["day"], "usd": r["usd"]} for r in flow_ledger(after_day) if r["counted"]]
 
 
+def realized_pnl(seed: dict):
+    """시드 시점 이후 '실현손익'을 봇 체결기록으로 재구성 (이동평균원가법).
+
+    입금은 손익이 아니므로 이 값에 절대 섞이지 않는다 — 현금흐름 역추적의
+    근본 문제(가짜 입금)를 회피하는 핵심.
+    """
+    after = seed.get("date", "1970-01-01")
+    days = journal_daily()
+    base = next((d for d in days if d["day"] >= after), None)
+    if base is None:
+        return 0.0, 0.0
+    # 시드 정의(원금0 = 보유원가 + 현금)를 역산해 시작 평단을 복원
+    qty = fnum(base["qty"])
+    avg = ((fnum(seed.get("usd")) - fnum(base["cash"])) / qty) if qty > 0 else 0.0
+    if avg <= 0:
+        avg = base["px"] or 0.0
+    cost, realized, traded = qty * avg, 0.0, 0.0
+    for d in days:
+        if d["day"] < after:
+            continue
+        for t in d["trades"]:
+            q, px = t["qty"], t["px"]          # q: +매수 / -매도
+            if q > 0:
+                cost += q * px
+                qty += q
+            elif q < 0 and qty > 0:
+                sell = min(-q, qty)
+                unit = cost / qty
+                realized += sell * (px - unit)
+                cost -= sell * unit
+                qty -= sell
+            traded += abs(q) * px
+    return realized, traded
+
+
 def build_wealth(account: dict, usd) -> dict:
-    """원금(누적 입금) vs 수익 분해. 시드는 최초 1회 '보유원가+현금'으로 자동 생성."""
+    """원금 = 총자산 − 평가손익 − 실현손익.
+
+    입금·출금은 손익이 아니라서 이 항등식에서 자동으로 원금에 남는다.
+    (구버전은 Δ현금·Δ수량으로 입금을 '추정'했는데, 매수가능현금은 미결제·
+     오버나이트 갭에 요동쳐서 스위칭 때마다 가짜 입금이 쌓였다.)
+    """
     usd = fnum(usd)
     total = fnum(account.get("value")) + usd
+    qty, avg, last = fnum(account.get("qty")), fnum(account.get("avg")), fnum(account.get("last"))
     seed = load_json(PRINCIPAL_PATH)
     if not seed or not fnum(seed.get("usd")):
-        seed = {"usd": round(fnum(account.get("qty")) * fnum(account.get("avg")) + usd, 2),
-                "date": time.strftime("%Y-%m-%d"),
-                "note": "자동 초기화 = 보유원가 + 달러현금 (조종석에서 보정 가능)"}
+        seed = {"usd": round(qty * avg + usd, 2), "date": time.strftime("%Y-%m-%d"),
+                "note": "자동 초기화 = 보유원가 + 달러현금"}
         with open(PRINCIPAL_PATH, "w", encoding="utf-8") as f:
             json.dump(seed, f, ensure_ascii=False, indent=1)
-    after = seed.get("date", "1970-01-01")
-    ledger = flow_ledger(after)
-    flows = [{"day": r["day"], "usd": r["usd"]} for r in ledger if r["counted"]]
-    suspect = [{"day": r["day"], "usd": r["usd"]} for r in ledger
-               if r["kind"] == "suspect" and r["day"] > after]
-    principal = fnum(seed["usd"]) + sum(f["usd"] for f in flows)
+    if seed.get("fixed"):                      # 수동 보정분은 그 값을 원금으로 고정
+        principal = fnum(seed["usd"])
+        unreal = real = 0.0
+    else:
+        unreal = qty * (last - avg) if (qty and avg and last) else fnum(account.get("pl"))
+        real, _ = realized_pnl(seed)
+        principal = total - unreal - real
     profit = total - principal
     return {"total": round(total, 2), "principal": round(principal, 2),
             "profit": round(profit, 2),
             "profit_rate": round(profit / principal * 100, 2) if principal > 0 else 0.0,
-            "seed": seed, "recent_flows": flows[-8:], "suspect": suspect[-6:]}
+            "unrealized": round(unreal, 2), "realized": round(real, 2),
+            "seed": seed, "recent_flows": [], "suspect": []}
 
 
 def spark_series():
@@ -594,12 +636,9 @@ async function load(force){
       ['수량',a.qty+'주'],['오늘',`<span style="color:${a.day>=0?'var(--up)':'var(--dn)'}">${pct(a.day_rate)}</span>`]]
       .map(([k,v,st])=>`<div class="tile" style="${st??''}"><div class="k">${k}</div><div class="v num">${v}</div></div>`).join('');
     $('krwwarn').textContent=(d.krw>=100000)?`⚠ 환전 대기 원화 ₩${Number(d.krw).toLocaleString()} — 토스 앱에서 환전해야 봇이 사용합니다 (원화는 원금·총자산에 미포함)`:'';
-    const sus=(w.suspect||[]);
-    $('pnote').innerHTML=`원금은 봇 일지의 입·출금을 자동 누적합니다 (시작: ${w.seed.date} $${Number(w.seed.usd).toLocaleString()}) ·
-      <a href="#" onclick="fixPrincipal(${w.principal});return false" style="color:var(--brass)">원금 보정</a>`
-      +(sus.length?`<br><span style="color:var(--dn)">⚠ 확인필요 ${sus.length}건 — 결제지연·조회오류로 보이는 흐름은 원금에서 제외했습니다 (`
-        +sus.map(f=>`${f.day} ${f.usd>=0?'+':'−'}$${Math.abs(f.usd).toLocaleString()}`).join(', ')
-        +`). 이 중 진짜 입금이 있으면 [원금 보정]으로 총액을 넣으세요.</span>`:'');
+    $('pnote').innerHTML=`원금 = 총자산 − 평가손익(${money(w.unrealized)}) − 실현손익(${money(w.realized)}) ·
+      입·출금은 손익이 아니므로 자동으로 원금에 반영됩니다 (기준: ${w.seed.date}${w.seed.fixed?' · 수동고정':''}) ·
+      <a href="#" onclick="fixPrincipal(${w.principal});return false" style="color:var(--brass)">원금 보정</a>`;
   } else if(a){
     $('value').textContent=money(a.value);
     $('pl').className='delta num '+(a.pl>=0?'up':'dn');
@@ -748,7 +787,7 @@ class H(BaseHTTPRequestHandler):
                 body = json.loads(self.rfile.read(n) or b"{}")
                 usd = float(body.get("usd"))
                 seed = {"usd": round(usd, 2), "date": time.strftime("%Y-%m-%d"),
-                        "note": "수동 보정"}
+                        "fixed": True, "note": "수동 보정(고정)"}
                 with open(PRINCIPAL_PATH, "w", encoding="utf-8") as f:
                     json.dump(seed, f, ensure_ascii=False, indent=1)
                 _cache["t"] = 0.0
@@ -758,35 +797,47 @@ class H(BaseHTTPRequestHandler):
 
 
 def audit():
-    """CLI 감사: 원금이 왜 그 숫자인지 날짜별로 전부 출력."""
-    try:                                   # 윈도우 cmd(cp949)에서 한글/기호 깨짐·크래시 방지
+    """CLI 감사: 원금이 어떻게 계산됐는지 분해해서 출력."""
+    try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     except Exception:
         pass
     seed = load_json(PRINCIPAL_PATH) or {}
-    after = seed.get("date", "1970-01-01")
-    print(f"시드: {seed.get('date','(없음)')} ${fnum(seed.get('usd')):,.2f}  ({seed.get('note','')})")
-    rows = flow_ledger(after)
-    if not rows:
-        print("journal.jsonl 에 비교할 스냅샷이 2일치 미만입니다.")
+    print(f"시드   : {seed.get('date','(없음)')}  ${fnum(seed.get('usd')):,.2f}  {seed.get('note','')}")
+    try:
+        from toss_client import TossClient
+        c = TossClient()
+        res = (c.holdings().get("result") or {})
+        sym = os.environ.get("SYMBOL", "TQQQ")
+        it = next((i for i in res.get("items", []) if i.get("symbol") == sym), {})
+        acc = {"qty": fnum(it.get("quantity")), "avg": fnum(it.get("averagePurchasePrice")),
+               "last": fnum(it.get("lastPrice")),
+               "value": fnum((it.get("marketValue") or {}).get("amount")),
+               "pl": fnum((it.get("profitLoss") or {}).get("amount"))}
+        usd = c.usd_cash()
+    except Exception as e:
+        print(f"토스 조회 실패: {e}")
         return
-    print(f"\n{'날짜':11s} {'흐름$':>11s} {'판정':8s} {'체결수량':>9s} {'미기록수량':>10s} "
-          f"{'현금$':>10s} {'수량':>8s} {'가격$':>8s}")
-    tot = 0.0
-    for r in rows:
-        mark = {"flow": "원금반영", "suspect": "확인필요", "noise": "무시"}[r["kind"]]
-        if r["counted"]:
-            tot += r["usd"]
-        print(f"{r['day']:11s} {r['usd']:11,.2f} {mark:8s} {r['traded']:9.2f} "
-              f"{r['resid_qty']:10.2f} {r['cash']:10,.2f} {r['qty']:8.2f} {r['px']:8.2f}")
-    print(f"\n원금 = 시드 ${fnum(seed.get('usd')):,.2f} + 반영흐름 ${tot:,.2f} "
-          f"= ${fnum(seed.get('usd')) + tot:,.2f}")
-    sus = [r for r in rows if r["kind"] == "suspect"]
-    if sus:
-        print(f"\n[확인필요] {len(sus)}건 (결제지연/조회오류로 보고 원금에서 제외했습니다):")
-        for r in sus:
-            print(f"   {r['day']}  ${r['usd']:,.2f}  체결 {r['traded']:.0f}주 / 미기록 {r['resid_qty']:.0f}주")
-        print("   이 중 진짜 입금이 있으면 조종석 [원금 보정]으로 총액을 직접 넣으세요.")
+    w = build_wealth(acc, usd)
+    real, traded = realized_pnl(seed)
+    print(f"\n총자산 : ${w['total']:,.2f}   (평가금 ${acc['value']:,.2f} + 현금 ${usd:,.2f})")
+    print(f"  ­ 평가손익 : ${w['unrealized']:>12,.2f}   ({acc['qty']:.0f}주 × (현재 ${acc['last']:.2f} − 평단 ${acc['avg']:.2f}))")
+    print(f"  ­ 실현손익 : ${w['realized']:>12,.2f}   (시드 이후 봇 체결 {traded:,.0f}달러어치 매매로 확정된 손익)")
+    print(f"  = 원 금   : ${w['principal']:>12,.2f}")
+    print(f"    총수익  : ${w['profit']:>12,.2f}  ({w['profit_rate']:+.2f}%)")
+    print("\n[체결 이력]")
+    days = journal_daily()
+    after = seed.get("date", "1970-01-01")
+    n = 0
+    for d in days:
+        if d["day"] < after:
+            continue
+        for t in d["trades"]:
+            n += 1
+            print(f"  {d['day']}  {'매수' if t['qty'] > 0 else '매도'} {abs(t['qty']):>6.0f}주 @ ${t['px']:,.2f}")
+    if not n:
+        print("  (시드 이후 체결 없음 — 실현손익 0)")
+    print("\n※ 실현손익은 봇 주문 시점가(ref_price) 기준이라 실제 체결가와 소폭 차이날 수 있습니다.")
 
 
 if __name__ == "__main__":

@@ -87,11 +87,11 @@ def save_state(st: dict):
 
 
 def parse_holdings(raw: dict, symbol: str):
-    """보유 수량·최근가 추출 (토스 실응답: result.items[].quantity 문자열).
+    """보유 수량·최근가·평단 추출 (토스 실응답: result.items[].quantity 문자열).
 
     현금(USD)은 이 엔드포인트에 없음 → 별도 엔드포인트(probe_cash로 확인)에서 조회.
     """
-    qty, last = 0.0, None
+    qty, last, avg = 0.0, None, None
     res = raw.get("result", raw) or {}
     if not isinstance(res, dict) or ("items" not in res and "holdings" not in res):
         # 응답 형식이 깨졌는데 qty=0으로 진행하면 (1) 보유 중인데 매도 신호를 놓치고
@@ -104,7 +104,9 @@ def parse_holdings(raw: dict, symbol: str):
             qty = float(it.get("quantity") or 0)
             lp = it.get("lastPrice")
             last = float(lp) if lp else None
-    return qty, last
+            ap = it.get("averagePurchasePrice")
+            avg = float(ap) if ap else None
+    return qty, last, avg
 
 
 def main():
@@ -120,7 +122,7 @@ def main():
 
     client = TossClient()
     raw = client.holdings()
-    qty, last_price = parse_holdings(raw, SYMBOL)
+    qty, last_price, avg_price = parse_holdings(raw, SYMBOL)
     try:
         cash = client.usd_cash()
     except Exception as e:
@@ -169,7 +171,7 @@ def main():
     line = (f"[볼스위칭 트레이더] {sig['asof']} 신호={sig['signal_aggressive']} "
             f"예외={sig['exception_buy']} 보유 {SYMBOL}={qty} 현금USD={cash}")
     snap = dict(type="snapshot", asof=sig["asof"], signal=sig["signal_aggressive"],
-                qty=qty, cash=cash, krw=krw, price=last_price,
+                qty=qty, cash=cash, krw=krw, price=last_price, avg=avg_price,
                 holdings_ok=True,          # 조회 성공분만 원금 재구성에 사용
                 mode="dry" if DRY else "live",
                 action=(action[0] if action else None))

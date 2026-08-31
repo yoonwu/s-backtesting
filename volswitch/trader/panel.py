@@ -249,6 +249,19 @@ def build_wealth(account: dict, usd, summary=None) -> dict:
             "seed": seed, "recent_flows": [], "suspect": []}
 
 
+def usdkrw():
+    """USD/KRW 환율 — yfinance(KRW=X). 실패 시 None (원화 표시만 생략)."""
+    try:
+        import yfinance as yf
+        df = yf.download("KRW=X", period="5d", interval="1d",
+                         auto_adjust=True, progress=False)
+        df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
+        v = float(df["Close"].dropna().iloc[-1])
+        return v if 500 < v < 3000 else None
+    except Exception:
+        return None
+
+
 def spark_series():
     """최근 ~6개월 QQQ 종가 + 운영 MA + 레짐(히스테리시스) — 히어로 차트용."""
     import numpy as np
@@ -296,6 +309,7 @@ def build_status(force=False) -> dict:
         out["spark"] = spark_series()
     except Exception:
         out["spark"] = None
+    out["fx"] = usdkrw()
 
     try:
         from toss_client import TossClient
@@ -472,6 +486,8 @@ header{display:flex;align-items:baseline;justify-content:space-between;margin-bo
 .tile{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
 .tile .k{font-size:10px;color:var(--mut);letter-spacing:.06em}
 .tile .v{font-size:15px;font-weight:700;margin-top:2px}
+.tile .w{font-size:11px;color:var(--mut);margin-top:2px;letter-spacing:.02em}
+.heronum .won{font-size:14px;color:var(--mut);margin-left:10px;font-weight:600}
 .krwwarn{margin-top:10px;font-size:12px;color:#d9a13c}
 /* --- orders / bot --- */
 .order{display:flex;justify-content:space-between;align-items:center;padding:8px 0;
@@ -543,7 +559,7 @@ pre{background:var(--card2);border:1px solid var(--line);border-radius:10px;padd
 
 <div class="card"><div class="eyebrow">내 계좌</div>
  <div class="heronum"><span class="big num" id="value">—</span>
-  <span class="delta num" id="pl"></span></div>
+  <span class="delta num" id="pl"></span><span class="won num" id="wonval"></span></div>
  <div class="subline" id="acctsub"></div>
  <div class="tiles" id="tiles"></div>
  <div class="krwwarn" id="krwwarn"></div>
@@ -582,6 +598,8 @@ pre{background:var(--card2);border:1px solid var(--line);border-radius:10px;padd
 const $=id=>document.getElementById(id);
 const money=(v,d=2)=>v==null?'—':'$'+Number(v).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
 const pct=v=>(v>=0?'+':'')+Number(v).toFixed(2)+'%';
+let FX=null;
+const won=(v,sign)=>FX==null||v==null?'':(sign&&v>0?'+':v<0?'−':'')+'₩'+Math.round(Math.abs(v)*FX).toLocaleString('ko-KR');
 
 function drawChart(sp){
   if(!sp||!sp.close||sp.close.length<2){$('chart').innerHTML='';return}
@@ -639,26 +657,29 @@ async function load(force){
   }
   drawChart(d.spark);
   const a=d.account,w=d.wealth;
+  FX=d.fx||null;
   if(a&&w){
     $('value').textContent=money(w.total);
+    $('wonval').textContent=FX?`≈ ${won(w.total)}`:'';
     $('pl').className='delta num '+(w.profit>=0?'up':'dn');
     $('pl').textContent=`${w.profit>=0?'▲':'▼'} ${money(Math.abs(w.profit))} (${pct(w.profit_rate)})`;
     $('acctsub').innerHTML=`총자산 = 평가금+달러현금 · ${d.symbol} ${a.qty}주 · 오늘 <span class="num" style="color:${a.day>=0?'var(--up)':'var(--dn)'}">${money(a.day)} (${pct(a.day_rate)})</span>`;
     const pc=w.profit>=0?'var(--up)':'var(--dn)';
     $('tiles').innerHTML=[
-      ['원금 (누적 입금)',money(w.principal,0),'border-color:rgba(201,163,83,.45)'],
-      ['총수익',`<span style="color:${pc}">${(w.profit>=0?'+':'−')+money(Math.abs(w.profit),0).slice(1)} · ${pct(w.profit_rate)}</span>`,`border-color:${w.profit>=0?'rgba(47,191,113,.35)':'rgba(224,85,90,.35)'}`],
-      ['이번 포지션 손익',`<span style="color:${a.pl>=0?'var(--up)':'var(--dn)'}">${money(a.pl,0)} (${pct(a.pl_rate)})</span>`],
-      ['달러 현금',money(d.usd)],
+      ['원금 (누적 입금)',money(w.principal,0),'border-color:rgba(201,163,83,.45)',won(w.principal)],
+      ['총수익',`<span style="color:${pc}">${(w.profit>=0?'+':'−')+money(Math.abs(w.profit),0).slice(1)} · ${pct(w.profit_rate)}</span>`,`border-color:${w.profit>=0?'rgba(47,191,113,.35)':'rgba(224,85,90,.35)'}`,won(w.profit,1)],
+      ['이번 포지션 손익',`<span style="color:${a.pl>=0?'var(--up)':'var(--dn)'}">${money(a.pl,0)} (${pct(a.pl_rate)})</span>`,'',won(a.pl,1)],
+      ['달러 현금',money(d.usd),'',won(d.usd)],
       ['평단가',money(a.avg)],['현재가',money(a.last)],
-      ['수량',a.qty+'주'],['오늘',`<span style="color:${a.day>=0?'var(--up)':'var(--dn)'}">${pct(a.day_rate)}</span>`]]
-      .map(([k,v,st])=>`<div class="tile" style="${st??''}"><div class="k">${k}</div><div class="v num">${v}</div></div>`).join('');
+      ['수량',a.qty+'주'],['오늘',`<span style="color:${a.day>=0?'var(--up)':'var(--dn)'}">${pct(a.day_rate)}</span>`,'',won(a.day,1)]]
+      .map(([k,v,st,wv])=>`<div class="tile" style="${st??''}"><div class="k">${k}</div><div class="v num">${v}</div>${wv?`<div class="w num">${wv}</div>`:''}</div>`).join('');
     $('krwwarn').textContent=(d.krw>=100000)?`⚠ 환전 대기 원화 ₩${Number(d.krw).toLocaleString()} — 토스 앱에서 환전해야 봇이 사용합니다 (원화는 원금·총자산에 미포함)`:'';
     $('pnote').innerHTML=(w.source==='toss'
         ? `원금·수익은 <b>토스가 계산한 계좌 총수익률</b>을 그대로 씁니다 (수수료 반영 시 ${pct(w.rate_net)}) ·
            평가손익 ${money(w.unrealized)} + 실현손익 ${money(w.realized)}`
         : (w.source==='manual' ? `원금 수동 고정값 사용 중 (${w.seed.date})`
                                : `⚠ 토스 총수익률을 못 읽어 근사치로 계산 중`))
+      + (FX?` · 환율 ₩${FX.toLocaleString('ko-KR',{maximumFractionDigits:1})}/$ (야후 종가 기준, 참고용)`:'')
       + ` · <a href="#" onclick="fixPrincipal(${w.principal});return false" style="color:var(--brass)">원금 보정</a>`;
   } else if(a){
     $('value').textContent=money(a.value);
@@ -716,9 +737,10 @@ async function loadHistory(){
     const a=st.account,w=st.wealth;
     const items=[[st.symbol+' 현재가',`${money(a.last)} <span style="color:${a.day_rate>=0?'var(--up)':'var(--dn)'};font-size:12px">${pct(a.day_rate)}</span>`],
                  ['평단가',money(a.avg)]];
-    if(w){items.push(['원금 (누적 입금)',money(w.principal,0)],
-      ['총수익',`<span style="color:${w.profit>=0?'var(--up)':'var(--dn)'}">${money(w.profit,0)} · ${pct(w.profit_rate)}</span>`]);}
-    $('histtiles').innerHTML=items.map(([k,v])=>`<div class="tile"><div class="k">${k}</div><div class="v num">${v}</div></div>`).join('');
+    FX=st.fx||FX;
+    if(w){items.push(['원금 (누적 입금)',money(w.principal,0),won(w.principal)],
+      ['총수익',`<span style="color:${w.profit>=0?'var(--up)':'var(--dn)'}">${money(w.profit,0)} · ${pct(w.profit_rate)}</span>`,won(w.profit,1)]);}
+    $('histtiles').innerHTML=items.map(([k,v,wv])=>`<div class="tile"><div class="k">${k}</div><div class="v num">${v}</div>${wv?`<div class="w num">${wv}</div>`:''}</div>`).join('');
     $('histhead').style.display='';
   }
   // 체결 내역
@@ -781,6 +803,7 @@ class H(BaseHTTPRequestHandler):
         data = body.encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", f"{ctype}; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")   # 코드 갱신 후 옛 화면이 남지 않게
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
@@ -852,10 +875,12 @@ def audit():
     print(f"  총수익률     {summary['rate']*100:>12.2f}%  (수수료반영 {summary['rate_net']*100:.2f}%)  ← 토스 앱과 같은 값")
     print(f"  달러현금     ${usd:>12,.2f}")
     print()
-    print("[조종석 계산]")
-    print(f"  총자산       ${w['total']:>12,.2f}   (평가금 + 현금)")
-    print(f"  원 금        ${w['principal']:>12,.2f}   = 총자산 / (1 + 총수익률)   [{w['source']}]")
-    print(f"  총수익       ${w['profit']:>12,.2f}   ({w['profit_rate']:+.2f}%)")
+    fx = usdkrw()
+    krw = (lambda v: f"  (₩{round(v*fx):,})" if fx else "")
+    print("[조종석 계산]" + (f"   환율 ₩{fx:,.1f}/$" if fx else ""))
+    print(f"  총자산       ${w['total']:>12,.2f}{krw(w['total'])}")
+    print(f"  원 금        ${w['principal']:>12,.2f}{krw(w['principal'])}   = 총자산 / (1 + 총수익률)  [{w['source']}]")
+    print(f"  총수익       ${w['profit']:>12,.2f}{krw(w['profit'])}   ({w['profit_rate']:+.2f}%)")
     print(f"    ├ 평가손익 ${w['unrealized']:>12,.2f}   (현재 들고 있는 포지션)")
     print(f"    └ 실현손익 ${w['realized']:>12,.2f}   (지금까지 매매로 확정 — 봇 설치 이전분 포함)")
     print()

@@ -249,17 +249,77 @@ def build_wealth(account: dict, usd, summary=None) -> dict:
             "seed": seed, "recent_flows": [], "suspect": []}
 
 
-def usdkrw():
-    """USD/KRW 환율 — yfinance(KRW=X). 실패 시 None (원화 표시만 생략)."""
+_fx = {"v": None, "t": 0.0, "src": "", "at": ""}
+
+
+def usdkrw(max_age: int = 60):
+    """USD/KRW — 실시간 우선. (야후 1분봉 → 네이버 매매기준율 → 야후 일봉)
+
+    반환: (환율, 출처, 기준시각).  전부 실패하면 (None, "", "") — 원화 표시만 생략.
+    """
+    now = time.time()
+    if _fx["v"] and now - _fx["t"] < max_age:
+        return _fx["v"], _fx["src"], _fx["at"]
+
+    def ok(v):
+        try:
+            v = float(v)
+        except (TypeError, ValueError):
+            return None
+        return v if 500 < v < 3000 else None
+
+    v = src = at = None
+    # 1) 야후 1분봉 — 외환은 장중 계속 갱신되므로 사실상 실시간
     try:
         import yfinance as yf
-        df = yf.download("KRW=X", period="5d", interval="1d",
+        df = yf.download("KRW=X", period="1d", interval="1m",
                          auto_adjust=True, progress=False)
         df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
-        v = float(df["Close"].dropna().iloc[-1])
-        return v if 500 < v < 3000 else None
+        ser = df["Close"].dropna()
+        if len(ser):
+            v = ok(ser.iloc[-1])
+            if v:
+                src, at = "야후 실시간", str(ser.index[-1])[11:16] + " UTC"
     except Exception:
-        return None
+        pass
+    # 2) 네이버 금융 매매기준율 (국내 기준, 한국에서 접속 시 가장 익숙한 값)
+    if not v:
+        try:
+            import requests
+            r = requests.get(
+                "https://m.stock.naver.com/front-api/marketIndex/productDetail"
+                "?category=exchange&reutersCode=FX_USDKRW", timeout=6,
+                headers={"User-Agent": "Mozilla/5.0"})
+            j = r.json()
+            res = j.get("result") or j
+            for k in ("calcPrice", "closePrice", "currentPrice", "basePrice", "price"):
+                cand = res.get(k) if isinstance(res, dict) else None
+                if isinstance(cand, dict):
+                    cand = cand.get("value") or cand.get("price")
+                v = ok(str(cand).replace(",", "") if cand is not None else None)
+                if v:
+                    src = "네이버 매매기준율"
+                    at = str(res.get("localTradedAt") or res.get("tradedAt") or "")[11:16]
+                    break
+        except Exception:
+            pass
+    # 3) 야후 일봉 (주말·장마감 대비)
+    if not v:
+        try:
+            import yfinance as yf
+            df = yf.download("KRW=X", period="5d", interval="1d",
+                             auto_adjust=True, progress=False)
+            df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
+            ser = df["Close"].dropna()
+            if len(ser):
+                v = ok(ser.iloc[-1])
+                if v:
+                    src, at = "야후 종가", str(ser.index[-1])[:10]
+        except Exception:
+            pass
+    if v:
+        _fx.update(v=v, t=now, src=src or "", at=at or "")
+    return _fx["v"], _fx["src"], _fx["at"]
 
 
 def spark_series():
@@ -294,6 +354,7 @@ def build_status(force=False) -> dict:
     if not force and _cache["data"] and now - _cache["t"] < 300:
         d = dict(_cache["data"])
         d["env"], d["last_run"] = env_state(), last_run()
+        d["fx"], d["fx_src"], d["fx_at"] = usdkrw()   # 환율만은 캐시와 무관하게 최신
         return d
 
     os.environ.update(read_env())
@@ -309,7 +370,7 @@ def build_status(force=False) -> dict:
         out["spark"] = spark_series()
     except Exception:
         out["spark"] = None
-    out["fx"] = usdkrw()
+    out["fx"], out["fx_src"], out["fx_at"] = usdkrw()
 
     try:
         from toss_client import TossClient
@@ -679,7 +740,7 @@ async function load(force){
            평가손익 ${money(w.unrealized)} + 실현손익 ${money(w.realized)}`
         : (w.source==='manual' ? `원금 수동 고정값 사용 중 (${w.seed.date})`
                                : `⚠ 토스 총수익률을 못 읽어 근사치로 계산 중`))
-      + (FX?` · 환율 ₩${FX.toLocaleString('ko-KR',{maximumFractionDigits:1})}/$ (야후 종가 기준, 참고용)`:'')
+      + (FX?` · 환율 ₩${FX.toLocaleString('ko-KR',{maximumFractionDigits:2})}/$ <span style="color:var(--mut)">(${d.fx_src||''}${d.fx_at?' '+d.fx_at:''})</span>`:'')
       + ` · <a href="#" onclick="fixPrincipal(${w.principal});return false" style="color:var(--brass)">원금 보정</a>`;
   } else if(a){
     $('value').textContent=money(a.value);
@@ -875,9 +936,9 @@ def audit():
     print(f"  총수익률     {summary['rate']*100:>12.2f}%  (수수료반영 {summary['rate_net']*100:.2f}%)  ← 토스 앱과 같은 값")
     print(f"  달러현금     ${usd:>12,.2f}")
     print()
-    fx = usdkrw()
+    fx, fx_src, fx_at = usdkrw()
     krw = (lambda v: f"  (₩{round(v*fx):,})" if fx else "")
-    print("[조종석 계산]" + (f"   환율 ₩{fx:,.1f}/$" if fx else ""))
+    print("[조종석 계산]" + (f"   환율 ₩{fx:,.2f}/$ [{fx_src} {fx_at}]" if fx else ""))
     print(f"  총자산       ${w['total']:>12,.2f}{krw(w['total'])}")
     print(f"  원 금        ${w['principal']:>12,.2f}{krw(w['principal'])}   = 총자산 / (1 + 총수익률)  [{w['source']}]")
     print(f"  총수익       ${w['profit']:>12,.2f}{krw(w['profit'])}   ({w['profit_rate']:+.2f}%)")

@@ -36,6 +36,10 @@ SYMBOL = os.environ.get("SYMBOL", "TQQQ")
 DRY = os.environ.get("DRY_RUN", "1") != "0"
 EX_FRAC = float(os.environ.get("EXCEPTION_FRACTION", "1.0"))
 EX_STOP = float(os.environ.get("EXCEPTION_STOP", "0.30"))  # 예외 포지션 추가하락 손절 (0=끔)
+# 지정가 버퍼: 토스가 MOC 미지원 → 지정가+CLS로 종가 체결.
+# 증거금이 (지정가×수량)으로 잡히므로 이 버퍼만큼 매수액이 줄어든다.
+# 3% = 주문 후 종가까지 +3% 급등해도 체결(TQQQ 기준 사실상 전부) & 현금 96.5% 투입.
+LIMIT_BUF = float(os.environ.get("LIMIT_BUFFER", "0.03"))
 
 
 def parse_price(raw) -> float:
@@ -189,8 +193,8 @@ def main():
     else:
         try:
             # 토스 API는 MOC 미지원 → LOC(지정가+CLS)로 종가 체결.
-            # 공격적 지정가(매도 -10%/매수 +10%)라 사실상 항상 종가에 체결되며,
-            # 종가가 지정가보다 불리하게 폭주한 날만 미체결(다음날 재시도)된다.
+            # 매도는 -10%(증거금 무관하니 넉넉히), 매수는 +LIMIT_BUF(기본 3%).
+            # 종가가 지정가보다 불리하게 폭주한 날만 미체결 → 다음날 자동 재시도.
             px = parse_price(client.price(SYMBOL))
             if side in ("SELL", "EXSTOP"):
                 limit = round(px * 0.90, 2)
@@ -203,10 +207,12 @@ def main():
                 if cash is None:
                     raise RuntimeError("현금(buying-power) 조회 실패 — 주문 불가")
                 amt = cash * (EX_FRAC if side == "EXBUY" else 0.995)
-                limit = round(px * 1.10, 2)
+                limit = round(px * (1.0 + LIMIT_BUF), 2)
                 q = int(amt / limit)
                 if q < 1:
                     raise RuntimeError(f"현금 ${amt:,.0f}로 1주(${limit}) 매수 불가")
+                print(f"매수 수량 {q}주 · 지정가 ${limit} (버퍼 {LIMIT_BUF:.1%}) "
+                      f"· 투입 ${q*px:,.0f}/${cash:,.0f} ({q*px/max(cash,1e-9):.1%})")
                 res = client.order(SYMBOL, "BUY", order_type="LIMIT",
                                    qty=q, price=limit, tif="CLS")
             if side == "EXBUY":

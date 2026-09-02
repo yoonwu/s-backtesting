@@ -731,10 +731,13 @@ async function load(force){
       ['총수익',`<span style="color:${pc}">${(w.profit>=0?'+':'−')+money(Math.abs(w.profit),0).slice(1)} · ${pct(w.profit_rate)}</span>`,`border-color:${w.profit>=0?'rgba(47,191,113,.35)':'rgba(224,85,90,.35)'}`,won(w.profit,1)],
       ['이번 포지션 손익',`<span style="color:${a.pl>=0?'var(--up)':'var(--dn)'}">${money(a.pl,0)} (${pct(a.pl_rate)})</span>`,'',won(a.pl,1)],
       ['달러 현금',money(d.usd),'',won(d.usd)],
+      ['원화 현금',d.krw==null?'—':'₩'+Number(d.krw).toLocaleString('ko-KR'),
+        (d.krw>=100000?'border-color:rgba(217,161,60,.45)':''),
+        (FX&&d.krw?'≈ '+money(d.krw/FX):'')],
       ['평단가',money(a.avg)],['현재가',money(a.last)],
       ['수량',a.qty+'주'],['오늘',`<span style="color:${a.day>=0?'var(--up)':'var(--dn)'}">${pct(a.day_rate)}</span>`,'',won(a.day,1)]]
       .map(([k,v,st,wv])=>`<div class="tile" style="${st??''}"><div class="k">${k}</div><div class="v num">${v}</div>${wv?`<div class="w num">${wv}</div>`:''}</div>`).join('');
-    $('krwwarn').textContent=(d.krw>=100000)?`⚠ 환전 대기 원화 ₩${Number(d.krw).toLocaleString()} — 토스 앱에서 환전해야 봇이 사용합니다 (원화는 원금·총자산에 미포함)`:'';
+    $('krwwarn').textContent=(d.krw>=100000)?`⚠ 환전 대기 원화 ₩${Number(d.krw).toLocaleString('ko-KR')} — 토스 앱에서 달러로 환전해야 봇이 매수에 씁니다 (원화는 원금·총자산에 미포함)`:'';
     $('pnote').innerHTML=(w.source==='toss'
         ? `원금·수익은 <b>토스가 계산한 계좌 총수익률</b>을 그대로 씁니다 (수수료 반영 시 ${pct(w.rate_net)}) ·
            평가손익 ${money(w.unrealized)} + 실현손익 ${money(w.realized)}`

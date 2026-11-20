@@ -113,10 +113,52 @@ def parse_holdings(raw: dict, symbol: str):
     return qty, last, avg
 
 
+def buy_with_retry(client, q: int, limit: float, tries: int = 6):
+    """LOC 매수. '매수가능금액 부족'(확정 거절)이면 수량을 ~2%씩 줄여 즉시 재주문.
+
+    그 외 오류(네트워크·타임아웃 등)는 실제로 접수됐을 수 있어 재주문하면 중복 위험 → 그대로 올린다.
+    """
+    for _ in range(tries):
+        try:
+            return client.order(SYMBOL, "BUY", order_type="LIMIT",
+                                qty=q, price=limit, tif="CLS"), q
+        except RuntimeError as e:
+            if "insufficient-buying-power" not in str(e):
+                raise
+            q -= max(1, -(-q * 2 // 100))
+            if q < 1:
+                raise
+            print(f"매수가능금액 부족 → {q}주로 재주문")
+    raise RuntimeError(f"매수가능금액 부족 — {tries}회 수량 축소 재주문 모두 거절")
+
+
+# 운영 결정값 (README 4절). .env가 이와 다르면 매 실행마다 경고한다.
+OPS_SPEC = {"EXCEPTION_STOP": 0.30, "EXCEPTION_FRACTION": 1.0}
+
+
+def config_warnings() -> list:
+    w = []
+    for k, want in OPS_SPEC.items():
+        raw = os.environ.get(k)
+        if raw is None:
+            continue  # 미지정 → 코드 기본값(=운영값) 사용
+        try:
+            if abs(float(raw) - want) > 1e-9:
+                w.append(f"{k}={raw} (운영 결정값 {want})")
+        except ValueError:
+            w.append(f"{k}={raw} (숫자 아님, 운영 결정값 {want})")
+    if not (os.environ.get("TELEGRAM_BOT_TOKEN") and os.environ.get("TELEGRAM_CHAT_ID")):
+        w.append("텔레그램 미설정 — 주문 실패 알림이 폰으로 가지 않음")
+    return w
+
+
 def main():
     if os.environ.get("TRADER_ENABLED") != "1":
         print("TRADER_ENABLED != 1 → 종료 (킬스위치)")
         return
+    warns = config_warnings()
+    if warns:
+        notify("⚠ 설정 점검: " + " / ".join(warns))
     # 실행 시각(KST 04:40)은 UTC 19:40 = 미국 동부 같은 날 장중 → UTC 요일 = 미국 거래 요일.
     # 토·일(미국)엔 장이 없어 주문이 거절되거나 금요일 가격 기준으로 잘못 예약된다.
     if datetime.now(timezone.utc).weekday() >= 5:
@@ -222,8 +264,11 @@ def main():
                     raise RuntimeError(f"현금 ${amt:,.0f}로 1주(${limit}) 매수 불가")
                 print(f"매수 수량 {q}주 · 지정가 ${limit} (버퍼 {LIMIT_BUF:.1%}) "
                       f"· 투입 ${q*px:,.0f}/${cash:,.0f} ({q*px/max(cash,1e-9):.1%})")
-                res = client.order(SYMBOL, "BUY", order_type="LIMIT",
-                                   qty=q, price=limit, tif="CLS")
+                q0 = q
+                res, q = buy_with_retry(client, q, limit)
+                if q != q0:
+                    desc += f" (매수가능금액 부족 → {q0}주에서 {q}주로 줄여 재주문)"
+                    msg = line + f"\n→ {desc}"
             if side == "EXBUY":
                 st["exception_latch"] = True
                 st["exception_entry"] = parse_price(client.price(SYMBOL))

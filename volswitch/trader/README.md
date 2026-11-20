@@ -60,6 +60,12 @@ CRON_TZ=America/New_York
 - `trader_state.json`이 예외매수 latch를 기억한다 — 서버 옮길 때 같이 옮길 것
 - 신호 대시보드: 저장소의 `volswitch/signal_state.json` + daily-signal 워크플로 이슈 알림이
   독립적인 2차 확인 채널 (봇이 죽어도 알림은 옴)
+- 예외매수 자리에서 손으로 샀다면 즉시 `python mark_exception.py` — 안 하면 봇이 정규 청산으로 보고 매도한다
+- 텔레그램 알림: `python telegram_setup.py <봇토큰>` (토큰·chat id를 .env에 저장 + 테스트 발송)
+- 매 실행 시작에 `.env`를 운영 결정값(4절)과 대조해 다르면 ⚠ 알림 (2026-11 손절 0 방치 사고 재발 방지)
+- 매수 주문이 '매수가능금액 부족'으로 거절되면 수량을 ~2%씩 줄여 최대 6회 즉시 재주문
+- 코드 수정 시 `python -m unittest discover -s volswitch/trader -p "test_trader.py"` (GitHub에서도 자동 실행).
+  `test_order.py`·`test_moc.py`는 **실계좌 주문 스크립트**이므로 테스트 러너로 돌리지 말 것
 
 ## 4. 전략 파라미터 (run_trader.py 기준)
 

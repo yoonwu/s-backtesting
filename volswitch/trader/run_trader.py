@@ -168,6 +168,9 @@ def main():
         cur = last_price if last_price else parse_price(client.price(SYMBOL))
         if entry and cur < entry * (1 - EX_STOP):
             action = ("EXSTOP", f"예외 포지션 손절: ${cur:,.2f} < 매수가 ${entry:,.2f}×{1-EX_STOP:.2f} — 전량 매도(MOC)")
+        elif cash is not None and cash >= min_topup:
+            # 예외매수 = 현금 전량. 남은 현금(부분 체결·수동 일부 매수·신규 입금)은 마저 투입
+            action = ("BUY", f"예외 포지션 잔여 현금 매수: ${cash:,.0f} (MOC)")
     elif (not hold and not in_market and exception
           and not st.get("exception_latch") and not st.get("exception_blocked")):
         action = ("EXBUY", f"예외매수: 트리거 발동, 현금 {EX_FRAC:.0%} 매수(MOC)")

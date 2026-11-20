@@ -166,14 +166,23 @@ class TraderScenarios(unittest.TestCase):
         self.assertEqual(fake.orders, [])
         self.assertTrue(st["exception_latch"])
 
-    def test_latch_buys_leftover_cash(self):
+    def test_latch_buys_leftover_cash_while_condition_holds(self):
+        self.sig("CASH", True)
         fake, st, _ = self.run_bot({"last_run": "", "exception_latch": True, "exception_entry": 42.32},
                                    qty=400, cash=10852.53, price=42)
         self.assertEqual([o["side"] for o in fake.orders], ["BUY"])
         self.assertMarginOK(fake, 10852.53)
         self.assertTrue(st["exception_latch"])
 
+    def test_latch_leftover_not_bought_after_condition_clears(self):
+        self.sig("CASH", False)  # 반등으로 예외 조건 꺼짐 → 남은 현금은 대기
+        fake, st, _ = self.run_bot({"last_run": "", "exception_latch": True, "exception_entry": 42.32},
+                                   qty=400, cash=10852.53, price=45)
+        self.assertEqual(fake.orders, [])
+        self.assertTrue(st["exception_latch"])  # 보유분은 그대로 유지
+
     def test_latch_leftover_buy_works_even_with_stop_off(self):
+        self.sig("CASH", True)
         rt.EX_STOP = 0.0
         fake, _, _ = self.run_bot({"last_run": "", "exception_latch": True, "exception_entry": 42.32},
                                   qty=400, cash=10852.53, price=42)

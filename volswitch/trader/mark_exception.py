@@ -50,6 +50,7 @@ print(f"   보유 {SYMBOL} {qty:g}주 · 손절 기준가 ${entry:,.2f}"
       f" → 손절선 ${entry * (1 - EX_STOP):,.2f} (−{EX_STOP:.0%})")
 if usd is not None:
     print(f"   남은 달러 현금 ${usd:,.2f}"
-          + (" → 다음 실행에 봇이 잔여분 매수" if usd >= float(os.environ.get("MIN_TOPUP_USD", "1000"))
+          + (" → 예외 조건이 살아있는 날에만 봇이 잔여분 매수"
+             if usd >= float(os.environ.get("MIN_TOPUP_USD", "1000"))
              else " (적립 최소액 미만 — 대기)"))
 print(json.dumps(st, ensure_ascii=False, indent=1))

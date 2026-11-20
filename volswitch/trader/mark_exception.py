@@ -44,6 +44,8 @@ try:
 except Exception:
     usd = None
 print(f"✅ 예외매수 포지션 등록 완료 ({STATE_FILE})")
+if EX_STOP <= 0:
+    print("⚠ .env의 EXCEPTION_STOP이 0 → 손절 꺼짐! 운영 결정값은 0.30 (README 4절)")
 print(f"   보유 {SYMBOL} {qty:g}주 · 손절 기준가 ${entry:,.2f}"
       f" → 손절선 ${entry * (1 - EX_STOP):,.2f} (−{EX_STOP:.0%})")
 if usd is not None:

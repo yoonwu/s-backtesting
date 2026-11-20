@@ -162,11 +162,11 @@ def main():
         action = ("BUY", f"적립 추가 매수: 신호 HOLD, 입금분 ${cash:,.0f} 매수(MOC)")
     elif not hold and in_market and not st.get("exception_latch"):
         action = ("SELL", "정규 청산: 신호 CASH, 전량 매도(MOC)")
-    elif not hold and in_market and st.get("exception_latch") and EX_STOP > 0:
+    elif not hold and in_market and st.get("exception_latch"):
         # 예외 포지션 손절 체크: 매수가 대비 추가 -EX_STOP 이탈 시 청산 + 재발동 금지
         entry = st.get("exception_entry")
         cur = last_price if last_price else parse_price(client.price(SYMBOL))
-        if entry and cur < entry * (1 - EX_STOP):
+        if EX_STOP > 0 and entry and cur < entry * (1 - EX_STOP):
             action = ("EXSTOP", f"예외 포지션 손절: ${cur:,.2f} < 매수가 ${entry:,.2f}×{1-EX_STOP:.2f} — 전량 매도(MOC)")
         elif cash is not None and cash >= min_topup:
             # 예외매수 = 현금 전량. 남은 현금(부분 체결·수동 일부 매수·신규 입금)은 마저 투입

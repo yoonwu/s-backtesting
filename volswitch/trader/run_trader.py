@@ -22,7 +22,7 @@
 import json
 import os
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 import requests
 
@@ -116,6 +116,11 @@ def parse_holdings(raw: dict, symbol: str):
 def main():
     if os.environ.get("TRADER_ENABLED") != "1":
         print("TRADER_ENABLED != 1 → 종료 (킬스위치)")
+        return
+    # 실행 시각(KST 04:40)은 UTC 19:40 = 미국 동부 같은 날 장중 → UTC 요일 = 미국 거래 요일.
+    # 토·일(미국)엔 장이 없어 주문이 거절되거나 금요일 가격 기준으로 잘못 예약된다.
+    if datetime.now(timezone.utc).weekday() >= 5:
+        print("미국 주말 → 종료 (장 없음)")
         return
 
     st = load_state()

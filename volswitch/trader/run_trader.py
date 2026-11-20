@@ -206,7 +206,8 @@ def main():
             else:
                 if cash is None:
                     raise RuntimeError("현금(buying-power) 조회 실패 — 주문 불가")
-                amt = cash * (EX_FRAC if side == "EXBUY" else 0.995)
+                # 토스 매수가능금액은 수수료까지 선차감 → 예외매수도 99.5% 상한
+                amt = cash * (min(EX_FRAC, 0.995) if side == "EXBUY" else 0.995)
                 limit = round(px * (1.0 + LIMIT_BUF), 2)
                 q = int(amt / limit)
                 if q < 1:
